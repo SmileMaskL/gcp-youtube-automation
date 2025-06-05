@@ -1,0 +1,82 @@
+name: Deploy to GCP App Engine and Trigger Automation
+
+on:
+  push:
+    branches:
+      - main # main 브랜치에 푸시될 때 워크플로우 실행
+  schedule:
+    # 한국 시간 기준: 0시, 3시, 7시, 12시, 18시, 22시 (UTC는 KST - 9시간)
+    # 0시 KST = 15시 UTC (전날), 3시 KST = 18시 UTC, 7시 KST = 22시 UTC, 12시 KST = 3시 UTC, 18시 KST = 9시 UTC, 22시 KST = 13시 UTC
+    - cron: '0 15,18,22,3,9,13 * * *' # UTC 기준으로 작성
+
+env:
+  PROJECT_ID: youtube-fully-automated # GCP 프로젝트 ID 직접 명시
+  GCP_REGION: us-central1 # App Engine 배포 리전
+
+jobs:
+  deploy-and-trigger:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: 'read'
+      id-token: 'write' # OIDC를 사용하여 GCP에 인증하기 위해 필요
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Configure GCP credentials
+        id: 'auth'
+        uses: 'google-github-actions/auth@v2'
+        with:
+          workload_identity_provider: 'projects/<span class="math-inline">\{\{ env\.PROJECT\_ID \}\}/locations/global/workloadIdentityPools/github\-pool/providers/github\-provider'
+service\_account\: 'github\-actions\-sa@</span>{{ env.PROJECT_ID }}.iam.gserviceaccount.com'
+          # Secret Manager에서 서비스 계정 키를 직접 사용하는 방식 대신 OIDC를 사용하는 것을 권장
+          # (더 안전하고, 키 파일을 GitHub Secret에 저장할 필요 없음)
+          # service_account_key: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }} # 이전 방식 (지양)
+
+      - name: Deploy to App Engine
+        id: deploy
+        uses: google-github-actions/deploy-appengine@v2
+        with:
+          project_id: <span class="math-inline">\{\{ env\.PROJECT\_ID \}\}
+\# App Engine 서비스 ID를 지정하지 않으면 default 서비스에 배포됩니다\.
+\# version\: v1 \# 선택 사항\: 버전 관리
+\# promote\: true \# 선택 사항\: 새 버전을 기본 버전으로 승격
+\- name\: Get App Engine service URL
+id\: get\_url
+run\: \|
+SERVICE\_URL\=</span>(gcloud app services describe default --project <span class="math-inline">\{\{ env\.PROJECT\_ID \}\} \-\-format\="value\(defaultHostname\)"\)
+echo "APP\_URL\=https\://</span>{SERVICE_URL}" >> $GITHUB_ENV
+        # gcloud cli는 기본적으로 설치되어 있으므로 별도 설치 필요 없음
+
+      - name: Trigger App Engine automation endpoint
+        env:
+          APP_ENGINE_URL: ${{ env.APP_URL }}
+          TRIGGER_ID: ${{ secrets.TRIGGER_ID }} # Secret Manager에서 TRIGGER_ID 가져오기
+        run: |
+          if [ -z "$APP_ENGINE_URL" ]; then
+            echo "Error: App Engine URL not found. Deployment might have failed or not yet propagated."
+            exit 1
+          fi
+          echo "Attempting to trigger App Engine at: <span class="math-inline">APP\_ENGINE\_URL/run"
+response\=</span>(curl -s -o /dev/null -w "%{http_code}" -X POST "<span class="math-inline">\{APP\_ENGINE\_URL\}/run" \\
+\-H "Content\-Type\: application/json" \\
+\-d '\{"trigger"\: "github\_actions\_scheduled", "trigger\_id"\: "</span>{{ env.TRIGGER_ID }}"}')
+          
+          if [ "$response" -eq 202 ]; then
+            echo "✅ Automation triggered successfully (HTTP 202 Accepted)."
+          elif [ "$response" -eq 429 ]; then
+            echo "⚠️ Automation trigger rejected (HTTP 429 Too Many Requests - already running)."
+          else
+            echo "❌ Failed to trigger automation. HTTP status code: $response"
+            exit 1 # 트리거 실패 시 워크플로우 실패로 간주
+          fi
