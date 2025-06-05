@@ -12,7 +12,13 @@ class YouTubeAutomation:
         # API 키 로테이션 초기화
         self.openai_keys = json.loads(get_secret("OPENAI_API_KEYS"))['keys']
         self.gemini_keys = json.loads(get_secret("GEMINI_API_KEYS"))['keys']
-        
+
+    # src/content_generator.py 수익형 콘텐츠 생성 로직
+    def generate_content(topic):
+    # 수익형 키워드 강조
+        profit_keywords = ["확대해석", "충격적 진실", "공개합니다", "무료 수익"]
+        title = f"{random.choice(profit_keywords)} {topic} {random.choice(['쇼킹!', '꿀팁!'])}"
+    
     def _select_api_key(self):
         """무작위 API 키 선택"""
         return {
