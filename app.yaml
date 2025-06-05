@@ -4,12 +4,7 @@ entrypoint: gunicorn -b :8080 app:app --timeout 300
 automatic_scaling:
   max_instances: 3
   min_instances: 1
-  # 무료 티어 관리를 위한 설정 (최소 인스턴스 0으로 설정하면 비용 절감에 유리)
-  # idle_timeout: 600s # 선택 사항: 유휴 상태 시 인스턴스 종료 시간 (비용 절감)
-  # target_cpu_utilization: 0.5 # 선택 사항: CPU 사용량에 따른 스케일링
 
 env_variables:
-  # GCP 프로젝트 ID는 app.yaml에 직접 설정하여 Secret Manager 접근에 사용
-  GCP_PROJECT_ID: "youtube-fully-automated"
-  # 리전 설정 (us-central1로 고정하여 안정성 및 무료 티어 활용)
+  GCP_PROJECT_ID: "youtube-full-automated"
   GCP_REGION: "us-central1"
