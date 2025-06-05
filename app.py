@@ -1,20 +1,4 @@
 from flask import Flask, request, jsonify
-import logging
-import os
-import time
-import traceback
-from threading import Thread
-from datetime import datetime, timedelta
-
-# src 모듈 임포트
-from src.video_creator import create_video
-from src.youtube_uploader import upload_video
-from src.utils import get_trending_topics, get_secret, rotate_api_key, clean_old_data
-from src.thumbnail_generator import generate_thumbnail
-from src.comment_poster import post_comment
-from src.shorts_converter import convert_to_shorts
-
-app = Flask(__name__)
 
 # 로깅 설정
 LOGS_DIR = "logs"
