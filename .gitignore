@@ -1,0 +1,8 @@
+*.json
+secrets/
+*.txt
+output/
+.env
+__pycache__/
+*.pyc
+logs/
