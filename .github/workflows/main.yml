@@ -35,8 +35,8 @@ jobs:
         id: 'auth'
         uses: 'google-github-actions/auth@v2'
         with:
-          workload_identity_provider: 'projects/${{ env.PROJECT_ID }}/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
-          service_account: 'github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com'
+          workload_identity_provider: 'projects/youtube-fully-automated/locations/global/workloadIdentityPools/github-pool/providers/github-provider'          
+          service_account: 'github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com'
 
       - name: Deploy to App Engine
         id: deploy
