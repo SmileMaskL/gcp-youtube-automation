@@ -29,6 +29,12 @@ def get_secret(secret_id):
         logger.error(f"비밀 불러오기 실패: {str(e)}")
         raise
 
+# src/utils.py 트렌드 분석 강화
+def get_trending_topics():
+    # 실시간 인기 검색어 크롤링 추가
+    trends = crawl_google_trends()
+    return trends[0] if trends else "AI 기술"
+
 def get_trending_topics():
     """다음 랭킹 뉴스에서 트렌드 토픽 수집"""
     try:
