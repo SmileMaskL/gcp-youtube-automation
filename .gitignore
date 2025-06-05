@@ -6,5 +6,5 @@ output/
 __pycache__/
 *.pyc
 logs/
-.env
+*.env
 service-account.json
