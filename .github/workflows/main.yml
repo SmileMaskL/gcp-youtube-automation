@@ -8,7 +8,7 @@ on:
     - cron: '0 15,18,22,3,9,13 * * *'
 
 env:
-  PROJECT_ID: gcp-youtube-automation-461202
+  PROJECT_ID: youtube-full-automated
   GCP_REGION: us-central1
 
 jobs:
@@ -35,8 +35,8 @@ jobs:
         id: 'auth'
         uses: 'google-github-actions/auth@v2'
         with:
-          workload_identity_provider: "projects/${{ env.PROJECT_ID }}/locations/global/workloadIdentityPools/github-pool/providers/github-provider"
-          service_account: "github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com"
+          workload_identity_provider: 'projects/${{ env.PROJECT_ID }}/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+          service_account: 'github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com'
 
       - name: Deploy to App Engine
         id: deploy
@@ -52,23 +52,22 @@ jobs:
 
       - name: Trigger App Engine automation endpoint
         env:
-          APP_ENGINE_URL: ${{ env.APP_URL }}
           TRIGGER_ID: ${{ secrets.TRIGGER_ID }}
         run: |
-          if [ -z "$APP_ENGINE_URL" ]; then
-            echo "Error: App Engine URL not found. Deployment might have failed or not yet propagated."
+          if [ -z "$APP_URL" ]; then
+            echo "Error: App Engine URL not found"
             exit 1
           fi
-          echo "Attempting to trigger App Engine at: $APP_ENGINE_URL/run"
-          response=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${APP_ENGINE_URL}/run" \
+          echo "Triggering automation at: $APP_URL/run"
+          response=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$APP_URL/run" \
             -H "Content-Type: application/json" \
-            -d '{"trigger": "github_actions_scheduled", "trigger_id": "'$TRIGGER_ID'"}')
+            -d '{"trigger": "github_actions", "trigger_id": "'$TRIGGER_ID'"}')
           
           if [ "$response" -eq 202 ]; then
-            echo "✅ Automation triggered successfully (HTTP 202 Accepted)."
+            echo "✅ Automation triggered"
           elif [ "$response" -eq 429 ]; then
-            echo "⚠️ Automation trigger rejected (HTTP 429 Too Many Requests - already running)."
+            echo "⚠️ Already running"
           else
-            echo "❌ Failed to trigger automation. HTTP status code: $response"
+            echo "❌ Failed with status: $response"
             exit 1
           fi
