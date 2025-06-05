@@ -17,10 +17,6 @@ from src.shorts_converter import convert_to_shorts
 
 app = Flask(__name__)
 
-# 로깅 설정
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 # 0. 시작 시 Secret Manager에서 환경변수 설정
 def init_secrets():
     """시작 시 모든 비밀 정보 로드"""
@@ -44,23 +40,31 @@ def init_secrets():
             response = secret_client.access_secret_version(name=name)
             secrets[key] = response.payload.data.decode('UTF-8')
             os.environ[key] = secrets[key]  # 환경변수 설정
-            logger.info(f"✅ {key} 로드 완료")
+            logging.info(f"✅ {key} 로드 완료")
         except Exception as e:
-            logger.critical(f"🔴 {key} 로드 실패: {str(e)}")
+            logging.critical(f"🔴 {key} 로드 실패: {str(e)}")
             raise RuntimeError(f"{key} 로드 실패")
 
 # 초기화 실행
 try:
     init_secrets()
 except Exception as e:
-    logger.critical(f"🔴 시스템 시작 불가: {str(e)}")
+    logging.critical(f"🔴 시스템 시작 불가: {str(e)}")
     exit(1)
+
+# 로깅 설정
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # 락 파일 타임아웃 (1시간)
 LOCK_TIMEOUT = 3600
 
 @app.route('/run', methods=['POST'])
 def run_automation():
+    """자동화 작업 트리거 엔드포인트"""
     # 락 파일 체크 (동시 실행 방지)
     if os.path.exists('automation.lock'):
         lock_time = os.path.getmtime('automation.lock')
@@ -80,6 +84,7 @@ def run_automation():
     return jsonify({"status": "started"}), 202
 
 def background_task():
+    """실제 자동화 작업 수행"""
     try:
         logger.info("🚀 자동화 작업 시작")
         
