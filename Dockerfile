@@ -1,20 +1,17 @@
+# 파이썬 3.9 기반
 FROM python:3.9-slim
 
+# FFmpeg 설치 (가장 중요한 단계!)
+RUN apt-get update && apt-get install -y ffmpeg
+
+# 작업 디렉토리 설정
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y \
-    ffmpeg \
-    libsm6 \
-    libxext6 \
-    fontconfig \
-    fonts-noto-cjk \
-    && rm -rf /var/lib/apt/lists/*
+# 필요한 파일 복사
+COPY . /app
 
-COPY requirements.txt .
+# 패키지 설치
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
-
-RUN fc-cache -fv
-
-CMD ["gunicorn", "--bind", "0.0.0.0:8080", "app:app", "--timeout", "300"]
+# 앱 실행
+CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:8080"]
