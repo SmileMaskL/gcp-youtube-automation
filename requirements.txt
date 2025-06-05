@@ -22,5 +22,5 @@ youtube-transcript-api==0.6.1 # 유튜브 스크립트 관련 라이브러리 (�
 google-cloud-logging==3.8.0
 beautifulsoup4==4.12.3
 ffmpeg-python==0.2.0 # MoviePy가 내부적으로 FFmpeg을 사용하지만, 직접 제어를 위해 추가
-ffmpeg-static==0.0.1 # FFmpeg 설치를 돕는 라이브러리 (Dockerfile에서 직접 설치하므로 선택적)
+# ffmpeg-static==0.0.1 # FFmpeg 설치를 돕는 라이브러리 (Dockerfile에서 직접 설치하므로 선택적)
 elevenlabs==1.2.0 # ElevenLabs API 연동
