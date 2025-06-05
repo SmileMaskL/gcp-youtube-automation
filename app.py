@@ -23,7 +23,7 @@ if not os.path.exists(LOGS_DIR):
 
 logging.basicConfig(
     filename=os.path.join(LOGS_DIR, "automation.log"),
-    level=logging.110,
+    level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s"
 )
 logger = logging.getLogger()
