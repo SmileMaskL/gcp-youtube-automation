@@ -1,0 +1,26 @@
+google-api-python-client==2.125.0
+google-auth-oauthlib==1.2.0
+google-auth==2.29.0
+google-cloud-secret-manager==2.16.1
+google-cloud-texttospeech==2.14.0 # 음성 생성에 필요, ElevenLabs 사용시 불필요하지만 유지
+google-generativeai==0.3.2 # Gemini API
+google-cloud-storage==2.16.0
+openai==1.30.1
+moviepy==1.0.3
+Pillow==10.2.0
+requests==2.31.0
+nltk==3.8.1
+python-dotenv==1.0.0
+pexels-api==1.0.1
+pytz==2023.3
+Flask==3.1.1
+werkzeug==3.1.3
+gunicorn>=22.0.0
+pytube==15.0.0 # 유튜브 영상 다운로드 관련 라이브러리 (현재 코드에서는 사용 안 함, 필요 시 활용)
+waitress==2.1.2 # Flask 배포용 WSGI 서버 (Gunicorn과 함께 사용 가능)
+youtube-transcript-api==0.6.1 # 유튜브 스크립트 관련 라이브러리 (현재 코드에서는 사용 안 함, 필요 시 활용)
+google-cloud-logging==3.8.0
+beautifulsoup4==4.12.3
+ffmpeg-python==0.2.0 # MoviePy가 내부적으로 FFmpeg을 사용하지만, 직접 제어를 위해 추가
+ffmpeg-static==0.0.1 # FFmpeg 설치를 돕는 라이브러리 (Dockerfile에서 직접 설치하므로 선택적)
+elevenlabs==1.2.0 # ElevenLabs API 연동
