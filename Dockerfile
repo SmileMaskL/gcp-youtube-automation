@@ -22,6 +22,7 @@ COPY . .
 
 # 실행 포트 설정
 ENV PORT 8080
+ENV YOUTUBE_CLIENT_SECRET=$YOUTUBE_CLIENT_SECRET
 
 # 실행 명령
 CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 app:app
