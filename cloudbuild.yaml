@@ -1,8 +1,28 @@
 steps:
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/youtube-auto-upload/youtube-auto-upload', '.']
+    args: [
+      'build', '-t', 
+      'us-central1-docker.pkg.dev/$PROJECT_ID/youtube-auto-upload/youtube-auto-upload', 
+      '.'
+    ]
+
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'us-central1-docker.pkg.dev/$PROJECT_ID/youtube-auto-upload/youtube-auto-upload']
+    args: [
+      'push', 
+      'us-central1-docker.pkg.dev/$PROJECT_ID/youtube-auto-upload/youtube-auto-upload'
+    ]
+
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: 'gcloud'
-    args: ['run', 'deploy', 'youtube-auto-upload', '--image', 'us-central1-docker.pkg.dev/$PROJECT_ID/youtube-auto-upload/youtube-auto-upload', '--region', 'us-central1', '--platform', 'managed', '--allow-unauthenticated']
+    args: [
+      'run', 'deploy', 'youtube-auto-upload',
+      '--image', 'us-central1-docker.pkg.dev/$PROJECT_ID/youtube-auto-upload/youtube-auto-upload',
+      '--region', 'us-central1',
+      '--platform', 'managed',
+      '--allow-unauthenticated',
+      '--memory', '1Gi',
+      '--timeout', '900s',
+      '--port', '8080'
+    ]
+options:
+  logging: CLOUD_LOGGING_ONLY
