@@ -10,12 +10,18 @@ RUN apt-get update && \
 
 WORKDIR /app
 
-# 먼저 requirements 설치 (캐시 활용)
+# pip 업그레이드 먼저 수행
+RUN pip install --upgrade pip
+
+# requirements 설치
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 소스 코드 복사
 COPY . .
 
+# 실행 포트 설정
+ENV PORT 8080
+
 # 실행 명령
-CMD ["python", "main.py"]
+CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 main:app
