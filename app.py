@@ -83,3 +83,18 @@ def upload():
     # YouTube 업로드
     try:
         youtube_title = "AI 수익
+    try:
+        youtube_title = "AI 수익 자동화 - 오늘의 인공지능 자동 동영상"
+        youtube_description = f"이 영상은 오픈AI GPT-4o로 자동 생성되었습니다.\n\n대본:\n{script_text}"
+        video_id = upload_to_youtube(youtube_title, youtube_description, outpath)
+    except Exception as e:
+        return jsonify({"error": "유튜브 업로드 실패", "raw": str(e)}), 500
+
+    return jsonify({
+        "result": "성공!",
+        "video_id": video_id,
+        "youtube_link": f"https://www.youtube.com/watch?v={video_id}"
+    })
+
+if __name__ == '__main__':
+    app.run(host="0.0.0.0", port=8080)
