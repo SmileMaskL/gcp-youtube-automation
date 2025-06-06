@@ -97,3 +97,19 @@ def upload_video(file_path, title, description, thumbnail_path=None):
             time.sleep(3)
     
     return None  # 모든 시도 실패
+    
+def upload_video(...):
+    # 기존 코드 유지
+    # ▼▼▼ 수익화 자동 설정 제거 이유 ▼▼▼
+    """
+    [주의] 2024년 유튜브 정책 변경!
+    * 첫 영상 업로드 전: 채널에서 수동으로 수익화 승인 필수
+    * 이후 업로드된 영상: 자동 수익화 가능
+    * 수익화 미승인 채널에선 monetizationDetails API 호출 불가
+    """
+    # 업로드 후 수익화 시도 (채널 승인된 경우만 작동)
+    try:
+        if is_channel_monetized():  # 새로 추가된 함수
+            youtube.videos().update(...)  # 수익화 설정
+    except:
+        logger.warning("⚠️ 채널 수익화 미승인 상태")
