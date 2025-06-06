@@ -3,8 +3,6 @@ name: Deploy to Cloud Run
 on:
   push:
     branches: [ main ]
-  # schedule:
-    # - cron: '0 3,9,15,21 * * *'  # 하루 4회 실행
 
 env:
   PROJECT_ID: youtube-fully-automated
@@ -23,23 +21,23 @@ jobs:
       with:
         project_id: ${{ env.PROJECT_ID }}
         service_account_key: ${{ secrets.GCP_SERVICE_KEY }}
-        install_components: gke-gcloud-auth-plugin
+        export_default_credentials: true
 
-    - name: Authenticate Docker
-      run: |-
+    - name: Authenticate Docker to Artifact Registry
+      run: |
         gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
     - name: Build and Push Docker image
-      run: |-
-        docker build -t us-central1-docker.pkg.dev/$PROJECT_ID/$SERVICE_NAME/$SERVICE_NAME .
-        docker push us-central1-docker.pkg.dev/$PROJECT_ID/$SERVICE_NAME/$SERVICE_NAME
+      run: |
+        docker build -t us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}/${{ env.SERVICE_NAME }} .
+        docker push us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}/${{ env.SERVICE_NAME }}
 
     - name: Deploy to Cloud Run
-      run: |-
-        gcloud run deploy $SERVICE_NAME \
-          --image us-central1-docker.pkg.dev/$PROJECT_ID/$SERVICE_NAME/$SERVICE_NAME \
+      run: |
+        gcloud run deploy ${{ env.SERVICE_NAME }} \
+          --image us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}/${{ env.SERVICE_NAME }} \
           --platform managed \
-          --region $REGION \
+          --region ${{ env.REGION }} \
           --memory 1Gi \
           --timeout 900s \
           --allow-unauthenticated \
@@ -47,9 +45,9 @@ jobs:
           --set-env-vars="YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }}"
 
     - name: Trigger service
-      run: |-
-        URL=$(gcloud run services describe $SERVICE_NAME \
+      run: |
+        URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
           --platform managed \
-          --region $REGION \
+          --region ${{ env.REGION }} \
           --format 'value(status.url)')
         curl -X POST "$URL/upload" -H "Content-Type: application/json"
