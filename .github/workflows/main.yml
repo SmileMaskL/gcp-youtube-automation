@@ -1,73 +1,65 @@
-name: Deploy to GCP App Engine and Trigger Automation
+name: Auto Build, Deploy, and Trigger YouTube Bot
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
   schedule:
-    - cron: '0 15,18,22,3,9,13 * * *'
+    - cron: '0 3,9,15,21 * * *' # 하루 4번 실행 (한국 기준 오전 12시, 6시, 정오, 6시)
 
 env:
   PROJECT_ID: youtube-full-automated
   GCP_REGION: us-central1
+  IMAGE_NAME: yt-auto-bot
+  REPOSITORY_NAME: youtube-bot-repo
 
 jobs:
-  deploy-and-trigger:
+  build-deploy-run:
     runs-on: ubuntu-latest
 
-    permissions:
-      contents: 'read'
-      id-token: 'write'
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    - name: ✅ GitHub 코드 가져오기
+      uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
+    - name: ✅ Docker Buildx 설정
+      uses: docker/setup-buildx-action@v3
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+    - name: ✅ GCP Artifact Registry 로그인
+      uses: docker/login-action@v3
+      with:
+        registry: us-central1-docker.pkg.dev
+        username: _json_key
+        password: ${{ secrets.GCP_SERVICE_KEY }}
 
-      - name: Configure GCP credentials
-        id: 'auth'
-        uses: 'google-github-actions/auth@v2'
-        with:
-          workload_identity_provider: 'projects/youtube-fully-automated/locations/global/workloadIdentityPools/github-pool/providers/github-provider'          
-          service_account: 'github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com'
+    - name: ✅ Docker 이미지 빌드
+      run: |
+        docker build -t $IMAGE_NAME .
 
-      - name: Deploy to App Engine
-        id: deploy
-        uses: google-github-actions/deploy-appengine@v2
-        with:
-          project_id: ${{ env.PROJECT_ID }}
+    - name: ✅ Docker 이미지 태그 및 푸시
+      run: |
+        docker tag $IMAGE_NAME us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/${{ env.IMAGE_NAME }}
+        docker push us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/${{ env.IMAGE_NAME }}
 
-      - name: Get App Engine service URL
-        id: get_url
-        run: |
-          SERVICE_URL=$(gcloud app services describe default --project ${{ env.PROJECT_ID }} --format="value(defaultHostname)")
-          echo "APP_URL=https://${SERVICE_URL}" >> $GITHUB_ENV
+    - name: ✅ GCP 인증 (App Engine용)
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ secrets.GCP_SERVICE_KEY }}
 
-      - name: Trigger App Engine automation endpoint
-        env:
-          TRIGGER_ID: ${{ secrets.TRIGGER_ID }}
-        run: |
-          if [ -z "$APP_URL" ]; then
-            echo "Error: App Engine URL not found"
-            exit 1
-          fi
-          echo "Triggering automation at: $APP_URL/run"
-          response=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$APP_URL/run" \
-            -H "Content-Type: application/json" \
-            -d '{"trigger": "github_actions", "trigger_id": "'$TRIGGER_ID'"}')
-          
-          if [ "$response" -eq 202 ]; then
-            echo "✅ Automation triggered"
-          elif [ "$response" -eq 429 ]; then
-            echo "⚠️ Already running"
-          else
-            echo "❌ Failed with status: $response"
-            exit 1
-          fi
+    - name: ✅ Cloud Run에 배포
+      run: |
+        gcloud config set project $PROJECT_ID
+        gcloud run deploy gcp-youtube-automation \
+          --image us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/${{ env.IMAGE_NAME }} \
+          --platform managed \
+          --region $GCP_REGION \
+          --allow-unauthenticated \
+          --memory 1Gi \
+          --timeout 900s
+
+    - name: ✅ 자동화 트리거 실행
+      run: |
+        URL=$(gcloud run services describe gcp-youtube-automation \
+          --platform managed \
+          --region $GCP_REGION \
+          --format="value(status.url)")
+        echo "🚀 Running automation at $URL"
+        curl -X POST "$URL/run" -H "Content-Type: application/json"
