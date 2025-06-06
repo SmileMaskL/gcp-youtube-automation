@@ -4,10 +4,10 @@ on:
   push:
     branches: [ main ]
   # schedule:
-    # - cron: '0 3,9,15,21 * * *'  # 하루 4회 실행 (한국 시간 기준)
+    # - cron: '0 3,9,15,21 * * *'  # 하루 4회 실행
 
 env:
-  PROJECT_ID: youtube-fully-automated  # ▼▼▼ 반드시 변경!
+  PROJECT_ID: youtube-fully-automated
   SERVICE_NAME: youtube-auto-upload
   REGION: us-central1
 
@@ -23,30 +23,28 @@ jobs:
       with:
         project_id: ${{ env.PROJECT_ID }}
         service_account_key: ${{ secrets.GCP_SERVICE_KEY }}
+        install_components: gke-gcloud-auth-plugin
 
-    - name: Enable Artifact Registry API
+    - name: Authenticate Docker
       run: |-
-        gcloud services enable artifactregistry.googleapis.com
+        gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
-    - name: Build Docker image
+    - name: Build and Push Docker image
       run: |-
-        docker build -t gcr.io/$PROJECT_ID/$SERVICE_NAME .
-
-    - name: Push to Artifact Registry
-      run: |-
-        docker push gcr.io/$PROJECT_ID/$SERVICE_NAME
+        docker build -t us-central1-docker.pkg.dev/$PROJECT_ID/$SERVICE_NAME/$SERVICE_NAME .
+        docker push us-central1-docker.pkg.dev/$PROJECT_ID/$SERVICE_NAME/$SERVICE_NAME
 
     - name: Deploy to Cloud Run
       run: |-
         gcloud run deploy $SERVICE_NAME \
-          --image gcr.io/$PROJECT_ID/$SERVICE_NAME \
+          --image us-central1-docker.pkg.dev/$PROJECT_ID/$SERVICE_NAME/$SERVICE_NAME \
           --platform managed \
           --region $REGION \
           --memory 1Gi \
           --timeout 900s \
           --allow-unauthenticated \
           --port 8080 \
-          --set-env-vars="YT_API_KEY=${{ secrets.YOUTUBE_CLIENT_SECRET }}"
+          --set-env-vars="YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }}"
 
     - name: Trigger service
       run: |-
