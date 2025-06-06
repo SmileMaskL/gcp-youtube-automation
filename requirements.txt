@@ -13,7 +13,7 @@ nltk==3.8.1
 python-dotenv==1.0.0
 pexels-api==1.0.1
 pytz==2023.3
-Flask=2.3.2
+Flask==2.3.2
 werkzeug==3.0.1
 gunicorn>=22.0.0
 pytube==15.0.0 # 유튜브 영상 다운로드 관련 라이브러리 (현재 코드에서는 사용 안 함, 필요 시 활용)
