@@ -39,27 +39,32 @@ jobs:
         docker tag $IMAGE_NAME us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/${{ env.IMAGE_NAME }}
         docker push us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/${{ env.IMAGE_NAME }}
 
-    - name: ✅ GCP 인증 (App Engine용)
+    - name: ✅ GCP 인증 (Cloud Run용)
       uses: google-github-actions/auth@v2
       with:
         credentials_json: ${{ secrets.GCP_SERVICE_KEY }}
 
-    - name: ✅ Cloud Run에 배포
+    - name: ✅ gcloud CLI 설치
+      uses: google-github-actions/setup-gcloud@v2
+      with:
+        project_id: ${{ env.PROJECT_ID }}
+
+    - name: ✅ Cloud Run에 Docker 이미지 직접 배포 (재빌드 없이)
       run: |
-        gcloud config set project $PROJECT_ID
         gcloud run deploy gcp-youtube-automation \
           --image us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/${{ env.IMAGE_NAME }} \
           --platform managed \
           --region $GCP_REGION \
           --allow-unauthenticated \
           --memory 1Gi \
-          --timeout 900s
+          --timeout 900s \
+          --port 8080
 
-    - name: ✅ 자동화 트리거 실행
+    - name: ✅ 자동화 트리거 실행 (curl로 실행)
       run: |
         URL=$(gcloud run services describe gcp-youtube-automation \
           --platform managed \
           --region $GCP_REGION \
           --format="value(status.url)")
-        echo "🚀 Running automation at $URL"
+        echo "🚀 실행 중: $URL"
         curl -X POST "$URL/run" -H "Content-Type: application/json"
