@@ -7,7 +7,7 @@ google-generativeai==0.3.2 # Gemini API
 google-cloud-storage==2.16.0
 openai==1.30.1
 moviepy==1.0.3
-Pillow==10.2.0
+Pillow==9.5.0
 requests==2.31.0
 nltk==3.8.1
 python-dotenv==1.0.0
@@ -25,3 +25,5 @@ ffmpeg-python==0.2.0 # MoviePy가 내부적으로 FFmpeg을 사용하지만, 직
 # ffmpeg-static==0.0.1 # FFmpeg 설치를 돕는 라이브러리 (Dockerfile에서 직접 설치하므로 선택적)
 elevenlabs==1.2.0 # ElevenLabs API 연동
 oauth2client
+numpy==1.23.5
+opencv-python==4.6.0.66
