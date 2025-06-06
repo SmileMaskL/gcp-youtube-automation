@@ -3,8 +3,8 @@ name: Deploy to Cloud Run
 on:
   push:
     branches: [ main ]
-  schedule:
-    - cron: '0 3,9,15,21 * * *'  # 하루 4회 실행 (한국 시간 기준)
+  # schedule:
+    # - cron: '0 3,9,15,21 * * *'  # 하루 4회 실행 (한국 시간 기준)
 
 env:
   PROJECT_ID: youtube-fully-automated  # ▼▼▼ 반드시 변경!
