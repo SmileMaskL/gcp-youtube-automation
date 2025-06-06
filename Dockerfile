@@ -1,17 +1,21 @@
-# ✅ 1. 파이썬 3.10 슬림 이미지
+# ✅ 파이썬 3.10 슬림 이미지를 사용합니다
 FROM python:3.10-slim
 
-# ✅ 2. 필수 패키지 설치 (ffmpeg 포함)
-RUN apt-get update && apt-get install -y ffmpeg curl && apt-get clean
+# ✅ 필요한 시스템 패키지들을 설치합니다
+RUN apt-get update && \
+    apt-get install -y ffmpeg curl python3-dev libsm6 libxext6 libxrender1 && \
+    apt-get clean
 
-# ✅ 3. 작업 디렉토리 설정
+# ✅ 작업 폴더를 만듭니다
 WORKDIR /app
 
-# ✅ 4. 모든 파일 복사
+# ✅ 모든 파일을 복사합니다
 COPY . .
 
-# ✅ 5. 파이썬 패키지 설치
-RUN pip install --upgrade pip && pip install -r requirements.txt
+# ✅ 파이썬 패키지들을 설치합니다
+RUN pip install --upgrade pip && \
+    pip install moviepy==1.0.3 && \
+    pip install --no-cache-dir youtube-upload
 
-# ✅ 6. 메인 실행 파일 지정
+# ✅ 실행 명령어를 설정합니다
 CMD ["python", "src/content_generator.py"]
