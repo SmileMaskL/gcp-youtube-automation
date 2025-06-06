@@ -24,4 +24,4 @@ COPY . .
 ENV PORT 8080
 
 # 실행 명령
-CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 main:app
+CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 app:app
