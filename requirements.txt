@@ -1,10 +1,10 @@
-google-api-python-client==2.125.0
+google-api-python-client==2.84.0
 google-auth-oauthlib==1.2.0
 google-auth==2.29.0
 google-cloud-secret-manager==2.16.1
 google-cloud-texttospeech==2.14.0 # 음성 생성에 필요, ElevenLabs 사용시 불필요하지만 유지
 google-generativeai==0.3.2 # Gemini API
-google-cloud-storage==2.16.0
+google-cloud-storage==2.8.0
 openai==1.30.1
 moviepy==1.0.3
 Pillow==9.5.0
@@ -13,7 +13,7 @@ nltk==3.8.1
 python-dotenv==1.0.0
 pexels-api==1.0.1
 pytz==2023.3
-Flask==3.1.1
+Flask=2.3.2
 werkzeug==3.1.3
 gunicorn>=22.0.0
 pytube==15.0.0 # 유튜브 영상 다운로드 관련 라이브러리 (현재 코드에서는 사용 안 함, 필요 시 활용)
