@@ -22,7 +22,7 @@ def upload_video():
         video_path = create_video()
         
         # 2. 유튜브 업로드
-        youtube = build('youtube', 'v3', developerKey=os.getenv('YT_API_KEY'))
+        youtube = build('youtube', 'v3', developerKey=os.getenv('YOUTUBE_CLIENT_SECRET'))
         
         request = youtube.videos().insert(
             part="snippet,status",
