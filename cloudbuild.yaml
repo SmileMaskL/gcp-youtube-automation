@@ -7,7 +7,7 @@ steps:
     '--build-arg', 'YOUTUBE_CLIENT_ID=$_YOUTUBE_CLIENT_ID',
     '--build-arg', 'YOUTUBE_CLIENT_SECRET=$_YOUTUBE_CLIENT_SECRET',
     '--build-arg', 'YOUTUBE_REFRESH_TOKEN=$_YOUTUBE_REFRESH_TOKEN',
-    '--build-arg', 'OPENAI_API_KEY=$_OPENAI_API_KEY',
+    '--build-arg', 'OPENAI_API_KEYS=$_OPENAI_API_KEYS',  # 모든 키를 한번에 전달
     '.'
   ]
 
@@ -25,21 +25,21 @@ steps:
     '--region', 'us-central1',
     '--platform', 'managed',
     '--allow-unauthenticated',
-    '--memory', '2Gi',  # 1Gi → 2Gi로 업그레이드
+    '--memory', '2Gi',
     '--timeout', '900s',
     '--port', '8080',
     '--set-env-vars', 
-    'YOUTUBE_CLIENT_ID=$_YOUTUBE_CLIENT_ID,YOUTUBE_CLIENT_SECRET=$_YOUTUBE_CLIENT_SECRET,YOUTUBE_REFRESH_TOKEN=$_YOUTUBE_REFRESH_TOKEN,OPENAI_API_KEY=$_OPENAI_API_KEY'
+    'YOUTUBE_CLIENT_ID=$_YOUTUBE_CLIENT_ID,YOUTUBE_CLIENT_SECRET=$_YOUTUBE_CLIENT_SECRET,YOUTUBE_REFRESH_TOKEN=$_YOUTUBE_REFRESH_TOKEN,OPENAI_API_KEYS=$_OPENAI_API_KEYS'
   ]
 
 options:
   logging: CLOUD_LOGGING_ONLY
   machineType: 'E2_HIGHCPU_8'
-  diskSizeGb: 50  # 디스크 크기 추가
+  diskSizeGb: 50
   substitution_option: 'ALLOW_LOOSE'
 
 substitutions:
-  _YOUTUBE_CLIENT_ID: ''  # 트리거에서 설정
-  _YOUTUBE_CLIENT_SECRET: ''  # 트리거에서 설정
-  _YOUTUBE_REFRESH_TOKEN: ''  # 트리거에서 설정
-  _OPENAI_API_KEYS: ''  # 트리거에서 설정
+  _YOUTUBE_CLIENT_ID: ''
+  _YOUTUBE_CLIENT_SECRET: ''
+  _YOUTUBE_REFRESH_TOKEN: ''
+  _OPENAI_API_KEYS: 'key1,key2,key3,key4,key5,key6,key7,key8,key9,key10'  # 실제 키로 대체
