@@ -11,7 +11,7 @@ permissions:
 
 env:
   PROJECT_ID: youtube-fully-automated
-  SERVICE_NAME: youtube-auto-upload
+  SERVICE_NAME: gcp-youtube-automation
   REGION: us-central1
   ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
   WORKLOAD_IDENTITY_PROVIDER: projects/${{ env.PROJECT_ID }}/locations/global/workloadIdentityPools/github-pool-v2/providers/github-provider
