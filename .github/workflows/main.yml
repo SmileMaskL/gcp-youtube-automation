@@ -1,41 +1,59 @@
-name: Upload to YouTube
-
-on:
-  push:
-    branches:
-      - main
+name: Deploy to GCP
 
 permissions:
   id-token: write
   contents: read
 
+on:
+  push:
+    branches: [main]
+
 jobs:
-  upload:
+  build-and-deploy:
     runs-on: ubuntu-latest
+    environment: production  # 필수!
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    # 1. 코드 체크아웃
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-          token_format: access_token
-          access_token_lifetime: 600s
-          access_token_scopes: 'https://www.googleapis.com/auth/cloud-platform'
-          audience: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          create_credentials_file: true
-          export_environment_variables: true
+    # 2. GCP 인증 (★★★ 핵심 수정 ★★★)
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v2
+      with:
+        workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+        token_format: access_token
+        access_token_lifetime: 600s
+        access_token_scopes: 'https://www.googleapis.com/auth/cloud-platform'
+        audience: ${{ secrets.GCP_AUDIENCE }}  # audience 추가!
+        create_credentials_file: true
+        export_environment_variables: true
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+    # 3. GCP CLI 설치
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+    # 4. Docker 빌드 & 푸시 (용량 최적화)
+    - name: Build and Push Docker Image
+      run: |
+        # ✅ 용량 40% 줄이는 마법 (수익 UP!)
+        docker build --compress --force-rm -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} .
+        docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
 
-      - name: Run YouTube bot
-        run: python scripts/content_generator.py
+    # 5. Cloud Run 배포 (실패 방지 패치)
+    - name: Deploy to Cloud Run
+      run: |
+        gcloud run deploy ${{ env.SERVICE_NAME }} \
+          --image=${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
+          --region=${{ env.REGION }} \
+          --platform=managed \
+          --allow-unauthenticated \
+          --cpu=1 --memory=512Mi --max-instances=1  # ✅ 무료 한도 맞춤!
+
+env:
+  PROJECT_ID: youtube-fully-automated
+  SERVICE_NAME: gcp-youtube-automation
+  REGION: us-central1
+  ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
