@@ -1,4 +1,4 @@
-name: Deploy to Cloud Run
+name: Automated YouTube Upload Deployment
 
 on:
   push:
@@ -8,52 +8,72 @@ env:
   PROJECT_ID: youtube-fully-automated
   SERVICE_NAME: youtube-auto-upload
   REGION: us-central1
+  ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+
+    permissions:
+      contents: 'read'
+      id-token: 'write'
 
     steps:
-      - uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-        with:
-          project_id: ${{ env.PROJECT_ID }}
-          service_account_key: ${{ secrets.GCP_SERVICE_KEY }}
-          export_default_credentials: true
-          install_components: gke-gcloud-auth-plugin
+    - name: Google Cloud Auth
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+        workload_identity_provider: projects/${{ env.PROJECT_ID }}/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+        service_account: github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
 
-      - name: Configure Docker Authentication
-        run: |
-          echo $GITHUB_TOKEN | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
-          gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
-          gcloud auth configure-docker gcr.io --quiet
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
+      with:
+        project_id: ${{ env.PROJECT_ID }}
 
-      - name: Build and Push Docker Image
-        run: |
-          docker build -t us-central1-docker.pkg.dev/${PROJECT_ID}/${SERVICE_NAME}/${SERVICE_NAME} .
-          docker push us-central1-docker.pkg.dev/${PROJECT_ID}/${SERVICE_NAME}/${SERVICE_NAME}
+    - name: Docker Setup
+      run: |
+        gcloud auth configure-docker ${{ env.ARTIFACT_REGISTRY }} --quiet
+        echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      - name: Deploy to Cloud Run
-        run: |
-          gcloud run deploy ${SERVICE_NAME} \
-            --image us-central1-docker.pkg.dev/${PROJECT_ID}/${SERVICE_NAME}/${SERVICE_NAME} \
-            --platform managed \
-            --region ${REGION} \
-            --memory 1Gi \
-            --timeout 900s \
-            --allow-unauthenticated \
-            --port 8080 \
-            --set-env-vars="YOUTUBE_CLIENT_ID=${{ secrets.YOUTUBE_CLIENT_ID }},\
-                           YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }},\
-                           YOUTUBE_REFRESH_TOKEN=${{ secrets.YOUTUBE_REFRESH_TOKEN }},\
-                           OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}"
+    - name: Build Docker Image
+      run: |
+        docker build \
+          -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
+          --build-arg YOUTUBE_CLIENT_ID=${{ secrets.YOUTUBE_CLIENT_ID }} \
+          --build-arg YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }} \
+          --build-arg YOUTUBE_REFRESH_TOKEN=${{ secrets.YOUTUBE_REFRESH_TOKEN }} \
+          --build-arg OPENAI_API_KEYS=${{ secrets.OPENAI_API_KEYS }} \  # 모든 키 전달
+          .
 
-      - name: Verify Deployment
-        run: |
-          gcloud run services describe ${SERVICE_NAME} \
-            --platform managed \
-            --region ${REGION} \
-            --format 'get(status.url)'
+    - name: Push Docker Image
+      run: |
+        docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
+
+    - name: Deploy to Cloud Run
+      run: |
+        gcloud run deploy ${{ env.SERVICE_NAME }} \
+          --image ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
+          --platform managed \
+          --region ${{ env.REGION }} \
+          --memory 2Gi \
+          --timeout 900s \
+          --allow-unauthenticated \
+          --port 8080 \
+          --set-env-vars \
+            "YOUTUBE_CLIENT_ID=${{ secrets.YOUTUBE_CLIENT_ID }},\
+            YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }},\
+            YOUTUBE_REFRESH_TOKEN=${{ secrets.YOUTUBE_REFRESH_TOKEN }},\
+            OPENAI_API_KEYS=${{ secrets.OPENAI_API_KEYS }}"
+
+    - name: Verify Deployment
+      run: |
+        SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
+          --platform managed \
+          --region ${{ env.REGION }} \
+          --format 'value(status.url)')
+        echo "Deployed service URL: $SERVICE_URL"
+        curl -s $SERVICE_URL/health-check || echo "Service is up but health check failed"
