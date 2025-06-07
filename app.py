@@ -1,100 +1,67 @@
 import os
-import tempfile
-from flask import Flask, request, jsonify
-
-from moviepy.editor import TextClip
-import openai
-from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
-
-# 환경변수에서 서비스 키를 받아서 사용 (Cloud Run 환경변수로 등록 필요)
-YOUTUBE_CLIENT_ID = os.getenv('YOUTUBE_CLIENT_ID')
-YOUTUBE_CLIENT_SECRET = os.getenv('YOUTUBE_CLIENT_SECRET')
-YOUTUBE_REFRESH_TOKEN = os.getenv('YOUTUBE_REFRESH_TOKEN')
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+import time
+import logging
+from flask import Flask, jsonify
+from src.youtube_uploader import YouTubeUploader
+from src.openai_utils import OpenAIClient
+from src.video_generator import generate_video  # 비디오 생성 모듈
 
 app = Flask(__name__)
 
-def get_openai_text(prompt):
-    openai.api_key = OPENAI_API_KEY
-    response = openai.chat.completions.create(
-        model="gpt-4o",
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=300
-    )
-    return response.choices[0].message.content.strip()
+# 로깅 설정
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('app.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
-def make_video_from_text(text, outfile):
-    # 30초짜리 검정배경 텍스트 영상 생성
-    clip = TextClip(text, fontsize=40, color='white', size=(720,1280), bg_color='black', method='caption')
-    clip = clip.set_duration(30)
-    clip.write_videofile(outfile, fps=24, codec="libx264", audio=False)
+# 전역 클라이언트 초기화
+ai_client = OpenAIClient()
+youtube_uploader = YouTubeUploader()
 
-def get_youtube_service():
-    # Cloud Run에서는 Refresh Token 기반 인증이 안정적 (서버리스 환경)
-    creds = Credentials(
-        token=None,
-        refresh_token=YOUTUBE_REFRESH_TOKEN,
-        token_uri="https://oauth2.googleapis.com/token",
-        client_id=YOUTUBE_CLIENT_ID,
-        client_secret=YOUTUBE_CLIENT_SECRET,
-        scopes=["https://www.googleapis.com/auth/youtube.upload"]
-    )
-    return build("youtube", "v3", credentials=creds)
-
-def upload_to_youtube(title, description, video_file):
-    youtube = get_youtube_service()
-    body=dict(
-        snippet=dict(
+def upload_process():
+    """실제 업로드 프로세스"""
+    try:
+        # 1. 콘텐츠 생성
+        prompt = "Create a 5-minute YouTube video script about AI automation"
+        script = ai_client.generate_content(prompt)
+        logger.info("✅ 콘텐츠 생성 완료")
+        
+        # 2. 비디오 생성
+        video_path = generate_video(script)
+        logger.info(f"🎬 비디오 생성 완료: {video_path}")
+        
+        # 3. 업로드 실행
+        title = "AI로 자동 생성된 동영상"
+        description = "이 동영상은 AI에 의해 자동 생성되었습니다."
+        video_url = youtube_uploader.upload_video(
+            file_path=video_path,
             title=title,
             description=description,
-            tags=["AI","Shorts","자동수익"]
-        ),
-        status=dict(
-            privacyStatus="public"
+            thumbnail_path="thumbnail.jpg" if os.path.exists("thumbnail.jpg") else None
         )
-    )
-    media = MediaFileUpload(video_file, mimetype='video/mp4', resumable=True)
-    request = youtube.videos().insert(
-        part="snippet,status",
-        body=body,
-        media_body=media
-    )
-    response = request.execute()
-    return response.get("id")
+        
+        logger.info(f"📤 업로드 완료: {video_url}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ 업로드 실패: {str(e)}", exc_info=True)
+        return False
 
 @app.route('/upload', methods=['POST'])
 def upload():
-    prompt = request.json.get('prompt') or "AI가 돈 버는 방법에 대한 유튜브 스크립트 30초 분량으로 만들어줘."
-    try:
-        script_text = get_openai_text(prompt)
-    except Exception as e:
-        return jsonify({"error": "AI 대본 생성 실패", "raw": str(e)}), 500
+    """업로드 API 엔드포인트"""
+    success = upload_process()
+    return jsonify({"success": success, "message": "업로드 완료" if success else "업로드 실패"})
 
-    # 임시 저장소에 동영상 저장
-    with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as tf:
-        outpath = tf.name
-    try:
-        make_video_from_text(script_text, outpath)
-    except Exception as e:
-        return jsonify({"error": "동영상 생성 실패", "raw": str(e)}), 500
+@app.route('/health', methods=['GET'])
+def health_check():
+    """헬스 체크"""
+    return jsonify({"status": "healthy"})
 
-    # YouTube 업로드
-    try:
-        youtube_title = "AI 수익
-    try:
-        youtube_title = "AI 수익 자동화 - 오늘의 인공지능 자동 동영상"
-        youtube_description = f"이 영상은 오픈AI GPT-4o로 자동 생성되었습니다.\n\n대본:\n{script_text}"
-        video_id = upload_to_youtube(youtube_title, youtube_description, outpath)
-    except Exception as e:
-        return jsonify({"error": "유튜브 업로드 실패", "raw": str(e)}), 500
-
-    return jsonify({
-        "result": "성공!",
-        "video_id": video_id,
-        "youtube_link": f"https://www.youtube.com/watch?v={video_id}"
-    })
-
-if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=8080)
+if __name__ == "__main__":
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
