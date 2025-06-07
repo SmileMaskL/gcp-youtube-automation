@@ -1,5 +1,10 @@
 name: Deploy to GCP
 
+# ✅ 필수: ID 토큰 권한 설정
+permissions:
+  id-token: write
+  contents: read
+
 on:
   push:
     branches: [main]
@@ -12,11 +17,10 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    # 🔽🔽🔽 이 부분만 정확히 수정하세요! 🔽🔽🔽
+    # Google Cloud 인증
     - name: Authenticate to Google Cloud
       uses: google-github-actions/auth@v2
       with:
-        # ✅ 프로젝트 ID를 'youtube-fully-automated'로 통일
         workload_identity_provider: 'projects/youtube-fully-automated/locations/global/workloadIdentityPools/github-pool-v2/providers/github-provider'
         service_account: 'github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com'
         token_format: access_token
