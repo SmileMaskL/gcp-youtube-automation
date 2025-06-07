@@ -12,6 +12,7 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
@@ -22,28 +23,37 @@ jobs:
           project_id: ${{ env.PROJECT_ID }}
           service_account_key: ${{ secrets.GCP_SERVICE_KEY }}
           export_default_credentials: true
+          install_components: gke-gcloud-auth-plugin
 
-      - name: Authenticate Docker to Artifact Registry
-        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
-
-      - name: Build and Push Docker image
+      - name: Configure Docker Authentication
         run: |
-          docker build -t us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}/${{ env.SERVICE_NAME }} .
-          docker push us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}/${{ env.SERVICE_NAME }}
+          echo $GITHUB_TOKEN | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
+          gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+          gcloud auth configure-docker gcr.io --quiet
+
+      - name: Build and Push Docker Image
+        run: |
+          docker build -t us-central1-docker.pkg.dev/${PROJECT_ID}/${SERVICE_NAME}/${SERVICE_NAME} .
+          docker push us-central1-docker.pkg.dev/${PROJECT_ID}/${SERVICE_NAME}/${SERVICE_NAME}
 
       - name: Deploy to Cloud Run
         run: |
-          gcloud run deploy ${{ env.SERVICE_NAME }} \
-            --image us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}/${{ env.SERVICE_NAME }} \
+          gcloud run deploy ${SERVICE_NAME} \
+            --image us-central1-docker.pkg.dev/${PROJECT_ID}/${SERVICE_NAME}/${SERVICE_NAME} \
             --platform managed \
-            --region ${{ env.REGION }} \
+            --region ${REGION} \
             --memory 1Gi \
             --timeout 900s \
             --allow-unauthenticated \
             --port 8080 \
-            --set-env-vars="YOUTUBE_CLIENT_ID=${{ secrets.YOUTUBE_CLIENT_ID }},YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }},YOUTUBE_REFRESH_TOKEN=${{ secrets.YOUTUBE_REFRESH_TOKEN }},OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}"
+            --set-env-vars="YOUTUBE_CLIENT_ID=${{ secrets.YOUTUBE_CLIENT_ID }},\
+                           YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }},\
+                           YOUTUBE_REFRESH_TOKEN=${{ secrets.YOUTUBE_REFRESH_TOKEN }},\
+                           OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}"
 
-      - name: Trigger service (optional)
+      - name: Verify Deployment
         run: |
-          URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} --platform managed --region ${{ env.REGION }} --format 'value(status.url)')
-          curl -X POST "$URL/upload" -H "Content-Type: application/json" -d '{"prompt":"유튜브 AI 자동 수익 영상 스크립트 만들어줘."}'
+          gcloud run services describe ${SERVICE_NAME} \
+            --platform managed \
+            --region ${REGION} \
+            --format 'get(status.url)'
