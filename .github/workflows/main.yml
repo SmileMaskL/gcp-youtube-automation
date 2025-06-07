@@ -20,7 +20,7 @@ jobs:
       REGION: us-central1
       ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
       IMAGE_TAG: ${{ github.sha }}
-      WORKLOAD_IDENTITY_PROVIDER: projects/123456789012/locations/global/workloadIdentityPools/github-pool-v2/providers/github-provider
+      WORKLOAD_IDENTITY_PROVIDER: projects/94662874801/locations/global/workloadIdentityPools/github-pool-v2/providers/github-provider
 
     steps:
     - name: Checkout code
@@ -30,7 +30,7 @@ jobs:
       uses: google-github-actions/auth@v2
       with:
         workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
-        service_account: github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
+        service_account: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
         token_format: 'access_token'
         access_token_lifetime: '600s'
         access_token_scopes: 'https://www.googleapis.com/auth/cloud-platform'
