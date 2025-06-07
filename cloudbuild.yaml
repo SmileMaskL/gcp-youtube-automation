@@ -11,8 +11,7 @@ steps:
     '--build-arg', 'GCP_SERVICE_ACCOUNT_KEY=$_GCP_SERVICE_ACCOUNT_KEY',
     '.'
   ]
-  env:
-    - 'DOCKER_BUILDKIT=1'
+  env: ['DOCKER_BUILDKIT=1']
   timeout: 1800s
 
 - name: 'gcr.io/cloud-builders/docker'
@@ -23,19 +22,22 @@ steps:
   timeout: 1200s
 
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-  entrypoint: 'gcloud'
-  args: [
-    'run', 'deploy', 'youtube-auto-upload',
-    '--image', 'us-central1-docker.pkg.dev/$PROJECT_ID/youtube-auto-upload/youtube-auto-upload:$COMMIT_SHA',
-    '--region', 'us-central1',
-    '--platform', 'managed',
-    '--allow-unauthenticated',
-    '--memory', '2Gi',
-    '--timeout', '900s',
-    '--port', '8080',
-    '--set-env-vars',
-    'YOUTUBE_CLIENT_ID=$_YOUTUBE_CLIENT_ID,YOUTUBE_CLIENT_SECRET=$_YOUTUBE_CLIENT_SECRET,YOUTUBE_REFRESH_TOKEN=$_YOUTUBE_REFRESH_TOKEN,OPENAI_API_KEYS=$_OPENAI_API_KEYS,GCP_SERVICE_ACCOUNT_KEY=$_GCP_SERVICE_ACCOUNT_KEY'
-  ]
+  entrypoint: 'bash'
+  args:
+    - '-c'
+    - |
+      gcloud auth activate-service-account --key-file=/workspace/gcp_key.json
+      gcloud run deploy youtube-auto-upload \
+        --image=us-central1-docker.pkg.dev/$PROJECT_ID/youtube-auto-upload/youtube-auto-upload:$COMMIT_SHA \
+        --region=us-central1 \
+        --platform=managed \
+        --allow-unauthenticated \
+        --memory=2Gi \
+        --timeout=900s \
+        --port=8080 \
+        --set-env-vars=YOUTUBE_CLIENT_ID=$_YOUTUBE_CLIENT_ID,YOUTUBE_CLIENT_SECRET=$_YOUTUBE_CLIENT_SECRET,YOUTUBE_REFRESH_TOKEN=$_YOUTUBE_REFRESH_TOKEN,OPENAI_API_KEYS=$_OPENAI_API_KEYS,GCP_SERVICE_ACCOUNT_KEY=$_GCP_SERVICE_ACCOUNT_KEY
+  env:
+    - 'CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE=/workspace/gcp_key.json'
   timeout: 600s
 
 options:
