@@ -1,29 +1,45 @@
 steps:
-  - name: 'gcr.io/cloud-builders/docker'
-    args: [
-      'build', '-t', 
-      'us-central1-docker.pkg.dev/$PROJECT_ID/youtube-auto-upload/youtube-auto-upload', 
-      '.'
-    ]
+- name: 'gcr.io/cloud-builders/docker'
+  args: [
+    'build', 
+    '-t', 
+    'us-central1-docker.pkg.dev/$PROJECT_ID/youtube-auto-upload/youtube-auto-upload:$COMMIT_SHA',
+    '--build-arg', 'YOUTUBE_CLIENT_ID=$_YOUTUBE_CLIENT_ID',
+    '--build-arg', 'YOUTUBE_CLIENT_SECRET=$_YOUTUBE_CLIENT_SECRET',
+    '--build-arg', 'YOUTUBE_REFRESH_TOKEN=$_YOUTUBE_REFRESH_TOKEN',
+    '--build-arg', 'OPENAI_API_KEY=$_OPENAI_API_KEY',
+    '.'
+  ]
 
-  - name: 'gcr.io/cloud-builders/docker'
-    args: [
-      'push', 
-      'us-central1-docker.pkg.dev/$PROJECT_ID/youtube-auto-upload/youtube-auto-upload'
-    ]
+- name: 'gcr.io/cloud-builders/docker'
+  args: [
+    'push',
+    'us-central1-docker.pkg.dev/$PROJECT_ID/youtube-auto-upload/youtube-auto-upload:$COMMIT_SHA'
+  ]
 
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    entrypoint: 'gcloud'
-    args: [
-      'run', 'deploy', 'youtube-auto-upload',
-      '--image', 'us-central1-docker.pkg.dev/$PROJECT_ID/youtube-auto-upload/youtube-auto-upload',
-      '--region', 'us-central1',
-      '--platform', 'managed',
-      '--allow-unauthenticated',
-      '--memory', '1Gi',
-      '--timeout', '900s',
-      '--port', '8080'
-    ]
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  entrypoint: 'gcloud'
+  args: [
+    'run', 'deploy', 'youtube-auto-upload',
+    '--image', 'us-central1-docker.pkg.dev/$PROJECT_ID/youtube-auto-upload/youtube-auto-upload:$COMMIT_SHA',
+    '--region', 'us-central1',
+    '--platform', 'managed',
+    '--allow-unauthenticated',
+    '--memory', '2Gi',  # 1Gi → 2Gi로 업그레이드
+    '--timeout', '900s',
+    '--port', '8080',
+    '--set-env-vars', 
+    'YOUTUBE_CLIENT_ID=$_YOUTUBE_CLIENT_ID,YOUTUBE_CLIENT_SECRET=$_YOUTUBE_CLIENT_SECRET,YOUTUBE_REFRESH_TOKEN=$_YOUTUBE_REFRESH_TOKEN,OPENAI_API_KEY=$_OPENAI_API_KEY'
+  ]
+
 options:
   logging: CLOUD_LOGGING_ONLY
   machineType: 'E2_HIGHCPU_8'
+  diskSizeGb: 50  # 디스크 크기 추가
+  substitution_option: 'ALLOW_LOOSE'
+
+substitutions:
+  _YOUTUBE_CLIENT_ID: ''  # 트리거에서 설정
+  _YOUTUBE_CLIENT_SECRET: ''  # 트리거에서 설정
+  _YOUTUBE_REFRESH_TOKEN: ''  # 트리거에서 설정
+  _OPENAI_API_KEYS: ''  # 트리거에서 설정
