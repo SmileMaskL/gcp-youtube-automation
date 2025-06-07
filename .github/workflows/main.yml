@@ -9,18 +9,18 @@ permissions:
   contents: 'read'
   id-token: 'write'
 
-env:
-  PROJECT_ID: youtube-fully-automated
-  SERVICE_NAME: gcp-youtube-automation
-  REGION: us-central1
-  ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
-  WORKLOAD_IDENTITY_PROVIDER: projects/${{ env.PROJECT_ID }}/locations/global/workloadIdentityPools/github-pool-v2/providers/github-provider
-  IMAGE_TAG: ${{ github.sha }}
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+
+    env:
+      PROJECT_ID: youtube-fully-automated
+      SERVICE_NAME: gcp-youtube-automation
+      REGION: us-central1
+      ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
+      IMAGE_TAG: ${{ github.sha }}
+      WORKLOAD_IDENTITY_PROVIDER: projects/123456789012/locations/global/workloadIdentityPools/github-pool-v2/providers/github-provider
 
     steps:
     - name: Checkout code
