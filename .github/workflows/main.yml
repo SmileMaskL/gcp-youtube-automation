@@ -1,87 +1,49 @@
-name: YouTube Auto Upload Deployment
+name: Deploy to GCP
 
 on:
   push:
     branches: [main]
-  workflow_dispatch:
-
-permissions:
-  contents: 'read'
-  id-token: 'write'
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-
-    env:
-      PROJECT_ID: youtube-fully-automated
-      SERVICE_NAME: gcp-youtube-automation
-      REGION: us-central1
-      ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
-      IMAGE_TAG: ${{ github.sha }}
-      WORKLOAD_IDENTITY_PROVIDER: projects/94662874801/locations/global/workloadIdentityPools/github-pool-v2/providers/github-provider
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    # 🔽🔽🔽 이 부분만 정확히 수정하세요! 🔽🔽🔽
     - name: Authenticate to Google Cloud
       uses: google-github-actions/auth@v2
       with:
-        workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
-        service_account: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
-        token_format: 'access_token'
-        access_token_lifetime: '600s'
+        # ✅ 프로젝트 ID를 'youtube-fully-automated'로 통일
+        workload_identity_provider: 'projects/youtube-fully-automated/locations/global/workloadIdentityPools/github-pool-v2/providers/github-provider'
+        service_account: 'github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com'
+        token_format: access_token
+        access_token_lifetime: 600s
         access_token_scopes: 'https://www.googleapis.com/auth/cloud-platform'
+        create_credentials_file: true
+        export_environment_variables: true
+        universe: googleapis.com
 
-    - name: Set up Google Cloud SDK
+    - name: Set up Cloud SDK
       uses: google-github-actions/setup-gcloud@v2
-      with:
-        project_id: ${{ env.PROJECT_ID }}
-        export_default_credentials: true
 
-    - name: Configure Docker
-      run: |
-        gcloud auth configure-docker ${{ env.ARTIFACT_REGISTRY }} --quiet
-
-    - name: Build Docker image
-      run: |
-        docker build \
-          -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}/${{ env.SERVICE_NAME }}:${{ env.IMAGE_TAG }} \
-          --build-arg YOUTUBE_CLIENT_ID=${{ secrets.YOUTUBE_CLIENT_ID }} \
-          --build-arg YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }} \
-          --build-arg YOUTUBE_REFRESH_TOKEN=${{ secrets.YOUTUBE_REFRESH_TOKEN }} \
-          --build-arg OPENAI_API_KEYS=${{ secrets.OPENAI_API_KEYS }} \
-          --build-arg GCP_SERVICE_ACCOUNT_KEY="${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}" \
-          .
-
-    - name: Push Docker image
-      run: |
-        docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}/${{ env.SERVICE_NAME }}:${{ env.IMAGE_TAG }}
+    - name: Build and Push Docker Image
+      run: |-
+        docker build -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} .
+        docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
 
     - name: Deploy to Cloud Run
-      run: |
+      run: |-
         gcloud run deploy ${{ env.SERVICE_NAME }} \
-          --image ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}/${{ env.SERVICE_NAME }}:${{ env.IMAGE_TAG }} \
-          --region ${{ env.REGION }} \
-          --platform managed \
-          --allow-unauthenticated \
-          --memory 2Gi \
-          --timeout 900s \
-          --port 8080 \
-          --set-env-vars \
-            "YOUTUBE_CLIENT_ID=${{ secrets.YOUTUBE_CLIENT_ID }},\
-            YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }},\
-            YOUTUBE_REFRESH_TOKEN=${{ secrets.YOUTUBE_REFRESH_TOKEN }},\
-            OPENAI_API_KEYS=${{ secrets.OPENAI_API_KEYS }},\
-            GCP_SERVICE_ACCOUNT_KEY=${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}"
+          --image=${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
+          --region=${{ env.REGION }} \
+          --platform=managed \
+          --allow-unauthenticated
 
-    - name: Verify deployment
-      run: |
-        SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
-          --platform managed \
-          --region ${{ env.REGION }} \
-          --format 'value(status.url)')
-        echo "Service deployed successfully to: $SERVICE_URL"
-        curl -s $SERVICE_URL/health-check || echo "Service is running but health check failed"
+env:
+  PROJECT_ID: youtube-fully-automated
+  SERVICE_NAME: gcp-youtube-automation
+  REGION: us-central1
+  ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
