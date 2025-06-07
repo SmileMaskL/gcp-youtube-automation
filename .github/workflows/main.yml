@@ -1,64 +1,41 @@
-name: Deploy to GCP
-
-# ID 토큰 권한 필수
-permissions:
-  id-token: write
-  contents: read
+name: Upload to YouTube
 
 on:
   push:
     branches:
       - main
 
-env:
-  PROJECT_ID: youtube-fully-automated
-  SERVICE_ACCOUNT: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
-  REGION: us-central1
-  SERVICE_NAME: gcp-youtube-automation
-  ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
-  WORKLOAD_IDENTITY_PROVIDER: projects/94662874801/locations/global/workloadIdentityPools/github-pool-v2/providers/github-provider
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
-  build-and-deploy:
+  upload:
     runs-on: ubuntu-latest
-    environment: production
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Authenticate to Google Cloud using Workload Identity Federation
-      uses: google-github-actions/auth@v2
-      with:
-        workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
-        service_account: ${{ env.SERVICE_ACCOUNT }}
-        token_format: access_token
-        access_token_lifetime: 600s
-        access_token_scopes: 'https://www.googleapis.com/auth/cloud-platform'
-        audience: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}   # 👈 이부분 반드시 넣어야 함
-        create_credentials_file: true
-        export_environment_variables: true
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_lifetime: 600s
+          access_token_scopes: 'https://www.googleapis.com/auth/cloud-platform'
+          audience: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          create_credentials_file: true
+          export_environment_variables: true
 
-    - name: Set up Cloud SDK
-      uses: google-github-actions/setup-gcloud@v2
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-    - name: Configure Docker authentication to Artifact Registry
-      run: |
-        gcloud auth configure-docker ${{ env.ARTIFACT_REGISTRY }}
+      - name: Install dependencies
+        run: pip install -r requirements.txt
 
-    - name: Build Docker image
-      run: |
-        docker build -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} .
-
-    - name: Push Docker image
-      run: |
-        docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
-
-    - name: Deploy to Cloud Run
-      run: |
-        gcloud run deploy ${{ env.SERVICE_NAME }} \
-          --image=${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
-          --region=${{ env.REGION }} \
-          --platform=managed \
-          --allow-unauthenticated
-
+      - name: Run YouTube bot
+        run: python scripts/content_generator.py
