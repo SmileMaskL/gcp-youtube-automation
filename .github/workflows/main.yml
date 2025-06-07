@@ -1,53 +1,64 @@
 name: Deploy to GCP
 
-# ✅ 필수: ID 토큰 권한 설정
+# ID 토큰 권한 필수
 permissions:
   id-token: write
   contents: read
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+
+env:
+  PROJECT_ID: youtube-fully-automated
+  SERVICE_ACCOUNT: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
+  REGION: us-central1
+  SERVICE_NAME: gcp-youtube-automation
+  ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
+  WORKLOAD_IDENTITY_PROVIDER: projects/94662874801/locations/global/workloadIdentityPools/github-pool-v2/providers/github-provider
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    environment: production
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    # Google Cloud 인증
-    - name: Authenticate to Google Cloud
+    - name: Authenticate to Google Cloud using Workload Identity Federation
       uses: google-github-actions/auth@v2
       with:
-        workload_identity_provider: 'projects/youtube-fully-automated/locations/global/workloadIdentityPools/github-pool-v2/providers/github-provider'
-        service_account: 'github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com'
+        workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ env.SERVICE_ACCOUNT }}
         token_format: access_token
         access_token_lifetime: 600s
         access_token_scopes: 'https://www.googleapis.com/auth/cloud-platform'
+        audience: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}   # 👈 이부분 반드시 넣어야 함
         create_credentials_file: true
         export_environment_variables: true
-        universe: googleapis.com
 
     - name: Set up Cloud SDK
       uses: google-github-actions/setup-gcloud@v2
 
-    - name: Build and Push Docker Image
-      run: |-
+    - name: Configure Docker authentication to Artifact Registry
+      run: |
+        gcloud auth configure-docker ${{ env.ARTIFACT_REGISTRY }}
+
+    - name: Build Docker image
+      run: |
         docker build -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} .
+
+    - name: Push Docker image
+      run: |
         docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
 
     - name: Deploy to Cloud Run
-      run: |-
+      run: |
         gcloud run deploy ${{ env.SERVICE_NAME }} \
           --image=${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
           --region=${{ env.REGION }} \
           --platform=managed \
           --allow-unauthenticated
 
-env:
-  PROJECT_ID: youtube-fully-automated
-  SERVICE_NAME: gcp-youtube-automation
-  REGION: us-central1
-  ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
