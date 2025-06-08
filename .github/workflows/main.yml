@@ -26,7 +26,8 @@ jobs:
         workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
         service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
         audience: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}  # 핵심 수정!
-
+        project_id: ${{ env.PROJECT_ID }}
+        
     - name: Setup GCloud
       uses: google-github-actions/setup-gcloud@v1
 
