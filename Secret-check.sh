@@ -3,10 +3,10 @@
 # 모든 시크릿 기본 검증
 echo "🔐 GCP_AUDIENCE: $GCP_AUDIENCE"
 echo "🔑 GCP_SERVICE_ACCOUNT: $GCP_SERVICE_ACCOUNT"
-echo "🌐 WORKLOAD_IDENTITY_PROVIDER: $WORKLOAD_IDENTITY_PROVIDER"
+echo "🌐 GCP_WORKLOAD_IDENTITY_PROVIDER: $GCP_WORKLOAD_IDENTITY_PROVIDER"
 
 # 핵심 검증 1: Audience 형식
-if [[ $WORKLOAD_IDENTITY_PROVIDER != *"iam.googleapis.com"* ]]; then
+if [[ $GCP_WORKLOAD_IDENTITY_PROVIDER != *"iam.googleapis.com"* ]]; then
   echo "❌ 치명적 오류: audience 형식이 잘못되었습니다!"
   echo "올바른 형식: //iam.googleapis.com/projects/[번호]/locations/global/workloadIdentityPools/[풀이름]/providers/[프로바이더]"
   exit 1
