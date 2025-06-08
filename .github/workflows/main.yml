@@ -10,7 +10,7 @@ jobs:
     permissions:
       contents: 'read'
       id-token: 'write'
-    env:  # 환경변수 이동 위치
+    env:
       PROJECT_ID: youtube-fully-automated
       SERVICE_NAME: gcp-youtube-automation
       REGION: us-central1
@@ -20,25 +20,28 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
+    # 🔑 Workload Identity 인증 (핵심 수정 부분)
     - name: Google Auth
       uses: google-github-actions/auth@v1
       with:
-        workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-        service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-        audience: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}  # 핵심 수정!
+        workload_identity_provider: projects/123456789/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+        service_account: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
+        audience: //iam.googleapis.com/projects/123456789/locations/global/workloadIdentityPools/github-pool/providers/github-provider
         project_id: ${{ env.PROJECT_ID }}
-        
+
     - name: Setup GCloud
       uses: google-github-actions/setup-gcloud@v1
 
+    # 🐳 Docker 빌드 및 푸시 (권한 문제 해결)
     - name: Build Docker
       run: |-
-        gcloud auth configure-docker ${{ env.ARTIFACT_REGISTRY }}
+        gcloud auth configure-docker ${{ env.ARTIFACT_REGISTRY }} --quiet
         docker build -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:latest .
 
     - name: Push Docker
       run: docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:latest
 
+    # 🚀 Cloud Run 배포
     - name: Deploy to Cloud Run
       run: |-
         gcloud run deploy ${{ env.SERVICE_NAME }} \
@@ -58,5 +61,6 @@ jobs:
           --set-env-vars="ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }}" \
           --set-env-vars="GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}"
 
+    # 🔔 작업 트리거
     - name: Trigger Job
       run: gcloud run services call ${{ env.SERVICE_NAME }} --region ${{ env.REGION }} --data '{"message":"start"}'
