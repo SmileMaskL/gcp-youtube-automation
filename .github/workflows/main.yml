@@ -1,67 +1,50 @@
 name: Deploy to GCP
 
-permissions:
-  id-token: write
-  contents: read
-
 on:
   push:
-    branches: [main]
-
-jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
-    environment: production  # 필수!
-
-    steps:
-    # 1. 코드 체크아웃
-    - name: Checkout code
-      uses: actions/checkout@v4
-     
-      # 반드시 이 구조로 설정!
-    - name: Authenticate to Google Cloud
-      uses: google-github-actions/auth@v2
-      with:
-        workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
-        service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-        audience: ${{ secrets.GCP_AUDIENCE }} # ✅ 핵심!
-
-    # 2. GCP 인증 (★★★ 핵심 수정 ★★★)
-    - name: Authenticate to Google Cloud
-      uses: google-github-actions/auth@v2
-      with:
-        workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-        service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-        token_format: access_token
-        access_token_lifetime: 600s
-        access_token_scopes: 'https://www.googleapis.com/auth/cloud-platform'
-        audience: ${{ secrets.GCP_AUDIENCE }}  # audience 추가!
-        create_credentials_file: true
-        export_environment_variables: true
-
-    # 3. GCP CLI 설치
-    - name: Set up Cloud SDK
-      uses: google-github-actions/setup-gcloud@v2
-
-    # 4. Docker 빌드 & 푸시 (용량 최적화)
-    - name: Build and Push Docker Image
-      run: |
-        # ✅ 용량 40% 줄이는 마법 (수익 UP!)
-        docker build --compress --force-rm -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} .
-        docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
-
-    # 5. Cloud Run 배포 (실패 방지 패치)
-    - name: Deploy to Cloud Run
-      run: |
-        gcloud run deploy ${{ env.SERVICE_NAME }} \
-          --image=${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
-          --region=${{ env.REGION }} \
-          --platform=managed \
-          --allow-unauthenticated \
-          --cpu=1 --memory=512Mi --max-instances=1  # ✅ 무료 한도 맞춤!
+    branches: [ main ]
 
 env:
   PROJECT_ID: youtube-fully-automated
   SERVICE_NAME: gcp-youtube-automation
   REGION: us-central1
   ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
+
+jobs:
+  setup-build-deploy:
+    name: Setup, Build, and Deploy
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v2
+      with:
+        workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
+
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
+
+    - name: Build Docker image
+      run: |-
+        gcloud auth configure-docker $ARTIFACT_REGISTRY
+        docker build -t $ARTIFACT_REGISTRY/$PROJECT_ID/$SERVICE_NAME:latest .
+
+    - name: Push Docker image
+      run: |-
+        docker push $ARTIFACT_REGISTRY/$PROJECT_ID/$SERVICE_NAME:latest
+
+    - name: Deploy to Cloud Run
+      run: |-
+        gcloud run deploy $SERVICE_NAME \
+          --image $ARTIFACT_REGISTRY/$PROJECT_ID/$SERVICE_NAME:latest \
+          --region $REGION \
+          --platform managed \
+          --allow-unauthenticated
