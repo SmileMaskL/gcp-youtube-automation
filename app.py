@@ -1,4 +1,5 @@
 import os
+import sys
 import random
 import time
 from datetime import datetime, timedelta
@@ -15,14 +16,23 @@ from pexels_api import API
 import subprocess
 import google.generativeai as genai
 
-# 환경 설정
-OPENAI_KEYS = os.getenv('OPENAI_API_KEYS', '').split(',')
-PEXELS_KEY = os.getenv('PEXELS_API_KEY', '')
-YT_CREDS = {
-    'client_id': os.getenv('YOUTUBE_CLIENT_ID', ''),
-    'client_secret': os.getenv('YOUTUBE_CLIENT_SECRET', ''),
-    'refresh_token': os.getenv('YOUTUBE_REFRESH_TOKEN', '')
-}
+# 환경 변수 검증 함수
+def validate_secrets():
+    required_envs = [
+        'OPENAI_API_KEYS',
+        'PEXELS_API_KEY',
+        'YOUTUBE_CLIENT_ID',
+        'YOUTUBE_CLIENT_SECRET',
+        'YOUTUBE_REFRESH_TOKEN',
+        'GEMINI_API_KEY'
+    ]
+    
+    missing = [var for var in required_envs if not os.getenv(var)]
+    if missing:
+        logging.error(f"❌ 치명적 오류: 다음 환경 변수가 설정되지 않았습니다: {', '.join(missing)}")
+        sys.exit(1)
+    else:
+        logging.info("✅ 모든 필수 환경 변수가 설정되었습니다.")
 
 # 로깅 설정
 logging.basicConfig(
