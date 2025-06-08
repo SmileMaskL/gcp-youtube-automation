@@ -8,6 +8,8 @@ steps:
       '.'
     ]
     id: 'build-docker-image'
+    # 로그 설정 추가
+    logging: CLOUD_LOGGING_ONLY
 
   # Docker 이미지 푸시
   - name: 'gcr.io/cloud-builders/docker'
@@ -16,6 +18,7 @@ steps:
       '$_ARTIFACT_REGISTRY/$PROJECT_ID/$_SERVICE_NAME:latest'
     ]
     id: 'push-docker-image'
+    logging: CLOUD_LOGGING_ONLY
 
   # Cloud Run에 배포
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -32,16 +35,21 @@ steps:
       'managed',
       '--allow-unauthenticated',
       '--set-env-vars',
-      'OPENAI_API_KEYS=$_OPENAI_API_KEYS,PEXELS_API_KEY=$_PEXELS_API_KEY,YOUTUBE_CLIENT_ID=$_YOUTUBE_CLIENT_ID,YOUTUBE_CLIENT_SECRET=$_YOUTUBE_CLIENT_SECRET,YOUTUBE_REFRESH_TOKEN=$_YOUTUBE_REFRESH_TOKEN,ELEVENLABS_API_KEY=$_ELEVENLABS_API_KEY,GEMINI_API_KEY=$_GEMINI_API_KEY'
+      'OPENAI_API_KEYS=$_OPENAI_API_KEYS,PEXELS_API_KEY=$_PEXELS_API_KEY,YOUTUBE_CLIENT_ID=$_YOUTUBE_CLIENT_ID,YOUTUBE_CLIENT_SECRET=$_YOUTUBE_CLIENT_SECRET,YOUTUBE_REFRESH_TOKEN=$_YOUTUBE_REFRESH_TOKEN,ELEVENLABS_API_KEY=$_ELEVENLABS_API_KEY,GEMINI_API_KEY=$_GEMINI_API_KEY',
+      '--min-instances=0',
+      '--max-instances=1'
     ]
     id: 'deploy-to-cloud-run'
+    logging: CLOUD_LOGGING_ONLY
 
-# 환경 변수 대체 (실제 값은 트리거에서 설정)
+options:
+  # 로그 설정 (에러 해결 핵심 부분)
+  logging: CLOUD_LOGGING_ONLY
+
 substitutions:
   _ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
   _SERVICE_NAME: gcp-youtube-automation
   _REGION: us-central1
 
-# 빌드 완료 후 이미지 저장
 images:
   - '$_ARTIFACT_REGISTRY/$PROJECT_ID/$_SERVICE_NAME:latest'
