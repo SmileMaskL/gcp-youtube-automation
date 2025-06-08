@@ -1,4 +1,4 @@
-name: Deploy and Run YouTube Automation
+name: YouTube Automation Pipeline
 
 on:
   push:
@@ -12,34 +12,32 @@ env:
 
 jobs:
   deploy-and-run:
-    name: Deploy and Run
     runs-on: ubuntu-latest
     permissions:
       contents: 'read'
       id-token: 'write'
 
     steps:
-    - name: Checkout code
+    - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Google Cloud Auth
-      uses: google-github-actions/auth@v2
+    - name: Google Auth
+      uses: google-github-actions/auth@v1
       with:
-        workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-        service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-        audience: ${{ secrets.GCP_AUDIENCE }}
+        workload_identity_provider: projects/123456789/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+        service_account: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
+        project_id: ${{ env.PROJECT_ID }}
 
-    - name: Set up Cloud SDK
-      uses: google-github-actions/setup-gcloud@v2
+    - name: Setup GCloud
+      uses: google-github-actions/setup-gcloud@v1
 
-    - name: Build Docker image
+    - name: Build Docker
       run: |-
         gcloud auth configure-docker $ARTIFACT_REGISTRY
         docker build -t $ARTIFACT_REGISTRY/$PROJECT_ID/$SERVICE_NAME:latest .
 
-    - name: Push Docker image
-      run: |-
-        docker push $ARTIFACT_REGISTRY/$PROJECT_ID/$SERVICE_NAME:latest
+    - name: Push Docker
+      run: docker push $ARTIFACT_REGISTRY/$PROJECT_ID/$SERVICE_NAME:latest
 
     - name: Deploy to Cloud Run
       run: |-
@@ -60,8 +58,5 @@ jobs:
           --set-env-vars="ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }}" \
           --set-env-vars="GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}"
 
-    - name: Trigger Daily Upload
-      run: |-
-        gcloud run services call $SERVICE_NAME \
-          --region $REGION \
-          --data '{"message":"trigger"}'
+    - name: Trigger Job
+      run: gcloud run services call $SERVICE_NAME --region $REGION --data '{"message":"start"}'
