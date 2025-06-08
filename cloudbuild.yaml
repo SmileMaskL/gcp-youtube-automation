@@ -28,6 +28,7 @@ steps:
       '--set-env-vars', 'GEMINI_API_KEY=${_GEMINI_API_KEY}'
     ]
     id: 'deploy'
+    secretEnv: ['_OPENAI_API_KEYS', '_PEXELS_API_KEY', '_YOUTUBE_CLIENT_ID', '_YOUTUBE_CLIENT_SECRET', '_YOUTUBE_REFRESH_TOKEN', '_ELEVENLABS_API_KEY', '_GEMINI_API_KEY']  # 이 부분 추가
 
 options:
   machineType: 'E2_HIGHCPU_8'
@@ -36,13 +37,23 @@ substitutions:
   _ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
   _SERVICE_NAME: gcp-youtube-automation
   _REGION: us-central1
-  _OPENAI_API_KEYS: $(gcloud secrets versions access latest --secret="OPENAI_API_KEYS")
-  _PEXELS_API_KEY: $(gcloud secrets versions access latest --secret="PEXELS_API_KEY")
-  _YOUTUBE_CLIENT_ID: $(gcloud secrets versions access latest --secret="YOUTUBE_CLIENT_ID")
-  _YOUTUBE_CLIENT_SECRET: $(gcloud secrets versions access latest --secret="YOUTUBE_CLIENT_SECRET")
-  _YOUTUBE_REFRESH_TOKEN: $(gcloud secrets versions access latest --secret="YOUTUBE_REFRESH_TOKEN")
-  _ELEVENLABS_API_KEY: $(gcloud secrets versions access latest --secret="ELEVENLABS_API_KEY")
-  _GEMINI_API_KEY: $(gcloud secrets versions access latest --secret="GEMINI_API_KEY")
+
+availableSecrets:
+  secretManager:
+  - versionName: projects/youtube-fully-automated/secrets/OPENAI_API_KEYS/versions/latest
+    env: '_OPENAI_API_KEYS'
+  - versionName: projects/youtube-fully-automated/secrets/PEXELS_API_KEY/versions/latest
+    env: '_PEXELS_API_KEY'
+  - versionName: projects/youtube-fully-automated/secrets/YOUTUBE_CLIENT_ID/versions/latest
+    env: '_YOUTUBE_CLIENT_ID'
+  - versionName: projects/youtube-fully-automated/secrets/YOUTUBE_CLIENT_SECRET/versions/latest
+    env: '_YOUTUBE_CLIENT_SECRET'
+  - versionName: projects/youtube-fully-automated/secrets/YOUTUBE_REFRESH_TOKEN/versions/latest
+    env: '_YOUTUBE_REFRESH_TOKEN'
+  - versionName: projects/youtube-fully-automated/secrets/ELEVENLABS_API_KEY/versions/latest
+    env: '_ELEVENLABS_API_KEY'
+  - versionName: projects/youtube-fully-automated/secrets/GEMINI_API_KEY/versions/latest
+    env: '_GEMINI_API_KEY'
 
 images:
   - '${_ARTIFACT_REGISTRY}/${PROJECT_ID}/${_SERVICE_NAME}:latest'
