@@ -1,4 +1,4 @@
-name: Deploy to GCP
+name: Deploy and Run YouTube Automation
 
 on:
   push:
@@ -11,24 +11,23 @@ env:
   ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
 
 jobs:
-  setup-build-deploy:
-    name: Setup, Build, and Deploy
+  deploy-and-run:
+    name: Deploy and Run
     runs-on: ubuntu-latest
-
     permissions:
       contents: 'read'
       id-token: 'write'
 
     steps:
-    - name: Checkout
+    - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Authenticate to Google Cloud
+    - name: Google Cloud Auth
       uses: google-github-actions/auth@v2
       with:
         workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-        service_account: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
-        audience: https://github.com/SmileMaskL/gcp-youtube-automation
+        service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+        audience: ${{ secrets.GCP_AUDIENCE }}
 
     - name: Set up Cloud SDK
       uses: google-github-actions/setup-gcloud@v2
@@ -52,9 +51,16 @@ jobs:
           --min-instances=0 \
           --max-instances=1 \
           --cpu=1 \
-          --memory=512Mi
+          --memory=512Mi \
+          --set-env-vars="OPENAI_API_KEYS=${{ secrets.OPENAI_API_KEYS }}" \
+          --set-env-vars="PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }}" \
+          --set-env-vars="YOUTUBE_CLIENT_ID=${{ secrets.YOUTUBE_CLIENT_ID }}" \
+          --set-env-vars="YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }}" \
+          --set-env-vars="YOUTUBE_REFRESH_TOKEN=${{ secrets.YOUTUBE_REFRESH_TOKEN }}" \
+          --set-env-vars="ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }}" \
+          --set-env-vars="GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}"
 
-    - name: Run Daily Upload
+    - name: Trigger Daily Upload
       run: |-
         gcloud run services call $SERVICE_NAME \
           --region $REGION \
