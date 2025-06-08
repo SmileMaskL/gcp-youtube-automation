@@ -8,7 +8,7 @@ steps:
     id: 'push'
 
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    entrypoint: 'gcloud'
+    entrypoint: gcloud
     args: [
       'run', 'deploy', '${_SERVICE_NAME}',
       '--image', '${_ARTIFACT_REGISTRY}/${PROJECT_ID}/${_SERVICE_NAME}:latest',
@@ -36,13 +36,13 @@ substitutions:
   _ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
   _SERVICE_NAME: gcp-youtube-automation
   _REGION: us-central1
-  _OPENAI_API_KEYS: ${_OPENAI_API_KEYS}
-  _PEXELS_API_KEY: ${_PEXELS_API_KEY}
-  _YOUTUBE_CLIENT_ID: ${_YOUTUBE_CLIENT_ID}
-  _YOUTUBE_CLIENT_SECRET: ${_YOUTUBE_CLIENT_SECRET}
-  _YOUTUBE_REFRESH_TOKEN: ${_YOUTUBE_REFRESH_TOKEN}
-  _ELEVENLABS_API_KEY: ${_ELEVENLABS_API_KEY}
-  _GEMINI_API_KEY: ${_GEMINI_API_KEY}
+  _OPENAI_API_KEYS: $(gcloud secrets versions access latest --secret="OPENAI_API_KEYS")
+  _PEXELS_API_KEY: $(gcloud secrets versions access latest --secret="PEXELS_API_KEY")
+  _YOUTUBE_CLIENT_ID: $(gcloud secrets versions access latest --secret="YOUTUBE_CLIENT_ID")
+  _YOUTUBE_CLIENT_SECRET: $(gcloud secrets versions access latest --secret="YOUTUBE_CLIENT_SECRET")
+  _YOUTUBE_REFRESH_TOKEN: $(gcloud secrets versions access latest --secret="YOUTUBE_REFRESH_TOKEN")
+  _ELEVENLABS_API_KEY: $(gcloud secrets versions access latest --secret="ELEVENLABS_API_KEY")
+  _GEMINI_API_KEY: $(gcloud secrets versions access latest --secret="GEMINI_API_KEY")
 
 images:
   - '${_ARTIFACT_REGISTRY}/${PROJECT_ID}/${_SERVICE_NAME}:latest'
