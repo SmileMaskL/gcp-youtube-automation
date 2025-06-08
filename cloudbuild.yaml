@@ -1,64 +1,48 @@
-name: YouTube Automation Pipeline
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', '${_ARTIFACT_REGISTRY}/${PROJECT_ID}/${_SERVICE_NAME}:latest', '.']
+    id: 'build'
 
-on:
-  push:
-    branches: [ main ]
-  schedule:
-    - cron: '0 12 * * *'  # 매일 한국 시간 21시 실행
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', '${_ARTIFACT_REGISTRY}/${PROJECT_ID}/${_SERVICE_NAME}:latest']
+    id: 'push'
 
-env:
-  PROJECT_ID: youtube-fully-automated
-  SERVICE_NAME: gcp-youtube-automation
-  REGION: us-central1
-  ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args: [
+      'run', 'deploy', '${_SERVICE_NAME}',
+      '--image', '${_ARTIFACT_REGISTRY}/${PROJECT_ID}/${_SERVICE_NAME}:latest',
+      '--region', '${_REGION}',
+      '--platform', 'managed',
+      '--allow-unauthenticated',
+      '--min-instances=0',
+      '--max-instances=1',
+      '--cpu=1',
+      '--memory=512Mi',
+      '--set-env-vars', 'OPENAI_API_KEYS=${_OPENAI_API_KEYS}',
+      '--set-env-vars', 'PEXELS_API_KEY=${_PEXELS_API_KEY}',
+      '--set-env-vars', 'YOUTUBE_CLIENT_ID=${_YOUTUBE_CLIENT_ID}',
+      '--set-env-vars', 'YOUTUBE_CLIENT_SECRET=${_YOUTUBE_CLIENT_SECRET}',
+      '--set-env-vars', 'YOUTUBE_REFRESH_TOKEN=${_YOUTUBE_REFRESH_TOKEN}',
+      '--set-env-vars', 'ELEVENLABS_API_KEY=${_ELEVENLABS_API_KEY}',
+      '--set-env-vars', 'GEMINI_API_KEY=${_GEMINI_API_KEY}'
+    ]
+    id: 'deploy'
 
-jobs:
-  deploy-and-run:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: 'read'
-      id-token: 'write'
+options:
+  machineType: 'E2_HIGHCPU_8'
 
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
+substitutions:
+  _ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
+  _SERVICE_NAME: gcp-youtube-automation
+  _REGION: us-central1
+  _OPENAI_API_KEYS: ${_OPENAI_API_KEYS}
+  _PEXELS_API_KEY: ${_PEXELS_API_KEY}
+  _YOUTUBE_CLIENT_ID: ${_YOUTUBE_CLIENT_ID}
+  _YOUTUBE_CLIENT_SECRET: ${_YOUTUBE_CLIENT_SECRET}
+  _YOUTUBE_REFRESH_TOKEN: ${_YOUTUBE_REFRESH_TOKEN}
+  _ELEVENLABS_API_KEY: ${_ELEVENLABS_API_KEY}
+  _GEMINI_API_KEY: ${_GEMINI_API_KEY}
 
-    - name: Google Auth
-      uses: google-github-actions/auth@v1
-      with:
-        workload_identity_provider: projects/123456789/locations/global/workloadIdentityPools/github-pool/providers/github-provider
-        service_account: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
-        project_id: ${{ env.PROJECT_ID }}
-
-    - name: Setup GCloud
-      uses: google-github-actions/setup-gcloud@v1
-
-    - name: Build Docker
-      run: |-
-        gcloud auth configure-docker $ARTIFACT_REGISTRY
-        docker build -t $ARTIFACT_REGISTRY/$PROJECT_ID/$SERVICE_NAME:latest .
-
-    - name: Push Docker
-      run: docker push $ARTIFACT_REGISTRY/$PROJECT_ID/$SERVICE_NAME:latest
-
-    - name: Deploy to Cloud Run
-      run: |-
-        gcloud run deploy $SERVICE_NAME \
-          --image $ARTIFACT_REGISTRY/$PROJECT_ID/$SERVICE_NAME:latest \
-          --region $REGION \
-          --platform managed \
-          --allow-unauthenticated \
-          --min-instances=0 \
-          --max-instances=1 \
-          --cpu=1 \
-          --memory=512Mi \
-          --set-env-vars="OPENAI_API_KEYS=${{ secrets.OPENAI_API_KEYS }}" \
-          --set-env-vars="PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }}" \
-          --set-env-vars="YOUTUBE_CLIENT_ID=${{ secrets.YOUTUBE_CLIENT_ID }}" \
-          --set-env-vars="YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }}" \
-          --set-env-vars="YOUTUBE_REFRESH_TOKEN=${{ secrets.YOUTUBE_REFRESH_TOKEN }}" \
-          --set-env-vars="ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }}" \
-          --set-env-vars="GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}"
-
-    - name: Trigger Job
-      run: gcloud run services call $SERVICE_NAME --region $REGION --data '{"message":"start"}'
+images:
+  - '${_ARTIFACT_REGISTRY}/${PROJECT_ID}/${_SERVICE_NAME}:latest'
