@@ -1,5 +1,4 @@
 import os
-import sys
 import random
 import time
 from datetime import datetime, timedelta
@@ -16,23 +15,14 @@ from pexels_api import API
 import subprocess
 import google.generativeai as genai
 
-# 환경 변수 검증 함수
-def validate_secrets():
-    required_envs = [
-        'OPENAI_API_KEYS',
-        'PEXELS_API_KEY',
-        'YOUTUBE_CLIENT_ID',
-        'YOUTUBE_CLIENT_SECRET',
-        'YOUTUBE_REFRESH_TOKEN',
-        'GEMINI_API_KEY'
-    ]
-    
-    missing = [var for var in required_envs if not os.getenv(var)]
-    if missing:
-        logging.error(f"❌ 치명적 오류: 다음 환경 변수가 설정되지 않았습니다: {', '.join(missing)}")
-        sys.exit(1)
-    else:
-        logging.info("✅ 모든 필수 환경 변수가 설정되었습니다.")
+# 환경 설정
+OPENAI_KEYS = os.getenv('OPENAI_API_KEYS', '').split(',')
+PEXELS_KEY = os.getenv('PEXELS_API_KEY', '')
+YT_CREDS = {
+    'client_id': os.getenv('YOUTUBE_CLIENT_ID', ''),
+    'client_secret': os.getenv('YOUTUBE_CLIENT_SECRET', ''),
+    'refresh_token': os.getenv('YOUTUBE_REFRESH_TOKEN', '')
+}
 
 # 로깅 설정
 logging.basicConfig(
@@ -45,6 +35,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# 수익 극대화 설정
+DAILY_UPLOAD_LIMIT = 5    # 일 1개 영상
+VIDEO_DURATION = 58.5     # 최적 영상 길이 (58.5초)
+
 class YouTubeAutoUploader:
     def __init__(self):
         self.current_key = random.choice(OPENAI_KEYS)
@@ -54,6 +48,7 @@ class YouTubeAutoUploader:
         self.pexels = API(PEXELS_KEY)
         self.youtube = self._setup_youtube()
         self.last_upload = None
+        self.upload_count_today = 0
 
     def _setup_youtube(self):
         creds = Credentials.from_authorized_user_info({
@@ -71,26 +66,61 @@ class YouTubeAutoUploader:
             logger.info(f"키 변경: ...{self.current_key[-4:]}")
 
     def _generate_content(self, topic):
+        """GPT-4o와 Gemini를 번갈아가며 사용하는 스마트 생성"""
         try:
-            if random.random() < 0.5:
+            # 무료 모델 우선 사용 (비용 절감)
+            if random.random() < 0.7:  # 70% 확률로 Gemini 사용
+                response = self.gemini.generate_content(
+                    f"60초 YouTube 쇼츠 스크립트 생성:\n"
+                    f"주제: {topic}\n"
+                    "구조:\n"
+                    "1. 초반 5초 강력한 훅\n"
+                    "2. 3가지 핵심 포인트\n"
+                    "3. 구독 유도 CTA\n"
+                    "4. 해시태그: #shorts #viral #자동화\n"
+                    "⚠️ 반드시 55-58초 길이로 생성"
+                )
+                return response.text
+            else:  # 30% 확률로 GPT-4o 사용
                 response = openai.ChatCompletion.create(
-                    model="gpt-4",
+                    model="gpt-4o",
                     messages=[
-                        {"role": "system", "content": "Create viral YouTube scripts under 60 seconds."},
-                        {"role": "user", "content": f"Create script about {topic} with:\n1. Hook\n2. 3 points\n3. CTA"}
+                        {
+                            "role": "system",
+                            "content": "당신은 바이럴 YouTube 쇼츠 전문 작가입니다. 60초 이내 완성도 높은 콘텐츠를 생성하세요."
+                        },
+                        {
+                            "role": "user",
+                            "content": f"[{topic}] 주제로 다음 요소 포함:\n"
+                            "- 초반 5초: 충격적인 사실\n"
+                            "- 중간: 3가지 핵심 포인트\n"
+                            "- 끝: 구독 유도\n"
+                            "- 해시태그: #shorts #viral #자동화"
+                        }
                     ],
-                    temperature=0.8
+                    temperature=0.9,
+                    max_tokens=500
                 )
                 return response.choices[0].message['content']
-            else:
-                response = self.gemini.generate_content(
-                    f"Create viral 60-sec YouTube script about {topic} with:\n"
-                    "1. Hook\n2. 3 points\n3. CTA\nUse emojis!")
-                return response.text
         except Exception as e:
-            logger.error(f"생성 실패: {str(e)}")
+            logger.error(f"콘텐츠 생성 실패: {str(e)}")
             self._rotate_key()
             return self._generate_content(topic)
+
+    def _optimize_title(self, title):
+        """무료 Gemini로 제목 최적화"""
+        try:
+            response = self.gemini.generate_content(
+                f"이 제목을 더 클릭 유도하게 바꿔주세요:\n{title}\n"
+                "규칙:\n"
+                "- 이모지 2개 이상 포함\n"
+                '- 숫자 사용 (예: "3가지 비밀")\n'
+                '- 강력한 형용사 사용 (예: "믿을 수 없는")\n'
+                '- 길이: 50자 이내'
+            )
+            return response.text.strip('"')
+        except:
+            return title + " 🔥🤯"
 
     def _make_thumbnail(self, title):
         try:
@@ -127,7 +157,7 @@ class YouTubeAutoUploader:
 
     def _create_video(self, script):
         try:
-            with open("script.txt", "w") as f:
+            with open("script.txt", "w", encoding="utf-8") as f:
                 f.write(script)
             
             cmd = [
@@ -139,7 +169,7 @@ class YouTubeAutoUploader:
                 "-c:a", "aac", "output.mp4"
             ]
             
-            subprocess.run(cmd, check=True)
+            subprocess.run(cmd, check=True, timeout=300)
             return "output.mp4"
         except Exception as e:
             logger.error(f"동영상 생성 실패: {str(e)}")
@@ -179,20 +209,6 @@ class YouTubeAutoUploader:
                     return None
                 time.sleep(10)
 
-    def _optimize_title(self, title):
-        try:
-            response = openai.ChatCompletion.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": "Make titles more clickable with emojis."},
-                    {"role": "user", "content": f"Improve: {title}"}
-                ],
-                temperature=0.7
-            )
-            return response.choices[0].message['content']
-        except:
-            return title
-
     def _get_topics(self):
         return [
             "AI 최신 뉴스", "기술 팁", "코딩 비법",
@@ -201,7 +217,20 @@ class YouTubeAutoUploader:
         ]
 
     def upload_daily(self):
-        if self.last_upload and (datetime.now() - self.last_upload) < timedelta(hours=20):
+        # 업로드 제한 확인
+        if self.upload_count_today >= DAILY_UPLOAD_LIMIT:
+            logger.info("일일 업로드 한도 도달")
+            return False
+            
+        # 최적 시간 확인 (한국 시간 기준)
+        current_hour = datetime.utcnow().hour + 9
+        if current_hour >= 24: current_hour -= 24
+        if abs(current_hour - OPTIMAL_UPLOAD_HOUR) > 1:
+            logger.info(f"최적 업로드 시간 아님 (현재: {current_hour}시, 권장: {OPTIMAL_UPLOAD_HOUR}시)")
+            return False
+            
+        # 마지막 업로드 확인
+        if self.last_upload and (datetime.utcnow() - self.last_upload) < timedelta(hours=20):
             logger.info("너무 빨리 업로드 시도")
             return False
             
@@ -233,6 +262,7 @@ class YouTubeAutoUploader:
                     media_body=MediaFileUpload(thumb)
                 ).execute()
                 
+                # 조회수 부스팅 시도
                 try:
                     requests.get(
                         f"https://www.youtube.com/watch?v={video_id}",
@@ -242,7 +272,8 @@ class YouTubeAutoUploader:
                 except:
                     pass
                 
-                self.last_upload = datetime.now()
+                self.last_upload = datetime.utcnow()
+                self.upload_count_today += 1
                 logger.info(f"성공적으로 업로드: {title}")
                 return True
         except Exception as e:
