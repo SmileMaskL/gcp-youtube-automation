@@ -1,50 +1,38 @@
 steps:
-  # Docker 이미지 빌드
   - name: 'gcr.io/cloud-builders/docker'
-    args: [
-      'build',
-      '-t',
-      '$_ARTIFACT_REGISTRY/$PROJECT_ID/$_SERVICE_NAME:latest',
-      '.'
-    ]
-    id: 'build-docker-image'
-    # 로그 설정 추가
+    args: ['build', '-t', '$_ARTIFACT_REGISTRY/$PROJECT_ID/$_SERVICE_NAME:latest', '.']
+    id: 'build'
     logging: CLOUD_LOGGING_ONLY
 
-  # Docker 이미지 푸시
   - name: 'gcr.io/cloud-builders/docker'
-    args: [
-      'push',
-      '$_ARTIFACT_REGISTRY/$PROJECT_ID/$_SERVICE_NAME:latest'
-    ]
-    id: 'push-docker-image'
+    args: ['push', '$_ARTIFACT_REGISTRY/$PROJECT_ID/$_SERVICE_NAME:latest']
+    id: 'push'
     logging: CLOUD_LOGGING_ONLY
 
-  # Cloud Run에 배포
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    entrypoint: gcloud
+    entrypoint: 'gcloud'
     args: [
-      'run',
-      'deploy',
-      '$_SERVICE_NAME',
-      '--image',
-      '$_ARTIFACT_REGISTRY/$PROJECT_ID/$_SERVICE_NAME:latest',
-      '--region',
-      '$_REGION',
-      '--platform',
-      'managed',
+      'run', 'deploy', '$_SERVICE_NAME',
+      '--image', '$_ARTIFACT_REGISTRY/$PROJECT_ID/$_SERVICE_NAME:latest',
+      '--region', '$_REGION',
+      '--platform', 'managed',
       '--allow-unauthenticated',
-      '--set-env-vars',
-      'OPENAI_API_KEYS=$_OPENAI_API_KEYS,PEXELS_API_KEY=$_PEXELS_API_KEY,YOUTUBE_CLIENT_ID=$_YOUTUBE_CLIENT_ID,YOUTUBE_CLIENT_SECRET=$_YOUTUBE_CLIENT_SECRET,YOUTUBE_REFRESH_TOKEN=$_YOUTUBE_REFRESH_TOKEN,ELEVENLABS_API_KEY=$_ELEVENLABS_API_KEY,GEMINI_API_KEY=$_GEMINI_API_KEY',
       '--min-instances=0',
-      '--max-instances=1'
+      '--max-instances=1',
+      '--set-env-vars', 'OPENAI_API_KEYS=$_OPENAI_API_KEYS',
+      '--set-env-vars', 'PEXELS_API_KEY=$_PEXELS_API_KEY',
+      '--set-env-vars', 'YOUTUBE_CLIENT_ID=$_YOUTUBE_CLIENT_ID',
+      '--set-env-vars', 'YOUTUBE_CLIENT_SECRET=$_YOUTUBE_CLIENT_SECRET',
+      '--set-env-vars', 'YOUTUBE_REFRESH_TOKEN=$_YOUTUBE_REFRESH_TOKEN',
+      '--set-env-vars', 'ELEVENLABS_API_KEY=$_ELEVENLABS_API_KEY',
+      '--set-env-vars', 'GEMINI_API_KEY=$_GEMINI_API_KEY'
     ]
-    id: 'deploy-to-cloud-run'
+    id: 'deploy'
     logging: CLOUD_LOGGING_ONLY
 
 options:
-  # 로그 설정 (에러 해결 핵심 부분)
   logging: CLOUD_LOGGING_ONLY
+  machineType: 'E2_HIGHCPU_8'
 
 substitutions:
   _ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
