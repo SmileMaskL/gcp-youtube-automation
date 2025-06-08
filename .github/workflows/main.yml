@@ -17,6 +17,14 @@ jobs:
     # 1. 코드 체크아웃
     - name: Checkout code
       uses: actions/checkout@v4
+     
+      # 반드시 이 구조로 설정!
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v2
+      with:
+        workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+        audience: ${{ secrets.GCP_AUDIENCE }} # ✅ 핵심!
 
     # 2. GCP 인증 (★★★ 핵심 수정 ★★★)
     - name: Authenticate to Google Cloud
