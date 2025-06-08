@@ -1,45 +1,31 @@
-FROM python:3.10-slim
+# Python 3.9 기반 이미지 사용
+FROM python:3.9-slim
 
-# 필수 도구 설치
-RUN apt-get update && \
-    apt-get install -y \
-    ffmpeg \
-    libsm6 \
-    libxext6 \
-    libxrender-dev \
-    && rm -rf /var/lib/apt/lists/*
-
+# 작업 디렉토리 설정
 WORKDIR /app
 
-# 종속성 먼저 설치 (캐시 최적화)
+# 필요한 시스템 패키지 설치
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    fonts-dejavu \
+    libgl1-mesa-glx \
+    && rm -rf /var/lib/apt/lists/*
+
+# 폰트 복사
+COPY fonts/Catfont.ttf /usr/share/fonts/truetype/
+
+# 의존성 설치
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-
-# 환경 변수 설정
-ARG YOUTUBE_CLIENT_ID
-ARG YOUTUBE_CLIENT_SECRET
-ARG YOUTUBE_REFRESH_TOKEN
-ARG OPENAI_API_KEYS
-ARG GCP_SERVICE_ACCOUNT_KEY
-
-ENV YOUTUBE_CLIENT_ID=$YOUTUBE_CLIENT_ID
-ENV YOUTUBE_CLIENT_SECRET=$YOUTUBE_CLIENT_SECRET
-ENV YOUTUBE_REFRESH_TOKEN=$YOUTUBE_REFRESH_TOKEN
-ENV OPENAI_API_KEYS=$OPENAI_API_KEYS
-ENV GCP_SERVICE_ACCOUNT_KEY=$GCP_SERVICE_ACCOUNT_KEY
-ENV PORT=8080
-ENV PYTHONUNBUFFERED=1
-
-# 소스 코드 복사
+# 애플리케이션 코드 복사
 COPY . .
 
-# 포트 설정
-EXPOSE 8080
+# 로그 디렉토리 생성
+RUN mkdir -p logs
 
-# Artifact Registry 인증 설정
-RUN echo "$GCP_SERVICE_ACCOUNT_KEY" > /app/gcp_key.json
-ENV GOOGLE_APPLICATION_CREDENTIALS=/app/gcp_key.json
+# 환경 변수 설정 (실제 값은 런타임에 주입)
+ENV PYTHONUNBUFFERED=1
 
-# 실행 명령
-CMD ["gunicorn", "--bind", ":8080", "--workers", "1", "--threads", "8", "--timeout", "0", "app:app"]
+# 앱 실행
+CMD ["python", "app.py"]
