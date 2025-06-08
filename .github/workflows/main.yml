@@ -28,6 +28,7 @@ jobs:
       with:
         workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
         service_account: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
+        audience: https://github.com/SmileMaskL/gcp-youtube-automation
 
     - name: Set up Cloud SDK
       uses: google-github-actions/setup-gcloud@v2
@@ -47,4 +48,14 @@ jobs:
           --image $ARTIFACT_REGISTRY/$PROJECT_ID/$SERVICE_NAME:latest \
           --region $REGION \
           --platform managed \
-          --allow-unauthenticated
+          --allow-unauthenticated \
+          --min-instances=0 \
+          --max-instances=1 \
+          --cpu=1 \
+          --memory=512Mi
+
+    - name: Run Daily Upload
+      run: |-
+        gcloud run services call $SERVICE_NAME \
+          --region $REGION \
+          --data '{"message":"trigger"}'
