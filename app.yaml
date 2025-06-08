@@ -1,18 +1,43 @@
-runtime: custom
-env: flex
-service: default
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', '$_ARTIFACT_REGISTRY/$PROJECT_ID/$_SERVICE_NAME:latest', '.']
+    id: 'build'
+    logging: CLOUD_LOGGING_ONLY
 
-runtime_config:
-  python_version: 3.9
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', '$_ARTIFACT_REGISTRY/$PROJECT_ID/$_SERVICE_NAME:latest']
+    id: 'push'
+    logging: CLOUD_LOGGING_ONLY
 
-manual_scaling:
-  instances: 1  # 비용 절감을 위해 고정된 인스턴스 1개 사용
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args: [
+      'run', 'deploy', '$_SERVICE_NAME',
+      '--image', '$_ARTIFACT_REGISTRY/$PROJECT_ID/$_SERVICE_NAME:latest',
+      '--region', '$_REGION',
+      '--platform', 'managed',
+      '--allow-unauthenticated',
+      '--min-instances=0',
+      '--max-instances=1',
+      '--set-env-vars', 'OPENAI_API_KEYS=$_OPENAI_API_KEYS',
+      '--set-env-vars', 'PEXELS_API_KEY=$_PEXELS_API_KEY',
+      '--set-env-vars', 'YOUTUBE_CLIENT_ID=$_YOUTUBE_CLIENT_ID',
+      '--set-env-vars', 'YOUTUBE_CLIENT_SECRET=$_YOUTUBE_CLIENT_SECRET',
+      '--set-env-vars', 'YOUTUBE_REFRESH_TOKEN=$_YOUTUBE_REFRESH_TOKEN',
+      '--set-env-vars', 'ELEVENLABS_API_KEY=$_ELEVENLABS_API_KEY',
+      '--set-env-vars', 'GEMINI_API_KEY=$_GEMINI_API_KEY'
+    ]
+    id: 'deploy'
+    logging: CLOUD_LOGGING_ONLY
 
-resources:
-  cpu: 1
-  memory_gb: 2
-  disk_size_gb: 10
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: 'E2_HIGHCPU_8'
 
-env_variables:
-  GCP_PROJECT_ID: "youtube-full-automated"
-  GCP_REGION: "us-central1"
+substitutions:
+  _ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
+  _SERVICE_NAME: gcp-youtube-automation
+  _REGION: us-central1
+
+images:
+  - '$_ARTIFACT_REGISTRY/$PROJECT_ID/$_SERVICE_NAME:latest'
