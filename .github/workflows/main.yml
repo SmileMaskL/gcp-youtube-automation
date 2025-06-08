@@ -3,8 +3,6 @@ name: YouTube Automation Pipeline
 on:
   push:
     branches: [ main ]
-  schedule:
-    - cron: '0 12 * * *'  # 매일 한국 시간 21시 실행
 
 env:
   PROJECT_ID: youtube-fully-automated
