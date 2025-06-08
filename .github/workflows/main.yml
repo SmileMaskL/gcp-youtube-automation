@@ -3,12 +3,8 @@ name: YouTube Automation Pipeline
 on:
   push:
     branches: [ main ]
-
-env:
-  PROJECT_ID: youtube-fully-automated
-  SERVICE_NAME: gcp-youtube-automation
-  REGION: us-central1
-  ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
+  schedule:
+    - cron: '0 12 * * *'  # 한국 시간 21시 실행
 
 jobs:
   deploy-and-run:
@@ -16,6 +12,11 @@ jobs:
     permissions:
       contents: 'read'
       id-token: 'write'
+    env:  # 환경변수 이동 위치
+      PROJECT_ID: youtube-fully-automated
+      SERVICE_NAME: gcp-youtube-automation
+      REGION: us-central1
+      ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
 
     steps:
     - name: Checkout
@@ -26,25 +27,24 @@ jobs:
       with:
         workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
         service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-        project_id: ${{ env.PROJECT_ID }}
-        audience: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}  # audience 추가!
+        audience: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}  # 핵심 수정!
 
     - name: Setup GCloud
       uses: google-github-actions/setup-gcloud@v1
 
     - name: Build Docker
       run: |-
-        gcloud auth configure-docker $ARTIFACT_REGISTRY
-        docker build -t $ARTIFACT_REGISTRY/$PROJECT_ID/$SERVICE_NAME:latest .
+        gcloud auth configure-docker ${{ env.ARTIFACT_REGISTRY }}
+        docker build -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:latest .
 
     - name: Push Docker
-      run: docker push $ARTIFACT_REGISTRY/$PROJECT_ID/$SERVICE_NAME:latest
+      run: docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:latest
 
     - name: Deploy to Cloud Run
       run: |-
-        gcloud run deploy $SERVICE_NAME \
-          --image $ARTIFACT_REGISTRY/$PROJECT_ID/$SERVICE_NAME:latest \
-          --region $REGION \
+        gcloud run deploy ${{ env.SERVICE_NAME }} \
+          --image ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:latest \
+          --region ${{ env.REGION }} \
           --platform managed \
           --allow-unauthenticated \
           --min-instances=0 \
@@ -60,4 +60,4 @@ jobs:
           --set-env-vars="GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}"
 
     - name: Trigger Job
-      run: gcloud run services call $SERVICE_NAME --region $REGION --data '{"message":"start"}'
+      run: gcloud run services call ${{ env.SERVICE_NAME }} --region ${{ env.REGION }} --data '{"message":"start"}'
