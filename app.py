@@ -14,8 +14,7 @@ import requests
 from pexels_api import API
 import subprocess
 import google.generativeai as genai
-upload_daily
-OPTIMAL_UPLOAD_HOUR = [3, 7, 12, 18, 22]
+OPTIMAL_UPLOAD_HOUR = 9
 
 # 환경 설정
 OPENAI_KEYS = os.getenv('OPENAI_API_KEYS', '').split(',')
