@@ -35,7 +35,7 @@ jobs:
         with:
           workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
-          audience: '//iam.googleapis.com/projects/94662874801/locations/global/workloadIdentityPools/github-pool-v2/providers/github-provider-final'
+          # audience: '//iam.googleapis.com/projects/94662874801/locations/global/workloadIdentityPools/github-pool-v2/providers/github-provider-final'
 
       # 3. gcloud SDK 설치
       - name: Set up Google Cloud SDK
@@ -76,7 +76,8 @@ jobs:
           )
 
           for secret in "${secrets[@]}"; do
-            echo "${secret}=$(gcloud secrets versions access latest --secret=${secret} --project=${{ env.PROJECT_ID }})" >> $GITHUB_ENV
+            val="$(gcloud secrets versions access latest --secret=${secret} --project=${{ env.PROJECT_ID }})"
+            echo "${secret}=${val}" >> $GITHUB_ENV
           done
 
       # 8. Docker 이미지 빌드 및 푸시
