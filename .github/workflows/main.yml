@@ -16,7 +16,7 @@ env:
   SERVICE_NAME: gcp-youtube-automation
   REGION: us-central1
   ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
-  GCP_WORKLOAD_IDENTITY_PROVIDER: projects/94662874801/locations/global/workloadIdentityPools/github-pool-v2/providers/github-provider  # ✅ 정문 이름
+  GCP_WORKLOAD_IDENTITY_PROVIDER: projects/94662874801/locations/global/workloadIdentityPools/github-pool-v2/providers/github-provider-final  # ✅ 정문 이름
   GCP_SERVICE_ACCOUNT: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
   CLOUD_RUN_URL: https://gcp-youtube-automation-abcdefg-uc.a.run.app
 
