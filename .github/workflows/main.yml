@@ -16,7 +16,7 @@ env:
   SERVICE_NAME: gcp-youtube-automation
   REGION: us-central1
   ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
-  GCP_WORKLOAD_IDENTITY_PROVIDER: projects/94662874801/locations/global/workloadIdentityPools/github-pool-v2/providers/github-provider-final  # ✅ 정문 이름
+  GCP_WORKLOAD_IDENTITY_PROVIDER: projects/94662874801/locations/global/workloadIdentityPools/github-pool-v2/providers/github-provider-final
   GCP_SERVICE_ACCOUNT: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
   CLOUD_RUN_URL: https://gcp-youtube-automation-abcdefg-uc.a.run.app
 
@@ -36,7 +36,7 @@ jobs:
         with:
           workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
-           # GCP가 기대하는 정확한 '암호' 형식을 명시적으로 지정합니다.
+          token_format: "access_token"
           audience: '//iam.googleapis.com/projects/94662874801/locations/global/workloadIdentityPools/github-pool-v2/providers/github-provider-final'
 
       # 3. gcloud SDK 설치
