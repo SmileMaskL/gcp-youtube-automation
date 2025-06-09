@@ -4,46 +4,74 @@ on:
   push:
     branches: [ main ]
 
+env:
+  PROJECT_ID: youtube-fully-automated
+  SERVICE_NAME: gcp-youtube-automation
+  REGION: us-central1
+  ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
+  GCP_WORKLOAD_IDENTITY_PROVIDER: projects/94662874801/locations/global/workloadIdentityPools/github-pool-v2/providers/github-provider
+  GCP_SERVICE_ACCOUNT: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
+
 jobs:
   deploy-and-run:
     runs-on: ubuntu-latest
     permissions:
       contents: 'read'
       id-token: 'write'
-    env:
-      PROJECT_ID: youtube-fully-automated
-      SERVICE_NAME: gcp-youtube-automation
-      REGION: us-central1
-      ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
 
     steps:
-    - name: Checkout
+    # 1. 코드 체크아웃
+    - name: Checkout Repository
       uses: actions/checkout@v4
 
-    # 🔑 Workload Identity 인증 (핵심 수정 부분)
-    - name: Google Auth
+    # 2. Google Cloud 인증 (Workload Identity 사용)
+    - name: Authenticate to Google Cloud
+      id: auth
       uses: google-github-actions/auth@v1
       with:
-        workload_identity_provider: projects/123456789/locations/global/workloadIdentityPools/github-pool/providers/github-provider
-        service_account: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
-        audience: //iam.googleapis.com/projects/123456789/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+        workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+        audience: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
         project_id: ${{ env.PROJECT_ID }}
 
-    - name: Setup GCloud
+    # 3. gcloud CLI 설정
+    - name: Set up Google Cloud SDK
       uses: google-github-actions/setup-gcloud@v1
+      with:
+        project_id: ${{ env.PROJECT_ID }}
 
-    # 🐳 Docker 빌드 및 푸시 (권한 문제 해결)
-    - name: Build Docker
-      run: |-
+    # 4. 시크릿 키 가져오기 (Secret Manager에서)
+    - name: Access Secrets from Secret Manager
+      id: secrets
+      run: |
+        echo "PEXELS_API_KEY=$(gcloud secrets versions access latest --secret='PEXELS_API_KEY' --project=$PROJECT_ID)" >> $GITHUB_ENV
+        echo "YOUTUBE_CLIENT_SECRET=$(gcloud secrets versions access latest --secret='YOUTUBE_CLIENT_SECRET' --project=$PROJECT_ID)" >> $GITHUB_ENV
+        echo "YOUTUBE_CLIENT_ID=$(gcloud secrets versions access latest --secret='YOUTUBE_CLIENT_ID' --project=$PROJECT_ID)" >> $GITHUB_ENV
+        echo "YOUTUBE_REFRESH_TOKEN=$(gcloud secrets versions access latest --secret='YOUTUBE_REFRESH_TOKEN' --project=$PROJECT_ID)" >> $GITHUB_ENV
+        echo "OPENAI_API_KEYS=$(gcloud secrets versions access latest --secret='OPENAI_API_KEYS' --project=$PROJECT_ID)" >> $GITHUB_ENV
+        echo "GEMINI_API_KEY=$(gcloud secrets versions access latest --secret='GEMINI_API_KEY' --project=$PROJECT_ID)" >> $GITHUB_ENV
+        echo "ELEVENLABS_API_KEY=$(gcloud secrets versions access latest --secret='ELEVENLABS_API_KEY' --project=$PROJECT_ID)" >> $GITHUB_ENV
+        echo "GCP_AUDIENCE=${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}" >> $GITHUB_ENV
+        echo "GCP_SERVICE_ACCOUNT=${{ env.GCP_SERVICE_ACCOUNT }}" >> $GITHUB_ENV
+
+    # 5. 시크릿 검증
+    - name: Validate Secrets
+      run: ./Secret-check.sh
+
+    # 6. Docker 빌드
+    - name: Build Docker Image
+      run: |
         gcloud auth configure-docker ${{ env.ARTIFACT_REGISTRY }} --quiet
         docker build -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:latest .
 
-    - name: Push Docker
-      run: docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:latest
+    # 7. Docker 이미지 푸시
+    - name: Push Docker Image
+      run: |
+        docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:latest
 
-    # 🚀 Cloud Run 배포
+    # 8. Cloud Run에 배포
     - name: Deploy to Cloud Run
-      run: |-
+      run: |
         gcloud run deploy ${{ env.SERVICE_NAME }} \
           --image ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:latest \
           --region ${{ env.REGION }} \
@@ -53,14 +81,19 @@ jobs:
           --max-instances=1 \
           --cpu=1 \
           --memory=512Mi \
-          --set-env-vars="OPENAI_API_KEYS=${{ secrets.OPENAI_API_KEYS }}" \
-          --set-env-vars="PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }}" \
-          --set-env-vars="YOUTUBE_CLIENT_ID=${{ secrets.YOUTUBE_CLIENT_ID }}" \
-          --set-env-vars="YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }}" \
-          --set-env-vars="YOUTUBE_REFRESH_TOKEN=${{ secrets.YOUTUBE_REFRESH_TOKEN }}" \
-          --set-env-vars="ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }}" \
-          --set-env-vars="GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}"
+          --set-env-vars="PEXELS_API_KEY=$PEXELS_API_KEY" \
+          --set-env-vars="YOUTUBE_CLIENT_ID=$YOUTUBE_CLIENT_ID" \
+          --set-env-vars="YOUTUBE_CLIENT_SECRET=$YOUTUBE_CLIENT_SECRET" \
+          --set-env-vars="YOUTUBE_REFRESH_TOKEN=$YOUTUBE_REFRESH_TOKEN" \
+          --set-env-vars="OPENAI_API_KEYS=$OPENAI_API_KEYS" \
+          --set-env-vars="GEMINI_API_KEY=$GEMINI_API_KEY" \
+          --set-env-vars="ELEVENLABS_API_KEY=$ELEVENLABS_API_KEY"
 
-    # 🔔 작업 트리거
-    - name: Trigger Job
-      run: gcloud run services call ${{ env.SERVICE_NAME }} --region ${{ env.REGION }} --data '{"message":"start"}'
+    # 9. 작업 실행 트리거
+    - name: Trigger YouTube Automation
+      run: |
+        curl -X POST \
+          -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
+          -H "Content-Type: application/json" \
+          https://${{ env.SERVICE_NAME }}-abcdefg-uc.a.run.app/start \
+          -d '{"action":"start"}'
