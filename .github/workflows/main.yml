@@ -36,6 +36,8 @@ jobs:
         with:
           workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+           # GCP가 기대하는 정확한 '암호' 형식을 명시적으로 지정합니다.
+          audience: '//iam.googleapis.com/projects/94662874801/locations/global/workloadIdentityPools/github-pool-v2/providers/github-provider-final'
 
       # 3. gcloud SDK 설치
       - name: Set up Google Cloud SDK
