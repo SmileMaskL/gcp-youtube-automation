@@ -37,7 +37,7 @@ jobs:
       with:
         workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
         service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
-        audience: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+        audience: //iam.googleapis.com/${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
         project_id: ${{ env.PROJECT_ID }}
 
     # 3. gcloud CLI 설정
