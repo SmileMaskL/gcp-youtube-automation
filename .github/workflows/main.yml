@@ -45,7 +45,6 @@ jobs:
       uses: google-github-actions/setup-gcloud@v1
       with:
         project_id: ${{ env.PROJECT_ID }}
-        export_default_credentials: true
 
     # 4. Python 환경 설정
     - name: Set up Python
