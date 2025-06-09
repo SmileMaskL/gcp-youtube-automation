@@ -30,6 +30,35 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+          audience: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Upload file to GCS
+        run: |
+          # 임시 파일 생성
+          echo "This file was uploaded by GitHub Actions at $(date)" > test_upload.txt
+          
+          # GCS에 파일 업로드
+          gsutil cp test_upload.txt gs://${{ env.GCP_BUCKET_NAME }}/
+          
+          # 업로드 확인
+          gsutil ls gs://${{ env.GCP_BUCKET_NAME }}/
+          
+          # 파일 내용 확인
+          gsutil cat gs://${{ env.GCP_BUCKET_NAME }}/test_upload.txt
+
+      - name: Verify upload
+        run: |
+          echo "✅ File successfully uploaded to gs://${{ env.GCP_BUCKET_NAME }}/test_upload.txt"
+          echo "📅 Upload time: $(date)"
+
       # 2. GCP 인증 (오류 해결 핵심)
       - id: 'auth'
         uses: google-github-actions/auth@v2
