@@ -36,9 +36,7 @@ jobs:
         with:
           workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
-          token_format: "access_token"
-          audience: '//iam.googleapis.com/projects/94662874801/locations/global/workloadIdentityPools/github-pool-v2/providers/github-provider-final'
-
+          audience: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
       # 3. gcloud SDK 설치
       - name: Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
