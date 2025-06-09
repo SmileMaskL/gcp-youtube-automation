@@ -14,7 +14,7 @@ import requests
 from pexels_api import API
 import subprocess
 import google.generativeai as genai
-
+upload_daily
 OPTIMAL_UPLOAD_HOUR = 0 3,7,12,18,22 * * *
 
 # 환경 설정
