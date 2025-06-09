@@ -3,7 +3,7 @@ name: GCP Youtube Automation CI/CD
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:  # 수동 실행 허용
+  workflow_dispatch:
 
 permissions:
   contents: 'read'
@@ -14,7 +14,7 @@ env:
   SERVICE_NAME: gcp-youtube-automation
   REGION: us-central1
   ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
-  GCP_BUCKET_NAME: yt-auto-bucket-001  # 이 부분이 추가되었습니다!
+  GCP_BUCKET_NAME: yt-auto-bucket-001
   GCP_SERVICE_ACCOUNT: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
   CLOUD_RUN_URL: https://gcp-youtube-automation-abcdefg-uc.a.run.app
   GCP_WORKLOAD_IDENTITY_PROVIDER: projects/94662874801/locations/global/workloadIdentityPools/github-pool-v2/providers/github-provider-final
@@ -26,44 +26,43 @@ jobs:
     timeout-minutes: 25
 
     steps:
-      # 1. 저장소 코드 체크아웃
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # 2. GCP 인증
+      # ✅ GCP 인증 (Workload Identity Only)
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
+          token_format: 'access_token'
           workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
-          audience: '//iam.googleapis.com/projects/94662874801/locations/global/workloadIdentityPools/github-pool-v2/providers/github-provider-final'
 
-      # 3. gcloud SDK 설치
-      - name: Set up Google Cloud SDK
+      # ✅ gcloud SDK 설치만 (인증은 하지 않음!)
+      - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
         with:
+          install_components: 'beta'
           project_id: ${{ env.PROJECT_ID }}
 
-      # 4. GCS에 테스트 파일 업로드 (새로 추가된 부분)
+      # ✅ GCS에 파일 업로드 테스트
       - name: Upload test file to GCS
         run: |
           echo "This file was uploaded by GitHub Actions at $(date)" > test_upload.txt
           gsutil cp test_upload.txt gs://${{ env.GCP_BUCKET_NAME }}/
           gsutil ls gs://${{ env.GCP_BUCKET_NAME }}/
 
-      # 5. Python 환경 설정
+      # ✅ Python 설정
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
-      # 6. Python 의존성 설치
       - name: Install Python Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # 7. Secret Manager에서 API 키 불러오기
+      # ✅ Google Secret Manager에서 API 키 로드
       - name: Load Secrets from Google Secret Manager
         run: |
           secrets=(
@@ -75,20 +74,19 @@ jobs:
             "GEMINI_API_KEY"
             "ELEVENLABS_API_KEY"
           )
-
           for secret in "${secrets[@]}"; do
             val="$(gcloud secrets versions access latest --secret=${secret} --project=${{ env.PROJECT_ID }})"
             echo "${secret}=${val}" >> $GITHUB_ENV
           done
 
-      # 8. Docker 이미지 빌드 및 푸시
+      # ✅ Docker Build & Push
       - name: Build & Push Docker Image to Artifact Registry
         run: |
           gcloud auth configure-docker ${{ env.ARTIFACT_REGISTRY }} --quiet
           docker build -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:latest .
           docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:latest
 
-      # 9. Cloud Run 배포
+      # ✅ Cloud Run 배포
       - name: Deploy to Cloud Run
         run: |
           gcloud run deploy ${{ env.SERVICE_NAME }} \
@@ -100,16 +98,9 @@ jobs:
             --max-instances=1 \
             --cpu=1 \
             --memory=512Mi \
-            --set-env-vars="PEXELS_API_KEY=$PEXELS_API_KEY" \
-            --set-env-vars="YOUTUBE_CLIENT_ID=$YOUTUBE_CLIENT_ID" \
-            --set-env-vars="YOUTUBE_CLIENT_SECRET=$YOUTUBE_CLIENT_SECRET" \
-            --set-env-vars="YOUTUBE_REFRESH_TOKEN=$YOUTUBE_REFRESH_TOKEN" \
-            --set-env-vars="OPENAI_API_KEYS=$OPENAI_API_KEYS" \
-            --set-env-vars="GEMINI_API_KEY=$GEMINI_API_KEY" \
-            --set-env-vars="ELEVENLABS_API_KEY=$ELEVENLABS_API_KEY" \
-            --set-env-vars="ENVIRONMENT=production"
+            --set-env-vars="PEXELS_API_KEY=$PEXELS_API_KEY,YOUTUBE_CLIENT_ID=$YOUTUBE_CLIENT_ID,YOUTUBE_CLIENT_SECRET=$YOUTUBE_CLIENT_SECRET,YOUTUBE_REFRESH_TOKEN=$YOUTUBE_REFRESH_TOKEN,OPENAI_API_KEYS=$OPENAI_API_KEYS,GEMINI_API_KEY=$GEMINI_API_KEY,ELEVENLABS_API_KEY=$ELEVENLABS_API_KEY,ENVIRONMENT=production"
 
-      # 10. 자동 콘텐츠 생성 및 업로드 실행
+      # ✅ 콘텐츠 생성 및 업로드 실행
       - name: Run YouTube Shorts Generator
         run: |
           echo "🎬 Generating video content..."
@@ -126,7 +117,7 @@ jobs:
 
           echo "✅ Automation finished!"
 
-      # 11. 결과 상태 확인
+      # ✅ 상태 확인 (선택사항)
       - name: Check Automation Status
         run: |
           curl -X POST \
@@ -135,7 +126,7 @@ jobs:
             ${{ env.CLOUD_RUN_URL }}/status \
             -d '{"action":"check"}'
 
-      # 12. 불필요한 이미지 정리
+      # ✅ 이미지 정리 (선택사항)
       - name: Cleanup Old Docker Images
         if: always()
         run: |
