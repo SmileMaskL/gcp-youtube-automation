@@ -10,16 +10,20 @@ permissions:
   id-token: 'write'
 
 env:
-  JOB_NAME: gcp-youtube-automation-job
+  SERVICE_NAME: gcp-youtube-automation
+  IMAGE_NAME: ${{ env.SERVICE_NAME }}
+  IMAGE_TAG: $GITHUB_SHA
   PROJECT_ID: youtube-fully-automated
+  GCP_WORKLOAD_IDENTITY_PROVIDER: projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions
   ARTIFACT_REGISTRY: us-central1-docker.pkg.dev/youtube-fully-automated/gcp-youtube-automation
   REGION: us-central1
+  GCP_BUCKET_NAME: yt-auto-bucket-001
   GCP_SERVICE_ACCOUNT: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
-  SCHEDULER_JOB_NAME: trigger-youtube-job
-  SCHEDULER_TIMEZONE: "Asia/Seoul"
+  CLOUD_RUN_URL: https://gcp-youtube-automation-abcdefg-uc.a.run.app
+  GITHUB_AUDIENCE: https://token.actions.githubusercontent.com
 
 jobs:
-  build-and-deploy-infra:
+  deploy-and-automate:
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
@@ -30,45 +34,67 @@ jobs:
       - name: 🔐 Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: "projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions"
+          token_format: 'access_token'
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
-          audience: 'https://token.actions.githubusercontent.com'
+          audience: ${{ env.GITHUB_AUDIENCE }}
+          create_credentials_file: true
 
       - name: ⚙️ Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
 
-      - name: 🐳 Configure Docker
-        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
-
-      - name: 🏗️ Build & Push Docker Image
+      - name: 🐳 Build & Push Docker Image
         run: |
-          docker build -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.JOB_NAME }}:${{ github.sha }} .
-          docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.JOB_NAME }}:${{ github.sha }}
+          docker build -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:$GITHUB_SHA .
+          docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:$GITHUB_SHA
 
-      - name: 👨‍🍳 Deploy Cloud Run Job
+      - name: 🚀 Deploy to Cloud Run
         run: |
-          gcloud run jobs deploy ${{ env.JOB_NAME }} \
-            --image ${{ env.ARTIFACT_REGISTRY }}/${{ env.JOB_NAME }}:${{ github.sha }} \
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --image ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:$GITHUB_SHA \
             --region ${{ env.REGION }} \
-            --service-account=${{ env.GCP_SERVICE_ACCOUNT }} \
-            --tasks=1 \
-            --max-retries=1 \
+            --platform managed \
+            --allow-unauthenticated \
+            --min-instances=0 \
+            --max-instances=1 \
             --cpu=1 \
-            --memory=1Gi \
-            --task-timeout=1800s \
-            --update-secrets=PEXELS_API_KEY=PEXELS_API_KEY:latest \
-            --update-secrets=YOUTUBE_CLIENT_ID=YOUTUBE_CLIENT_ID:latest \
-            --update-secrets=YOUTUBE_CLIENT_SECRET=YOUTUBE_CLIENT_SECRET:latest \
-            --update-secrets=YOUTUBE_REFRESH_TOKEN=YOUTUBE_REFRESH_TOKEN:latest \
-            --update-secrets=OPENAI_API_KEYS=OPENAI_API_KEYS:latest \
-            --update-secrets=GEMINI_API_KEY=GEMINI_API_KEY:latest \
-            --update-secrets=ELEVENLABS_API_KEY=ELEVENLABS_API_KEY:latest
-            
-      - name: ⏰ Create/Update Cloud Scheduler
+            --memory=512Mi \
+            --set-env-vars="PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }}" \
+            --set-env-vars="YOUTUBE_CLIENT_ID=${{ secrets.YOUTUBE_CLIENT_ID }}" \
+            --set-env-vars="YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }}" \
+            --set-env-vars="YOUTUBE_REFRESH_TOKEN=${{ secrets.YOUTUBE_REFRESH_TOKEN }}" \
+            --set-env-vars="OPENAI_API_KEYS=${{ secrets.OPENAI_API_KEYS }}" \
+            --set-env-vars="GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" \
+            --set-env-vars="ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }}" \
+            --set-env-vars="ENVIRONMENT=production"
+
+      - name: 🎬 Run YouTube Shorts Generator
         run: |
-          gcloud scheduler jobs update cloud-run-v2 ${{ env.SCHEDULER_JOB_NAME }} \
-            --schedule="${{ env.SCHEDULER_CRON }}" \
-            --time-zone="${{ env.SCHEDULER_TIMEZONE }}" \
-            --location="${{ env.REGION }}" \
-            --job="${{ env.JOB_NAME }}" \
-            --description="매일 유튜브 영상 자동 업로드 작업을 실행합니다."
+          echo "▶️ Generating content..."
+          python scripts/content_generator.py \
+            --pexels-key "${{ secrets.PEXELS_API_KEY }}" \
+            --openai-key "${{ secrets.OPENAI_API_KEYS }}" \
+            --gemini-key "${{ secrets.GEMINI_API_KEY }}"
+
+          echo "📤 Uploading to YouTube..."
+          python scripts/uploader.py \
+            --client-id "${{ secrets.YOUTUBE_CLIENT_ID }}" \
+            --client-secret "${{ secrets.YOUTUBE_CLIENT_SECRET }}" \
+            --refresh-token "${{ secrets.YOUTUBE_REFRESH_TOKEN }}"
+
+      - name: 📡 Call Cloud Run Status Endpoint
+        run: |
+          ID_TOKEN=$(gcloud auth print-identity-token)
+          curl -X POST \
+            -H "Authorization: Bearer ${ID_TOKEN}" \
+            -H "Content-Type: application/json" \
+            ${{ env.CLOUD_RUN_URL }}/status \
+            -d '{"action":"check"}'
+
+      - name: 🧹 Cleanup Old Docker Images
+        if: always()
+        run: |
+          chmod +x cleanup-repo-fixed.sh
+          ./cleanup-repo-fixed.sh
