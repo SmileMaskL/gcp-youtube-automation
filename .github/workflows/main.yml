@@ -14,7 +14,6 @@ env:
   IMAGE_NAME: ${{ env.SERVICE_NAME }}
   IMAGE_TAG: $GITHUB_SHA
   PROJECT_ID: youtube-fully-automated
-  # 🔥 반드시 확인할 부분: 실제 Workload Identity Provider 경로
   GCP_WORKLOAD_IDENTITY_PROVIDER: projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions
   ARTIFACT_REGISTRY: us-central1-docker.pkg.dev/youtube-fully-automated/gcp-youtube-automation
   REGION: us-central1
@@ -32,7 +31,6 @@ jobs:
       - name: 📁 Checkout Repository
         uses: actions/checkout@v4
 
-      # 🔥 인증 단계: create_credentials_file 활성화
       - name: 🔐 Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
@@ -40,22 +38,18 @@ jobs:
           workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
           audience: ${{ env.GITHUB_AUDIENCE }}
-          create_credentials_file: true  # 이 설정이 핵심
+          create_credentials_file: true
 
       - name: ⚙️ Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ env.PROJECT_ID }}
 
-      # 🔥 Load Secrets 단계 완전 삭제 (불필요)
-
-      # Docker 빌드/푸시
       - name: 🐳 Build & Push Docker Image
         run: |
           docker build -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:$GITHUB_SHA .
           docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:$GITHUB_SHA
 
-      # Cloud Run 배포 시 🔥 환경변수를 GitHub Secrets에서 직접 주입
       - name: 🚀 Deploy to Cloud Run
         run: |
           gcloud run deploy ${{ env.SERVICE_NAME }} \
@@ -76,20 +70,19 @@ jobs:
             --set-env-vars="ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }}" \
             --set-env-vars="ENVIRONMENT=production"
 
-      # 이후 단계들도 secrets 직접 참조로 변경
       - name: 🎬 Run YouTube Shorts Generator
         run: |
+          echo "▶️ Generating content..."
           python scripts/content_generator.py \
             --pexels-key "${{ secrets.PEXELS_API_KEY }}" \
             --openai-key "${{ secrets.OPENAI_API_KEYS }}" \
             --gemini-key "${{ secrets.GEMINI_API_KEY }}"
 
+          echo "📤 Uploading to YouTube..."
           python scripts/uploader.py \
             --client-id "${{ secrets.YOUTUBE_CLIENT_ID }}" \
             --client-secret "${{ secrets.YOUTUBE_CLIENT_SECRET }}" \
             --refresh-token "${{ secrets.YOUTUBE_REFRESH_TOKEN }}"
-
-          echo "✅ All automation completed!"
 
       - name: 📡 Call Cloud Run Status Endpoint
         run: |
