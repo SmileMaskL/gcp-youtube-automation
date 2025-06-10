@@ -5,10 +5,6 @@ on:
     branches: [ main ]
   workflow_dispatch:  # 수동 실행 허용
 
-permissions:
-  contents: 'read'
-  id-token: 'write'
-
 env:
   PROJECT_ID: youtube-fully-automated
   SERVICE_NAME: gcp-youtube-automation
@@ -23,6 +19,10 @@ jobs:
   deploy-and-automate:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+
+    permissions:
+      contents: 'read'
+      id-token: 'write'
 
     steps:
       - name: 📁 Checkout Repository
