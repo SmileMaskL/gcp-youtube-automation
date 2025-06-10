@@ -55,7 +55,7 @@ jobs:
             --max-retries=1 \
             --cpu=1 \
             --memory=1Gi \
-            --timeout=1800s \
+            --task-timeout=1800s \
             --update-secrets=PEXELS_API_KEY=PEXELS_API_KEY:latest \
             --update-secrets=YOUTUBE_CLIENT_ID=YOUTUBE_CLIENT_ID:latest \
             --update-secrets=YOUTUBE_CLIENT_SECRET=YOUTUBE_CLIENT_SECRET:latest \
