@@ -32,6 +32,7 @@ jobs:
         with:
           workload_identity_provider: "projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions"
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+          audience: 'https://token.actions.githubusercontent.com'
 
       - name: ⚙️ Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
