@@ -14,6 +14,7 @@ env:
   IMAGE_NAME: ${{ env.SERVICE_NAME }}
   IMAGE_TAG: $GITHUB_SHA
   PROJECT_ID: youtube-fully-automated
+  GCP_WORKLOAD_IDENTITY_PROVIDER: projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions
   ARTIFACT_REGISTRY: us-central1-docker.pkg.dev/youtube-fully-automated/gcp-youtube-automation
   REGION: us-central1
   GCP_BUCKET_NAME: yt-auto-bucket-001
