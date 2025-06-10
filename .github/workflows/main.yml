@@ -15,10 +15,10 @@ env:
   SERVICE_NAME: gcp-youtube-automation
   REGION: us-central1
   GCP_BUCKET_NAME: yt-auto-bucket-001
-  GCP_SERVICE_ACCOUNT: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
+  GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
   CLOUD_RUN_URL: https://gcp-youtube-automation-abcdefg-uc.a.run.app
   # 🔥 변경된 부분 (Audience 고정)
-  GCP_WORKLOAD_IDENTITY_PROVIDER: projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1
+  GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
   GITHUB_AUDIENCE: https://github.com/SmileMaskL/gcp-youtube-automation
 
 jobs:
