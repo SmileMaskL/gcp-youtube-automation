@@ -18,7 +18,7 @@ env:
   GCP_SERVICE_ACCOUNT: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
   CLOUD_RUN_URL: https://gcp-youtube-automation-abcdefg-uc.a.run.app
   # 🔥 변경된 부분 (Audience 고정)
-  GCP_WORKLOAD_IDENTITY_PROVIDER: projects/94662874801/locations/global/workloadIdentityPools/github-pool-v3/providers/github-provider
+  GCP_WORKLOAD_IDENTITY_PROVIDER: projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1
   GITHUB_AUDIENCE: https://github.com/SmileMaskL/gcp-youtube-automation
 
 jobs:
@@ -37,7 +37,7 @@ jobs:
           token_format: 'access_token'
           workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
-          audience: ${{ env.GITHUB_AUDIENCE }}
+          # audience: ${{ env.GITHUB_AUDIENCE }}
           create_credentials_file: true
 
       - name: ⚙️ Set up Google Cloud SDK
