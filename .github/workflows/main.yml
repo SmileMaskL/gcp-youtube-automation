@@ -35,6 +35,11 @@ jobs:
           workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
 
+      - name: 🧪 GCP 명령어 테스트
+        run: |
+          gcloud config set project $GCP_PROJECT_ID
+          gcloud storage buckets list
+
       - name: ⚙️ Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
         with:
