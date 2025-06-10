@@ -47,8 +47,8 @@ jobs:
 
       - name: 🐳 Build & Push Docker Image
         run: |
-          docker build -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:$GITHUB_SHA .
-          docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:$GITHUB_SHA
+          docker build -t ${{ env.ARTIFACT_REGISTRY }}/gcp-youtube-automation:$GITHUB_SHA .
+          docker push ${{ env.ARTIFACT_REGISTRY }}/gcp-youtube-automation:$GITHUB_SHA
 
       - name: 🚀 Deploy to Cloud Run
         run: |
