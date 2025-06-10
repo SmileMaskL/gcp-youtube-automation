@@ -38,7 +38,7 @@ jobs:
 
       - name: 🧪 GCP 명령어 테스트
         run: |
-          gcloud config set project $GCP_PROJECT_ID
+          gcloud config set project $PROJECT_ID
           gcloud storage buckets list
 
       - name: ⚙️ Set up Google Cloud SDK
