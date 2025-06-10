@@ -19,7 +19,7 @@ env:
   CLOUD_RUN_URL: https://gcp-youtube-automation-abcdefg-uc.a.run.app
   # 🔥 변경된 부분 (Audience 고정)
   GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-  GITHUB_AUDIENCE: https://github.com/SmileMaskL/gcp-youtube-automation
+  GITHUB_AUDIENCE: https://token.actions.githubusercontent.com
 
 jobs:
   deploy-and-automate:
