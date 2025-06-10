@@ -3,70 +3,56 @@ name: GCP Youtube Automation CI/CD
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:  # 수동 실행 허용
+  workflow_dispatch:
+
+permissions:
+  contents: 'read'
+  id-token: 'write'
 
 env:
   PROJECT_ID: youtube-fully-automated
   ARTIFACT_REGISTRY: us-central1-docker.pkg.dev/youtube-fully-automated/gcp-youtube-automation
-  IMAGE_NAME: SmileMask-image-name
-  IMAGE_TAG: latest
   SERVICE_NAME: gcp-youtube-automation
   REGION: us-central1
-  # ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
   GCP_BUCKET_NAME: yt-auto-bucket-001
   GCP_SERVICE_ACCOUNT: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
   CLOUD_RUN_URL: https://gcp-youtube-automation-abcdefg-uc.a.run.app
+  # 🔥 변경된 부분 (Audience 고정)
   GCP_WORKLOAD_IDENTITY_PROVIDER: projects/94662874801/locations/global/workloadIdentityPools/github-pool-v3/providers/github-provider
+  GITHUB_AUDIENCE: https://github.com/SmileMaskL/gcp-youtube-automation
 
 jobs:
   deploy-and-automate:
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
-    permissions:
-      contents: 'read'
-      id-token: 'write'
-
     steps:
       - name: 📁 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 🔐 Authenticate to Google Cloud (Workload Identity)
+      # 🔥 변경된 인증 단계 (audience 명시적 추가)
+      - name: 🔐 Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
           token_format: 'access_token'
           workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
-          audience: "https://token.actions.githubusercontent.com"
-
-      - name: 🧪 GCP 명령어 테스트
-        run: |
-          gcloud config set project $PROJECT_ID
-          gcloud storage buckets list
+          audience: ${{ env.GITHUB_AUDIENCE }}
+          create_credentials_file: true
 
       - name: ⚙️ Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ env.PROJECT_ID }}
-          install_components: 'beta'
 
-      - name: 🧪 Test GCS Upload
+      # 🔥 Secret Manager 권한 확인 추가
+      - name: 🔑 Verify Secret Manager Access
         run: |
-          echo "Uploaded from GitHub Actions at $(date)" > test_upload.txt
-          gsutil cp test_upload.txt gs://${{ env.GCP_BUCKET_NAME }}/
-          gsutil ls gs://${{ env.GCP_BUCKET_NAME }}/
+          gcloud secrets list --project=$PROJECT_ID
+          gcloud iam service-accounts get-iam-policy $GCP_SERVICE_ACCOUNT
 
-      - name: 🐍 Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-
-      - name: 📦 Install Python Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: 🔑 Load Secrets from Secret Manager
+      # 🔥 변경된 시크릿 로드 방식 (에러 핸들링 추가)
+      - name: 🔑 Load Secrets
         run: |
           secrets=(
             "PEXELS_API_KEY"
@@ -78,15 +64,23 @@ jobs:
             "ELEVENLABS_API_KEY"
           )
           for secret in "${secrets[@]}"; do
-            val="$(gcloud secrets versions access latest --secret=${secret} --project=${{ env.PROJECT_ID }})"
-            echo "${secret}=${val}" >> $GITHUB_ENV
+            echo "Loading $secret..."
+            val=$(gcloud secrets versions access latest --secret=$secret --project=$PROJECT_ID || echo "")
+            if [ -z "$val" ]; then
+              echo "::warning::Failed to load $secret"
+            else
+              echo "$secret=***" >> $GITHUB_ENV
+              echo "$secret"_SECRET="$val" >> $GITHUB_ENV
+            fi
           done
 
-      - name: 🐳 Build & Push Docker Image to Artifact Registry
+      # 🔥 단일 Docker 빌드/푸시로 통합
+      - name: 🐳 Build & Push Docker Image
         run: |
-          gcloud auth configure-docker ${{ env.ARTIFACT_REGISTRY }} --quiet
-          docker build -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:latest .
-          docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:latest
+          docker build -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:$GITHUB_SHA .
+          docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:$GITHUB_SHA
+
+      # ... (이하 동일) ...
 
       - name: Build Docker image
         run: docker build -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} . # <-- 이미지 빌드
