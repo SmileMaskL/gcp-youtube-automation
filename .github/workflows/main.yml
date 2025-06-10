@@ -7,9 +7,12 @@ on:
 
 env:
   PROJECT_ID: youtube-fully-automated
+  ARTIFACT_REGISTRY: us-central1-docker.pkg.dev/youtube-fully-automated/gcp-youtube-automation
+  IMAGE_NAME: SmileMask-image-name
+  IMAGE_TAG: latest
   SERVICE_NAME: gcp-youtube-automation
   REGION: us-central1
-  ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
+  # ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
   GCP_BUCKET_NAME: yt-auto-bucket-001
   GCP_SERVICE_ACCOUNT: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
   CLOUD_RUN_URL: https://gcp-youtube-automation-abcdefg-uc.a.run.app
@@ -84,6 +87,12 @@ jobs:
           gcloud auth configure-docker ${{ env.ARTIFACT_REGISTRY }} --quiet
           docker build -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:latest .
           docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:latest
+
+      - name: Build Docker image
+        run: docker build -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} . # <-- 이미지 빌드
+
+      - name: Push Docker image to Artifact Registry # <-- 이미지 푸시 단계!
+        run: docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} # <-- 바로 여기에! 네 그 명령어!
 
       - name: 🚀 Deploy to Cloud Run
         run: |
