@@ -10,11 +10,11 @@ permissions:
   id-token: 'write'
 
 env:
-  IMAGE_NAME: ${{ env.SERVICE_NAME }}
-  IMAGE_TAG: $GITHUB_SHA
   PROJECT_ID: youtube-fully-automated
   ARTIFACT_REGISTRY: us-central1-docker.pkg.dev/youtube-fully-automated/gcp-youtube-automation
   SERVICE_NAME: gcp-youtube-automation
+  IMAGE_NAME: ${{ env.SERVICE_NAME }}
+  IMAGE_TAG: $GITHUB_SHA
   REGION: us-central1
   GCP_BUCKET_NAME: yt-auto-bucket-001
   GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
