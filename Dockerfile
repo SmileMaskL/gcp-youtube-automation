@@ -1,31 +1,16 @@
-# Python 3.9 기반 이미지 사용
-FROM python:3.9-slim
+# 1. 베이스 이미지 선택 (파이썬 3.10 버전)
+FROM python:3.10-slim
 
-# 작업 디렉토리 설정
+# 2. 작업 디렉토리 설정
 WORKDIR /app
 
-# 필요한 시스템 패키지 설치
-RUN apt-get update && apt-get install -y \
-    ffmpeg \
-    fonts-dejavu \
-    libgl1-mesa-glx \
-    && rm -rf /var/lib/apt/lists/*
-
-# 폰트 복사
-COPY fonts/Catfont.ttf /usr/share/fonts/truetype/
-
-# 의존성 설치
-COPY requirements.txt .
+# 3. 필요한 라이브러리 목록 복사 및 설치
+COPY requirements.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 애플리케이션 코드 복사
+# 4. 프로젝트의 모든 코드를 컨테이너 안으로 복사
 COPY . .
 
-# 로그 디렉토리 생성
-RUN mkdir -p logs
-
-# 환경 변수 설정 (실제 값은 런타임에 주입)
-ENV PYTHONUNBUFFERED=1
-
-# 앱 실행
-CMD ["python", "app.py"]
+# 5. 이 컨테이너가 시작될 때 실행할 기본 명령어
+# main.py 파일을 실행하도록 설정합니다.
+CMD ["python", "main.py"]
