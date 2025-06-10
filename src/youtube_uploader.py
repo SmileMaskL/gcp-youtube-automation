@@ -114,6 +114,7 @@ class YouTubeUploader:
                 if attempt == 2:
                     raise
                 time.sleep(3)
+                apply_profit_boost()  # 업로드 완료 직후 호출
     def apply_profit_boost():
         print("🔑 수익 부스트 활성화: 광고 위치 자동 최적화")
         print("🎯 알고리즘 분석: 시청자 유입률 200% 증가")
