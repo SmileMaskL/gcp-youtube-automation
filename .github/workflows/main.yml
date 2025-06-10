@@ -11,7 +11,7 @@ permissions:
 
 env:
   SERVICE_NAME: gcp-youtube-automation
-  IMAGE_NAME: ${{ env.SERVICE_NAME }}
+  IMAGE_NAME: gcp-youtube-automation
   IMAGE_TAG: $GITHUB_SHA
   PROJECT_ID: youtube-fully-automated
   GCP_WORKLOAD_IDENTITY_PROVIDER: projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions
