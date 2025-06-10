@@ -14,13 +14,13 @@ env:
   IMAGE_NAME: ${{ env.SERVICE_NAME }}
   IMAGE_TAG: $GITHUB_SHA
   PROJECT_ID: youtube-fully-automated
+  # 🔥 반드시 확인할 부분: 실제 Workload Identity Provider 경로
   GCP_WORKLOAD_IDENTITY_PROVIDER: projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions
   ARTIFACT_REGISTRY: us-central1-docker.pkg.dev/youtube-fully-automated/gcp-youtube-automation
   REGION: us-central1
   GCP_BUCKET_NAME: yt-auto-bucket-001
-  GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+  GCP_SERVICE_ACCOUNT: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
   CLOUD_RUN_URL: https://gcp-youtube-automation-abcdefg-uc.a.run.app
-  # 🔥 변경된 부분 (Audience 고정)
   GITHUB_AUDIENCE: https://token.actions.githubusercontent.com
 
 jobs:
@@ -32,7 +32,7 @@ jobs:
       - name: 📁 Checkout Repository
         uses: actions/checkout@v4
 
-      # 🔥 변경된 인증 단계 (audience 명시적 추가)
+      # 🔥 인증 단계: create_credentials_file 활성화
       - name: 🔐 Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
@@ -40,52 +40,26 @@ jobs:
           workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
           audience: ${{ env.GITHUB_AUDIENCE }}
-          create_credentials_file: true
+          create_credentials_file: true  # 이 설정이 핵심
 
       - name: ⚙️ Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ env.PROJECT_ID }}
 
-      # 🔥 Secret Manager 권한 확인 추가
-      - name: 🔑 Verify Secret Manager Access
-        run: |
-          gcloud secrets list --project=$PROJECT_ID
-          gcloud iam service-accounts get-iam-policy $GCP_SERVICE_ACCOUNT
+      # 🔥 Load Secrets 단계 완전 삭제 (불필요)
 
-      # 🔥 변경된 시크릿 로드 방식 (에러 핸들링 추가)
-      - name: 🔑 Load Secrets
-        run: |
-          secrets=(
-            "PEXELS_API_KEY"
-            "YOUTUBE_CLIENT_ID"
-            "YOUTUBE_CLIENT_SECRET"
-            "YOUTUBE_REFRESH_TOKEN"
-            "OPENAI_API_KEYS"
-            "GEMINI_API_KEY"
-            "ELEVENLABS_API_KEY"
-          )
-          for secret in "${secrets[@]}"; do
-            echo "Loading $secret..."
-            val=$(gcloud secrets versions access latest --secret=$secret --project=$PROJECT_ID || echo "")
-            if [ -z "$val" ]; then
-              echo "::warning::Failed to load $secret"
-            else
-              echo "$secret=***" >> $GITHUB_ENV
-              echo "$secret"_SECRET="$val" >> $GITHUB_ENV
-            fi
-          done
-
-      # 🔥 단일 Docker 빌드/푸시로 통합
+      # Docker 빌드/푸시
       - name: 🐳 Build & Push Docker Image
         run: |
           docker build -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:$GITHUB_SHA .
           docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:$GITHUB_SHA
 
+      # Cloud Run 배포 시 🔥 환경변수를 GitHub Secrets에서 직접 주입
       - name: 🚀 Deploy to Cloud Run
         run: |
           gcloud run deploy ${{ env.SERVICE_NAME }} \
-            --image ${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:latest \
+            --image ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:$GITHUB_SHA \
             --region ${{ env.REGION }} \
             --platform managed \
             --allow-unauthenticated \
@@ -93,28 +67,27 @@ jobs:
             --max-instances=1 \
             --cpu=1 \
             --memory=512Mi \
-            --set-env-vars="PEXELS_API_KEY=$PEXELS_API_KEY" \
-            --set-env-vars="YOUTUBE_CLIENT_ID=$YOUTUBE_CLIENT_ID" \
-            --set-env-vars="YOUTUBE_CLIENT_SECRET=$YOUTUBE_CLIENT_SECRET" \
-            --set-env-vars="YOUTUBE_REFRESH_TOKEN=$YOUTUBE_REFRESH_TOKEN" \
-            --set-env-vars="OPENAI_API_KEYS=$OPENAI_API_KEYS" \
-            --set-env-vars="GEMINI_API_KEY=$GEMINI_API_KEY" \
-            --set-env-vars="ELEVENLABS_API_KEY=$ELEVENLABS_API_KEY" \
+            --set-env-vars="PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }}" \
+            --set-env-vars="YOUTUBE_CLIENT_ID=${{ secrets.YOUTUBE_CLIENT_ID }}" \
+            --set-env-vars="YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }}" \
+            --set-env-vars="YOUTUBE_REFRESH_TOKEN=${{ secrets.YOUTUBE_REFRESH_TOKEN }}" \
+            --set-env-vars="OPENAI_API_KEYS=${{ secrets.OPENAI_API_KEYS }}" \
+            --set-env-vars="GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" \
+            --set-env-vars="ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }}" \
             --set-env-vars="ENVIRONMENT=production"
 
+      # 이후 단계들도 secrets 직접 참조로 변경
       - name: 🎬 Run YouTube Shorts Generator
         run: |
-          echo "▶️ Generating content..."
           python scripts/content_generator.py \
-            --pexels-key "$PEXELS_API_KEY" \
-            --openai-key "$OPENAI_API_KEYS" \
-            --gemini-key "$GEMINI_API_KEY"
+            --pexels-key "${{ secrets.PEXELS_API_KEY }}" \
+            --openai-key "${{ secrets.OPENAI_API_KEYS }}" \
+            --gemini-key "${{ secrets.GEMINI_API_KEY }}"
 
-          echo "📤 Uploading to YouTube..."
           python scripts/uploader.py \
-            --client-id "$YOUTUBE_CLIENT_ID" \
-            --client-secret "$YOUTUBE_CLIENT_SECRET" \
-            --refresh-token "$YOUTUBE_REFRESH_TOKEN"
+            --client-id "${{ secrets.YOUTUBE_CLIENT_ID }}" \
+            --client-secret "${{ secrets.YOUTUBE_CLIENT_SECRET }}" \
+            --refresh-token "${{ secrets.YOUTUBE_REFRESH_TOKEN }}"
 
           echo "✅ All automation completed!"
 
