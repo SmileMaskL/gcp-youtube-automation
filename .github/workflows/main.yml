@@ -18,8 +18,8 @@ env:
   GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
   CLOUD_RUN_URL: https://gcp-youtube-automation-abcdefg-uc.a.run.app
   # 🔥 변경된 부분 (Audience 고정)
-  GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-  GITHUB_AUDIENCE: https://token.actions.githubusercontent.com
+  GCP_WORKLOAD_IDENTITY_PROVIDER: projects/123456789/locations/global/workloadIdentityPools/POOL_ID/providers/github-provider-v1
+  # GITHUB_AUDIENCE: https://token.actions.githubusercontent.com
 
 jobs:
   deploy-and-automate:
@@ -79,8 +79,6 @@ jobs:
         run: |
           docker build -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:$GITHUB_SHA .
           docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:$GITHUB_SHA
-
-      # ... (이하 동일) ...
 
       - name: Build Docker image
         run: docker build -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} . # <-- 이미지 빌드
