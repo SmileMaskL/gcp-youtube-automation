@@ -31,6 +31,15 @@ jobs:
       - name: 📁 Checkout Repository
         uses: actions/checkout@v4
 
+      - name: 🐳 Docker 인증 및 푸시
+        run: |
+          echo "🔑 GCP 서비스 계정 인증 중..."
+          gcloud auth activate-service-account --key-file=$GITHUB_WORKSPACE/gha-creds.json
+          gcloud auth configure-docker us-central1-docker.pkg.dev
+    
+          echo "🚀 이미지 푸시 시도..."
+          docker push us-central1-docker.pkg.dev/youtube-fully-automated/gcp-youtube-automation/gcp-youtube-automation:$GITHUB_SHA
+
       - name: 🔐 Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
