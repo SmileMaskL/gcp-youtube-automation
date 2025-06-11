@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main ]
   workflow_dispatch:
-
+  
 env:
   SERVICE_NAME: gcp-youtube-automation
   REGION: us-central1
@@ -33,6 +33,7 @@ jobs:
       with:
         workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
         service_account: ${{ env.SERVICE_ACCOUNT }}
+        audience: https://token.actions.githubusercontent.com  # ✅ 오류 해결을 위해 추가
         access_token_lifetime: 3600s
 
   deploy:
@@ -62,11 +63,11 @@ jobs:
       run: |
         echo "🔐 시크릿 로드 시작"
         
-        # 환경 변수 매핑 테이블
+        # 환경 변수 매핑 테이블 (사용자 시크릿 이름에 맞게 수정)
         declare -A secret_map=(
-          ["OPENAI_API_KEY"]="openai-api-key"
-          ["GEMINI_API_KEY"]="gemini-api-key"
-          ["ELEVENLABS_API_KEY"]="elevenlabs-api-key"
+          ["OPENAI_API_KEY"]="openai-api-keys"           # 실제 시크릿 이름: openai-api-keys
+          ["GEMINI_API_KEY"]="gemini-api-key"             # 실제 시크릿 이름: gemini-api-key
+          ["ELEVENLABS_API_KEY"]="elevenlabs-api-key"     # 실제 시크릿 이름: elevenlabs-api-key
           ["YOUTUBE_CREDENTIALS"]="youtube-oauth-credentials"
           ["STORAGE_BUCKET"]="storage-bucket-name"
         )
@@ -80,7 +81,7 @@ jobs:
             --project=$PROJECT_ID \
             --format="value(data)")
             
-          # 멀티라인 시크릿 처리
+          # 멀티라인 시크릿 처리 (JSON 형식일 경우)
           if [[ $secret_name == *"credentials"* ]]; then
             echo "$env_var<<EOF" >> $GITHUB_ENV
             echo "$secret_value" >> $GITHUB_ENV
@@ -97,8 +98,6 @@ jobs:
     if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     env:
       PROJECT_ID: ${{ needs.setup-auth.outputs.project_id }}
-      WORKLOAD_PROVIDER: ${{ needs.setup-auth.outputs.workload_provider }}
-      SERVICE_ACCOUNT: ${{ needs.setup-auth.outputs.service_account }}
     
     steps:
     - name: Checkout code
@@ -109,6 +108,7 @@ jobs:
       with:
         workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
         service_account: ${{ env.SERVICE_ACCOUNT }}
+        audience: https://token.actions.githubusercontent.com  # ✅ 동일하게 추가
     
     - name: Cloud SDK 설정
       uses: google-github-actions/setup-gcloud@v2
@@ -126,7 +126,7 @@ jobs:
           --project=$PROJECT_ID \
           --format='value(status.url)')
         
-        # 수익화 가능 주제 배열
+        # 수익화 가능 주제 배열 (실제 수익화 가능한 주제로 구성)
         MONETIZABLE_TOPICS=(
           "AI로 유튜브 자동화해서 수익 올리는 법"
           "2025년 가장 수익률 높은 부업 TOP5"
@@ -138,7 +138,7 @@ jobs:
           "파이썬 자동화로 수익 창출하기"
         )
         
-        # 동적 실행 간격 계산
+        # 동적 실행 간격 계산 (GCP 무료 한도 내에서 최대 효율)
         MIN_INTERVAL=300  # 5분
         MAX_INTERVAL=600  # 10분
         MIN_DURATION=180  # 3분
@@ -148,6 +148,7 @@ jobs:
           echo "📹 생성 시작: $topic"
           DURATION=$(( MIN_DURATION + RANDOM % (MAX_DURATION - MIN_DURATION + 1) ))
           
+          # API 호출 (타임아웃 및 재시도 설정 포함)
           curl -X POST "$SERVICE_URL/generate" \
             -H "Content-Type: application/json" \
             -d "{
