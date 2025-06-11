@@ -1,8 +1,7 @@
 name: GCP Youtube Automation CI/CD
 
 on:
-  push:
-    branches: [ main ]
+  push: { branches: [ main ] }
   workflow_dispatch:
 
 permissions:
@@ -16,18 +15,15 @@ env:
   ARTIFACT_REGISTRY: us-central1-docker.pkg.dev/youtube-fully-automated/gcp-youtube-automation
   REGION: us-central1
   CLOUD_RUN_URL: https://gcp-youtube-automation-abcdefg-uc.a.run.app
-  GITHUB_AUDIENCE: https://token.actions.githubusercontent.com
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
-
     steps:
       - name: 📁 Checkout
         uses: actions/checkout@v4
 
-      - name: 🔐 Authenticate to GCP via Workload Identity
+      - name: 🔐 Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
           token_format: 'access_token'
@@ -39,9 +35,8 @@ jobs:
         with:
           project_id: ${{ env.PROJECT_ID }}
 
-      - name: Authenticate Docker to Artifact Registry
-        run: |
-          gcloud auth configure-docker ${{ env.ARTIFACT_REGISTRY }}
+      - name: Docker Registry 인증
+        run: gcloud auth configure-docker ${{ env.ARTIFACT_REGISTRY }}
 
       - name: 🐳 Build & Push Docker Image
         run: |
@@ -55,15 +50,14 @@ jobs:
             --region ${{ env.REGION }} \
             --platform managed \
             --allow-unauthenticated \
-            --min-instances=0 \
-            --max-instances=1 \
+            --min-instances=0 --max-instances=1 \
             --cpu=1 --memory=512Mi \
-            --set-env-vars=... # secrets 그대로 사용
+            --set-env-vars="...익명 환경변수..."
 
       - name: 🎬 Generate & Upload Content
         run: |
-          python scripts/content_generator.py ...
-          python scripts/uploader.py ...
+          python scripts/content_generator.py
+          python scripts/uploader.py
 
       - name: 📡 Call Cloud Run Endpoint
         run: |
