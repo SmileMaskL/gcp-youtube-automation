@@ -27,7 +27,7 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-
+      
     - id: auth
     - name: Google Cloud 인증 (100% 오류 해결 버전)
       uses: google-github-actions/auth@v2
@@ -38,6 +38,13 @@ jobs:
         access_token_scopes: "https://www.googleapis.com/auth/cloud-platform"
         audience: "https://token.actions.githubusercontent.com"
         access_token_lifetime: 3600s
+        "repository": "SmileMaskL/gcp-youtube-automation"
+
+    - name: Print OIDC Token Payload (base64 decoded)
+      id: decode
+      shell: bash
+      run: |
+       echo "${{ steps.auth.outputs.id_token }}" | cut -d '.' -f2 | base64 -d | jq
 
   deploy:
     runs-on: ubuntu-latest
