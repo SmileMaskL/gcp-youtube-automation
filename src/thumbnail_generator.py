@@ -12,293 +12,198 @@ class ThumbnailGenerator:
     def __init__(self):
         self.width = 1280
         self.height = 720
-        self.font_path = None
-        self.setup_fonts()
-    
-    def setup_fonts(self):
-        """폰트 설정"""
+        self.colors = [
+            (255, 87, 51),   # 빨간색
+            (255, 193, 7),   # 노란색
+            (40, 167, 69),   # 초록색
+            (0, 123, 255),   # 파란색
+            (108, 117, 125), # 회색
+            (220, 53, 69),   # 진한 빨간색
+            (255, 193, 7),   # 주황색
+        ]
+        
+    def create_thumbnail(self, title, subtitle="", output_path="thumbnail.jpg"):
+        """썸네일 이미지 생성"""
         try:
-            # 시스템 폰트 경로들
-            font_paths = [
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-                "/System/Library/Fonts/Arial.ttf",
-                "/Windows/Fonts/arial.ttf",
-                "arial.ttf"
-            ]
+            # 배경 이미지 생성
+            img = Image.new('RGB', (self.width, self.height), color=(33, 37, 41))
+            draw = ImageDraw.Draw(img)
             
-            for path in font_paths:
-                if os.path.exists(path):
-                    self.font_path = path
-                    break
+            # 그라데이션 배경 추가
+            self._add_gradient_background(img)
+            
+            # 제목 추가
+            self._add_title_text(draw, title)
+            
+            # 부제목 추가
+            if subtitle:
+                self._add_subtitle_text(draw, subtitle)
+            
+            # 장식 요소 추가
+            self._add_decorative_elements(draw)
+            
+            # 이미지 저장
+            img.save(output_path, quality=95)
+            logger.info(f"썸네일 생성 완료: {output_path}")
+            
+            return output_path
+            
+        except Exception as e:
+            logger.error(f"썸네일 생성 실패: {str(e)}")
+            raise
+    
+    def _add_gradient_background(self, img):
+        """그라데이션 배경 추가"""
+        try:
+            # 선택한 색상으로 그라데이션 생성
+            color = random.choice(self.colors)
+            
+            # 배경 그라데이션
+            for y in range(self.height):
+                # 위에서 아래로 어두워지는 그라데이션
+                alpha = y / self.height
+                dark_factor = 0.3 + (0.7 * alpha)
+                
+                current_color = (
+                    int(color[0] * dark_factor),
+                    int(color[1] * dark_factor),
+                    int(color[2] * dark_factor)
+                )
+                
+                # 한 줄씩 그리기
+                for x in range(self.width):
+                    img.putpixel((x, y), current_color)
                     
         except Exception as e:
-            logger.warning(f"폰트 설정 실패: {e}")
-            self.font_path = None
+            logger.error(f"배경 생성 실패: {str(e)}")
     
-    def create_gradient_background(self, color1, color2):
-        """그라데이션 배경 생성"""
+    def _add_title_text(self, draw, title):
+        """제목 텍스트 추가"""
         try:
-            # RGB 색상으로 변환
-            r1, g1, b1 = color1
-            r2, g2, b2 = color2
+            # 폰트 크기 설정
+            font_size = 80
             
-            # 그라데이션 생성
-            background = np.zeros((self.height, self.width, 3), dtype=np.uint8)
+            # 기본 폰트 사용 (시스템에 따라 다름)
+            try:
+                font = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", font_size)
+            except:
+                try:
+                    font = ImageFont.truetype("arial.ttf", font_size)
+                except:
+                    font = ImageFont.load_default()
             
-            for y in range(self.height):
-                ratio = y / self.height
-                r = int(r1 * (1 - ratio) + r2 * ratio)
-                g = int(g1 * (1 - ratio) + g2 * ratio)
-                b = int(b1 * (1 - ratio) + b2 * ratio)
-                background[y, :] = [b, g, r]  # OpenCV는 BGR 순서
+            # 텍스트 길이에 따라 폰트 크기 조정
+            while len(title) * font_size > self.width * 0.8:
+                font_size -= 5
+                try:
+                    font = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", font_size)
+                except:
+                    try:
+                        font = ImageFont.truetype("arial.ttf", font_size)
+                    except:
+                        font = ImageFont.load_default()
             
-            return background
+            # 텍스트 위치 계산
+            bbox = draw.textbbox((0, 0), title, font=font)
+            text_width = bbox[2] - bbox[0]
+            text_height = bbox[3] - bbox[1]
             
-        except Exception as e:
-            logger.error(f"그라데이션 배경 생성 실패: {e}")
-            # 단색 배경으로 대체
-            return np.full((self.height, self.width, 3), color1[::-1], dtype=np.uint8)
-    
-    def add_text_with_outline(self, image, text, position, font_scale=2, 
-                            text_color=(255, 255, 255), outline_color=(0, 0, 0),
-                            thickness=3, outline_thickness=8):
-        """텍스트에 외곽선 추가"""
-        try:
-            # 외곽선 먼저 그리기
-            cv2.putText(image, text, position, cv2.FONT_HERSHEY_SIMPLEX, 
-                       font_scale, outline_color, outline_thickness, cv2.LINE_AA)
+            x = (self.width - text_width) // 2
+            y = (self.height - text_height) // 2 - 50
             
-            # 텍스트 그리기
-            cv2.putText(image, text, position, cv2.FONT_HERSHEY_SIMPLEX, 
-                       font_scale, text_color, thickness, cv2.LINE_AA)
-            
-        except Exception as e:
-            logger.error(f"텍스트 추가 실패: {e}")
-    
-    def add_shapes_and_effects(self, image):
-        """도형과 효과 추가"""
-        try:
-            # 화살표 추가
-            pts = np.array([[100, 300], [200, 250], [200, 280], [300, 280], 
-                           [300, 320], [200, 320], [200, 350]], np.int32)
-            cv2.fillPoly(image, [pts], (255, 255, 0))  # 노란색 화살표
-            
-            # 원형 강조 표시
-            cv2.circle(image, (1000, 200), 80, (255, 0, 0), 8)  # 빨간색 원
-            
-            # 느낌표 추가
-            cv2.putText(image, "!", (980, 220), cv2.FONT_HERSHEY_SIMPLEX, 
-                       3, (255, 0, 0), 8, cv2.LINE_AA)
-            
-        except Exception as e:
-            logger.error(f"도형 추가 실패: {e}")
-    
-    def create_money_themed_thumbnail(self, title, topic):
-        """돈 관련 썸네일 생성"""
-        try:
-            # 금색 그라데이션 배경
-            background = self.create_gradient_background((255, 215, 0), (255, 140, 0))
-            
-            # 제목 추가 (여러 줄로 분할)
-            words = title.split()
-            lines = []
-            current_line = ""
-            
-            for word in words:
-                if len(current_line + word) < 15:  # 한 줄 최대 길이
-                    current_line += word + " "
-                else:
-                    if current_line:
-                        lines.append(current_line.strip())
-                    current_line = word + " "
-            
-            if current_line:
-                lines.append(current_line.strip())
-            
-            # 텍스트 추가
-            y_offset = 150
-            for i, line in enumerate(lines[:3]):  # 최대 3줄
-                y_pos = y_offset + (i * 120)
-                self.add_text_with_outline(background, line, (50, y_pos), 
-                                         font_scale=1.5, text_color=(0, 0, 0),
-                                         outline_color=(255, 255, 255))
-            
-            # 돈 기호 추가
-            self.add_text_with_outline(background, "$$$", (1000, 500), 
-                                     font_scale=3, text_color=(0, 255, 0),
-                                     outline_color=(0, 0, 0))
-            
-            # 도형과 효과 추가
-            self.add_shapes_and_effects(background)
-            
-            return background
-            
-        except Exception as e:
-            logger.error(f"돈 테마 썸네일 생성 실패: {e}")
-            return self.create_simple_thumbnail(title)
-    
-    def create_tutorial_thumbnail(self, title, topic):
-        """튜토리얼 썸네일 생성"""
-        try:
-            # 파란색 그라데이션 배경
-            background = self.create_gradient_background((30, 144, 255), (0, 100, 200))
-            
-            # 제목 처리
-            main_text = title.split('(')[0].strip()
+            # 텍스트 그림자 효과
+            shadow_offset = 3
+            draw.text((x + shadow_offset, y + shadow_offset), title, font=font, fill=(0, 0, 0, 128))
             
             # 메인 텍스트
-            self.add_text_with_outline(background, main_text, (50, 200), 
-                                     font_scale=1.8, text_color=(255, 255, 255),
-                                     outline_color=(0, 0, 0))
-            
-            # "HOW TO" 라벨 추가
-            cv2.rectangle(background, (50, 50), (300, 120), (255, 0, 0), -1)
-            self.add_text_with_outline(background, "HOW TO", (70, 100), 
-                                     font_scale=1.2, text_color=(255, 255, 255),
-                                     outline_color=(0, 0, 0), thickness=2)
-            
-            # 체크마크 추가
-            pts = np.array([[1000, 400], [1050, 450], [1150, 350]], np.int32)
-            cv2.polylines(background, [pts], False, (0, 255, 0), 15)
-            
-            return background
+            draw.text((x, y), title, font=font, fill=(255, 255, 255))
             
         except Exception as e:
-            logger.error(f"튜토리얼 썸네일 생성 실패: {e}")
-            return self.create_simple_thumbnail(title)
+            logger.error(f"제목 텍스트 추가 실패: {str(e)}")
     
-    def create_secret_thumbnail(self, title, topic):
-        """비밀/팁 썸네일 생성"""
+    def _add_subtitle_text(self, draw, subtitle):
+        """부제목 텍스트 추가"""
         try:
-            # 어두운 그라데이션 배경
-            background = self.create_gradient_background((25, 25, 25), (75, 0, 130))
+            font_size = 40
             
-            # "SECRET" 라벨
-            cv2.rectangle(background, (50, 50), (250, 120), (255, 0, 255), -1)
-            self.add_text_with_outline(background, "SECRET", (70, 100), 
-                                     font_scale=1.0, text_color=(255, 255, 255),
-                                     outline_color=(0, 0, 0))
+            try:
+                font = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans.ttf", font_size)
+            except:
+                try:
+                    font = ImageFont.truetype("arial.ttf", font_size)
+                except:
+                    font = ImageFont.load_default()
             
-            # 메인 텍스트
-            main_text = title.replace("비밀", "").replace("SECRET", "").strip()
-            words = main_text.split()[:4]  # 처음 4단어만
-            display_text = " ".join(words)
+            # 텍스트 위치 계산
+            bbox = draw.textbbox((0, 0), subtitle, font=font)
+            text_width = bbox[2] - bbox[0]
             
-            self.add_text_with_outline(background, display_text, (50, 250), 
-                                     font_scale=1.5, text_color=(255, 255, 0),
-                                     outline_color=(0, 0, 0))
+            x = (self.width - text_width) // 2
+            y = self.height // 2 + 100
             
-            # 물음표 추가
-            self.add_text_with_outline(background, "?", (1100, 300), 
-                                     font_scale=4, text_color=(255, 255, 0),
-                                     outline_color=(0, 0, 0))
+            # 배경 박스
+            padding = 10
+            box_coords = [
+                x - padding,
+                y - padding,
+                x + text_width + padding,
+                y + font_size + padding
+            ]
+            draw.rectangle(box_coords, fill=(0, 0, 0, 100))
             
-            return background
+            # 부제목 텍스트
+            draw.text((x, y), subtitle, font=font, fill=(255, 255, 255))
             
         except Exception as e:
-            logger.error(f"비밀 썸네일 생성 실패: {e}")
-            return self.create_simple_thumbnail(title)
+            logger.error(f"부제목 텍스트 추가 실패: {str(e)}")
     
-    def create_simple_thumbnail(self, title):
-        """간단한 썸네일 생성 (기본값)"""
+    def _add_decorative_elements(self, draw):
+        """장식 요소 추가"""
         try:
-            # 기본 파란색 배경
-            background = np.full((self.height, self.width, 3), (100, 100, 200), dtype=np.uint8)
+            # 모서리에 작은 원들 추가
+            circle_color = random.choice(self.colors)
             
-            # 제목을 여러 줄로 분할
-            words = title.split()
-            lines = []
-            current_line = ""
+            # 좌상단
+            draw.ellipse([20, 20, 80, 80], fill=circle_color)
             
-            for word in words:
-                if len(current_line + word) < 20:
-                    current_line += word + " "
-                else:
-                    if current_line:
-                        lines.append(current_line.strip())
-                    current_line = word + " "
+            # 우상단
+            draw.ellipse([self.width-80, 20, self.width-20, 80], fill=circle_color)
             
-            if current_line:
-                lines.append(current_line.strip())
+            # 좌하단
+            draw.ellipse([20, self.height-80, 80, self.height-20], fill=circle_color)
             
-            # 텍스트 추가
-            y_offset = 200
-            for i, line in enumerate(lines[:3]):
-                y_pos = y_offset + (i * 100)
-                self.add_text_with_outline(background, line, (50, y_pos), 
-                                         font_scale=1.3, text_color=(255, 255, 255),
-                                         outline_color=(0, 0, 0))
+            # 우하단
+            draw.ellipse([self.width-80, self.height-80, self.width-20, self.height-20], fill=circle_color)
             
-            return background
+            # 중앙 상단에 강조 라인
+            line_y = 100
+            draw.rectangle([self.width//2 - 150, line_y, self.width//2 + 150, line_y + 8], fill=(255, 255, 255))
             
         except Exception as e:
-            logger.error(f"간단한 썸네일 생성 실패: {e}")
-            # 최소한의 썸네일
-            return np.full((self.height, self.width, 3), (128, 128, 128), dtype=np.uint8)
+            logger.error(f"장식 요소 추가 실패: {str(e)}")
     
-    def generate_thumbnail(self, title, topic, output_path=None):
-        """메인 썸네일 생성 함수"""
-        try:
-            logger.info(f"썸네일 생성 시작: {title}")
+    def create_multiple_thumbnails(self, title, count=3):
+        """여러 버전의 썸네일 생성"""
+        thumbnails = []
+        
+        for i in range(count):
+            output_path = f"thumbnail_{i+1}.jpg"
             
-            # 키워드에 따라 다른 스타일 적용
-            if any(word in title.lower() for word in ['돈', '벌기', '부자', '수익', 'money']):
-                thumbnail = self.create_money_themed_thumbnail(title, topic)
-            elif any(word in title.lower() for word in ['비밀', '팁', 'secret', '몰랐던']):
-                thumbnail = self.create_secret_thumbnail(title, topic)
-            elif any(word in title.lower() for word in ['방법', '하는법', 'how', 'tutorial']):
-                thumbnail = self.create_tutorial_thumbnail(title, topic)
+            # 각각 다른 스타일로 생성
+            if i == 0:
+                # 기본 스타일
+                thumbnail_path = self.create_thumbnail(title, "", output_path)
+            elif i == 1:
+                # 부제목 포함
+                subtitle = "💰 월 100만원 달성법"
+                thumbnail_path = self.create_thumbnail(title, subtitle, output_path)
             else:
-                thumbnail = self.create_simple_thumbnail(title)
+                # 다른 색상 스킴
+                original_colors = self.colors.copy()
+                self.colors = [(255, 20, 147), (138, 43, 226), (30, 144, 255)]  # 핑크/보라/파랑 계열
+                thumbnail_path = self.create_thumbnail(title, "🔥 실제 후기", output_path)
+                self.colors = original_colors
             
-            # 파일 저장
-            if output_path is None:
-                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                output_path = f'thumbnail_{timestamp}.jpg'
+            thumbnails.append(thumbnail_path)
             
-            success = cv2.imwrite(output_path, thumbnail)
-            
-            if success:
-                logger.info(f"썸네일 저장 완료: {output_path}")
-                return output_path
-            else:
-                logger.error("썸네일 저장 실패")
-                return None
-                
-        except Exception as e:
-            logger.error(f"썸네일 생성 실패: {e}")
-            return None
-    
-    def add_face_placeholder(self, image, position=(800, 200), size=(200, 200)):
-        """얼굴 자리표시자 추가 (실제 얼굴 대신)"""
-        try:
-            x, y = position
-            w, h = size
-            
-            # 원형 배경
-            center = (x + w//2, y + h//2)
-            cv2.circle(image, center, w//2, (255, 200, 100), -1)
-            cv2.circle(image, center, w//2, (0, 0, 0), 5)
-            
-            # 간단한 얼굴 표시
-            # 눈
-            cv2.circle(image, (center[0]-30, center[1]-20), 10, (0, 0, 0), -1)
-            cv2.circle(image, (center[0]+30, center[1]-20), 10, (0, 0, 0), -1)
-            
-            # 입
-            cv2.ellipse(image, (center[0], center[1]+20), (40, 20), 0, 0, 180, (0, 0, 0), 3)
-            
-        except Exception as e:
-            logger.error(f"얼굴 자리표시자 추가 실패: {e}")
-
-if __name__ == "__main__":
-    # 테스트
-    generator = ThumbnailGenerator()
-    test_title = "유튜브로 월 100만원 벌기 (실제 후기)"
-    test_topic = "유튜브 수익화"
-    
-    result = generator.generate_thumbnail(test_title, test_topic, "test_thumbnail.jpg")
-    if result:
-        print(f"테스트 썸네일 생성 완료: {result}")
-    else:
-        print("테스트 썸네일 생성 실패")
+        return thumbnails
