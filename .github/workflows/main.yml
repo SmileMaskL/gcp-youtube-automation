@@ -54,6 +54,10 @@ jobs:
         with:
           project_id: ${{ env.PROJECT_ID }}
 
+      - name: Authenticate Docker to Artifact Registry
+        run: | 
+          gcloud auth configure-docker ${{ env.ARTIFACT_REGISTRY }}
+
       - name: 🐳 Build & Push Docker Image
         run: |
           docker build -t ${{ env.ARTIFACT_REGISTRY }}/gcp-youtube-automation:$GITHUB_SHA .
