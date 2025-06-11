@@ -64,86 +64,42 @@ jobs:
         # OpenAI API Key
         OPENAI_API_KEY=$(gcloud secrets versions access latest \
           --secret="openai-api-key" \
-          --project="${{ env.PROJECT_ID }}")
+          --project="${{ env.PROJECT_ID }}" \
+          --account="${{ secrets.WIF_SERVICE_ACCOUNT }}" \
+          --impersonate-service-account)
         echo "OPENAI_API_KEY=$OPENAI_API_KEY" >> $GITHUB_ENV
         
         # Gemini API Key
         GEMINI_API_KEY=$(gcloud secrets versions access latest \
           --secret="gemini-api-key" \
-          --project="${{ env.PROJECT_ID }}")
+          --project="${{ env.PROJECT_ID }}" \
+          --account="${{ secrets.WIF_SERVICE_ACCOUNT }}" \
+          --impersonate-service-account)
         echo "GEMINI_API_KEY=$GEMINI_API_KEY" >> $GITHUB_ENV
         
         # ElevenLabs API Key
         ELEVENLABS_API_KEY=$(gcloud secrets versions access latest \
           --secret="elevenlabs-api-key" \
-          --project="${{ env.PROJECT_ID }}")
+          --project="${{ env.PROJECT_ID }}" \
+          --account="${{ secrets.WIF_SERVICE_ACCOUNT }}" \
+          --impersonate-service-account)
         echo "ELEVENLABS_API_KEY=$ELEVENLABS_API_KEY" >> $GITHUB_ENV
         
         # YouTube OAuth Credentials
         YOUTUBE_CREDENTIALS=$(gcloud secrets versions access latest \
           --secret="youtube-oauth-credentials" \
-          --project="${{ env.PROJECT_ID }}")
+          --project="${{ env.PROJECT_ID }}" \
+          --account="${{ secrets.WIF_SERVICE_ACCOUNT }}" \
+          --impersonate-service-account)
         echo "YOUTUBE_CREDENTIALS=$YOUTUBE_CREDENTIALS" >> $GITHUB_ENV
         
         # Storage Bucket Name
         STORAGE_BUCKET=$(gcloud secrets versions access latest \
           --secret="storage-bucket-name" \
-          --project="${{ env.PROJECT_ID }}")
+          --project="${{ env.PROJECT_ID }}" \
+          --account="${{ secrets.WIF_SERVICE_ACCOUNT }}" \
+          --impersonate-service-account)
         echo "STORAGE_BUCKET=$STORAGE_BUCKET" >> $GITHUB_ENV
-    
-    - name: Build Docker image
-      run: |
-        IMAGE_TAG="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }}"
-        echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
-        
-        docker build \
-          --build-arg OPENAI_API_KEY="${{ env.OPENAI_API_KEY }}" \
-          --build-arg GEMINI_API_KEY="${{ env.GEMINI_API_KEY }}" \
-          --build-arg ELEVENLABS_API_KEY="${{ env.ELEVENLABS_API_KEY }}" \
-          --build-arg YOUTUBE_CREDENTIALS="${{ env.YOUTUBE_CREDENTIALS }}" \
-          --build-arg STORAGE_BUCKET="${{ env.STORAGE_BUCKET }}" \
-          --build-arg GCP_PROJECT_ID="${{ env.PROJECT_ID }}" \
-          -t $IMAGE_TAG .
-    
-    - name: Push Docker image
-      run: |
-        docker push ${{ env.IMAGE_TAG }}
-    
-    - name: Deploy to Cloud Run
-      run: |
-        gcloud run deploy ${{ env.SERVICE_NAME }} \
-          --image=${{ env.IMAGE_TAG }} \
-          --platform=managed \
-          --region=${{ env.REGION }} \
-          --allow-unauthenticated \
-          --memory=2Gi \
-          --cpu=1 \
-          --timeout=3600 \
-          --concurrency=1 \
-          --max-instances=1 \
-          --set-env-vars="GCP_PROJECT_ID=${{ env.PROJECT_ID }}" \
-          --set-env-vars="STORAGE_BUCKET=${{ env.STORAGE_BUCKET }}" \
-          --service-account="${{ secrets.WIF_SERVICE_ACCOUNT }}"
-    
-    - name: Run initial content generation
-      run: |
-        SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
-          --region=${{ env.REGION }} \
-          --format='value(status.url)')
-        
-        echo "Service URL: $SERVICE_URL"
-        
-        curl -X POST "$SERVICE_URL/generate" \
-          -H "Content-Type: application/json" \
-          -d '{
-            "topic": "AI로 월 100만원 버는 방법",
-            "style": "informative",
-            "duration": 300,
-            "monetization": true
-          }' \
-          --max-time 3600 \
-          --retry 3 \
-          --retry-delay 10
 
   generate-content:
     runs-on: ubuntu-latest
@@ -186,7 +142,6 @@ jobs:
         
         for topic in "${MONETIZABLE_TOPICS[@]}"; do
           echo "Generating monetizable content for: $topic"
-          
           DURATION=$(( 180 + RANDOM % 300 ))
           
           curl -X POST "$SERVICE_URL/generate" \
