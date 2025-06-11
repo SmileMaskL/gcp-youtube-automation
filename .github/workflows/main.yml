@@ -10,7 +10,8 @@ env:
   REGION: us-central1
   PROJECT_ID: youtube-fully-automated
   # ▼▼▼ 중요! 여기서 audience 값 수정 ▼▼▼
-  WORKLOAD_IDENTITY_PROVIDER: "projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1?audience=https://token.actions.githubusercontent.com"
+  WORKLOAD_IDENTITY_PROVIDER: "projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1"
+  audience: "https://token.actions.githubusercontent.com"
   SERVICE_ACCOUNT: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
 
 permissions:
