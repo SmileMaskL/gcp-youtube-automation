@@ -246,4 +246,4 @@ class ContentGenerator:
             f"이것만 알면 {topic} 마스터 #Shorts",
             f"{topic} 비밀 공개 (99%가 모름)",
             f"{topic}로 부자 되는 법 (3분 요약)",
-            f"실제로 {topic}으로 성공한 방법
+            f"실제로 {topic}으로 성공한 방법"
