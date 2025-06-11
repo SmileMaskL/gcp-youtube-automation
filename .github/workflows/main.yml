@@ -1,7 +1,8 @@
 name: GCP Youtube Automation CI/CD
 
 on:
-  push: { branches: [ main ] }
+  push:
+    branches: [ main ]
   workflow_dispatch:
 
 permissions:
@@ -11,17 +12,33 @@ permissions:
 env:
   SERVICE_NAME: gcp-youtube-automation
   IMAGE_NAME: gcp-youtube-automation
+  IMAGE_TAG: $GITHUB_SHA
   PROJECT_ID: youtube-fully-automated
+  GCP_WORKLOAD_IDENTITY_PROVIDER: projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions
   ARTIFACT_REGISTRY: us-central1-docker.pkg.dev/youtube-fully-automated/gcp-youtube-automation
   REGION: us-central1
+  GCP_BUCKET_NAME: yt-auto-bucket-001
+  GCP_SERVICE_ACCOUNT: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
   CLOUD_RUN_URL: https://gcp-youtube-automation-abcdefg-uc.a.run.app
+  GITHUB_AUDIENCE: https://token.actions.githubusercontent.com
 
 jobs:
-  deploy:
+  deploy-and-automate:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+
     steps:
-      - name: 📁 Checkout
+      - name: 📁 Checkout Repository
         uses: actions/checkout@v4
+
+      - name: 🐳 Docker 인증 및 푸시
+        run: |
+          # echo "🔑 GCP 서비스 계정 인증 중..."
+          # gcloud auth activate-service-account --key-file=$GITHUB_WORKSPACE/gha-creds.json
+          gcloud auth configure-docker us-central1-docker.pkg.dev
+    
+          echo "🚀 이미지 푸시 시도..."
+          docker push us-central1-docker.pkg.dev/youtube-fully-automated/gcp-youtube-automation/gcp-youtube-automation:$GITHUB_SHA
 
       - name: 🔐 Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
@@ -29,41 +46,64 @@ jobs:
           token_format: 'access_token'
           workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+          audience: ${{ env.GITHUB_AUDIENCE }}
+          create_credentials_file: true
 
-      - name: ⚙️ Setup SDK
+      - name: ⚙️ Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ env.PROJECT_ID }}
 
-      - name: Docker Registry 인증
-        run: gcloud auth configure-docker ${{ env.ARTIFACT_REGISTRY }}
-
       - name: 🐳 Build & Push Docker Image
         run: |
-          docker build -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.IMAGE_NAME }}:$GITHUB_SHA .
-          docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.IMAGE_NAME }}:$GITHUB_SHA
+          docker build -t ${{ env.ARTIFACT_REGISTRY }}/gcp-youtube-automation:$GITHUB_SHA .
+          docker push ${{ env.ARTIFACT_REGISTRY }}/gcp-youtube-automation:$GITHUB_SHA
 
       - name: 🚀 Deploy to Cloud Run
         run: |
           gcloud run deploy ${{ env.SERVICE_NAME }} \
-            --image ${{ env.ARTIFACT_REGISTRY }}/${{ env.IMAGE_NAME }}:$GITHUB_SHA \
+            --image ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:$GITHUB_SHA \
             --region ${{ env.REGION }} \
             --platform managed \
             --allow-unauthenticated \
-            --min-instances=0 --max-instances=1 \
-            --cpu=1 --memory=512Mi \
-            --set-env-vars="...익명 환경변수..."
+            --min-instances=0 \
+            --max-instances=1 \
+            --cpu=1 \
+            --memory=512Mi \
+            --set-env-vars="PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }}" \
+            --set-env-vars="YOUTUBE_CLIENT_ID=${{ secrets.YOUTUBE_CLIENT_ID }}" \
+            --set-env-vars="YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }}" \
+            --set-env-vars="YOUTUBE_REFRESH_TOKEN=${{ secrets.YOUTUBE_REFRESH_TOKEN }}" \
+            --set-env-vars="OPENAI_API_KEYS=${{ secrets.OPENAI_API_KEYS }}" \
+            --set-env-vars="GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" \
+            --set-env-vars="ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }}" \
+            --set-env-vars="ENVIRONMENT=production"
 
-      - name: 🎬 Generate & Upload Content
+      - name: 🎬 Run YouTube Shorts Generator
         run: |
-          python scripts/content_generator.py
-          python scripts/uploader.py
+          echo "▶️ Generating content..."
+          python scripts/content_generator.py \
+            --pexels-key "${{ secrets.PEXELS_API_KEY }}" \
+            --openai-key "${{ secrets.OPENAI_API_KEYS }}" \
+            --gemini-key "${{ secrets.GEMINI_API_KEY }}"
 
-      - name: 📡 Call Cloud Run Endpoint
+          echo "📤 Uploading to YouTube..."
+          python scripts/uploader.py \
+            --client-id "${{ secrets.YOUTUBE_CLIENT_ID }}" \
+            --client-secret "${{ secrets.YOUTUBE_CLIENT_SECRET }}" \
+            --refresh-token "${{ secrets.YOUTUBE_REFRESH_TOKEN }}"
+
+      - name: 📡 Call Cloud Run Status Endpoint
         run: |
           ID_TOKEN=$(gcloud auth print-identity-token)
-          curl -X POST -H "Authorization: Bearer $ID_TOKEN" ${{ env.CLOUD_RUN_URL }}/status -d '{"action":"check"}'
+          curl -X POST \
+            -H "Authorization: Bearer ${ID_TOKEN}" \
+            -H "Content-Type: application/json" \
+            ${{ env.CLOUD_RUN_URL }}/status \
+            -d '{"action":"check"}'
 
-      - name: 🧹 Cleanup
+      - name: 🧹 Cleanup Old Docker Images
         if: always()
-        run: ./cleanup-repo-fixed.sh
+        run: |
+          chmod +x cleanup-repo-fixed.sh
+          ./cleanup-repo-fixed.sh
