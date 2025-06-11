@@ -12,7 +12,6 @@ permissions:
 env:
   SERVICE_NAME: gcp-youtube-automation
   IMAGE_NAME: gcp-youtube-automation
-  IMAGE_TAG: $GITHUB_SHA
   PROJECT_ID: youtube-fully-automated
   GCP_WORKLOAD_IDENTITY_PROVIDER: projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions
   ARTIFACT_REGISTRY: us-central1-docker.pkg.dev/youtube-fully-automated/gcp-youtube-automation
@@ -25,20 +24,11 @@ env:
 jobs:
   deploy-and-automate:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
 
     steps:
       - name: 📁 Checkout Repository
         uses: actions/checkout@v4
-
-      - name: 🐳 Docker 인증 및 푸시
-        run: |
-          # echo "🔑 GCP 서비스 계정 인증 중..."
-          # gcloud auth activate-service-account --key-file=$GITHUB_WORKSPACE/gha-creds.json
-          gcloud auth configure-docker us-central1-docker.pkg.dev
-    
-          echo "🚀 이미지 푸시 시도..."
-          docker push us-central1-docker.pkg.dev/youtube-fully-automated/gcp-youtube-automation/gcp-youtube-automation:$GITHUB_SHA
 
       - name: 🔐 Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
@@ -54,56 +44,73 @@ jobs:
         with:
           project_id: ${{ env.PROJECT_ID }}
 
+      - name: 🔑 Configure Docker for Artifact Registry
+        run: |
+          echo "🔑 Docker 인증 설정 중..."
+          gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
       - name: 🐳 Build & Push Docker Image
         run: |
-          docker build -t ${{ env.ARTIFACT_REGISTRY }}/gcp-youtube-automation:$GITHUB_SHA .
-          docker push ${{ env.ARTIFACT_REGISTRY }}/gcp-youtube-automation:$GITHUB_SHA
+          echo "🔨 Docker 이미지 빌드 중..."
+          docker build -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
+          docker build -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.IMAGE_NAME }}:latest .
+          
+          echo "🚀 Docker 이미지 푸시 중..."
+          docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.IMAGE_NAME }}:latest
 
       - name: 🚀 Deploy to Cloud Run
         run: |
+          echo "☁️ Cloud Run 배포 중..."
           gcloud run deploy ${{ env.SERVICE_NAME }} \
-            --image ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:$GITHUB_SHA \
+            --image ${{ env.ARTIFACT_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
             --region ${{ env.REGION }} \
             --platform managed \
             --allow-unauthenticated \
             --min-instances=0 \
-            --max-instances=1 \
+            --max-instances=3 \
             --cpu=1 \
-            --memory=512Mi \
-            --set-env-vars="PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }}" \
-            --set-env-vars="YOUTUBE_CLIENT_ID=${{ secrets.YOUTUBE_CLIENT_ID }}" \
-            --set-env-vars="YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }}" \
-            --set-env-vars="YOUTUBE_REFRESH_TOKEN=${{ secrets.YOUTUBE_REFRESH_TOKEN }}" \
-            --set-env-vars="OPENAI_API_KEYS=${{ secrets.OPENAI_API_KEYS }}" \
-            --set-env-vars="GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" \
-            --set-env-vars="ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }}" \
-            --set-env-vars="ENVIRONMENT=production"
+            --memory=1Gi \
+            --timeout=300 \
+            --concurrency=10 \
+            --port=8080 \
+            --set-env-vars="ENVIRONMENT=production" \
+            --set-env-vars="PROJECT_ID=${{ env.PROJECT_ID }}" \
+            --set-env-vars="BUCKET_NAME=${{ env.GCP_BUCKET_NAME }}" \
+            --set-env-vars="ELEVENLABS_VOICE_ID=uyVNoMrnUku1dZyVEXwD" \
+            --quiet
 
-      - name: 🎬 Run YouTube Shorts Generator
+      - name: 🎬 Generate and Upload YouTube Content
         run: |
-          echo "▶️ Generating content..."
-          python scripts/content_generator.py \
-            --pexels-key "${{ secrets.PEXELS_API_KEY }}" \
-            --openai-key "${{ secrets.OPENAI_API_KEYS }}" \
-            --gemini-key "${{ secrets.GEMINI_API_KEY }}"
-
-          echo "📤 Uploading to YouTube..."
-          python scripts/uploader.py \
-            --client-id "${{ secrets.YOUTUBE_CLIENT_ID }}" \
-            --client-secret "${{ secrets.YOUTUBE_CLIENT_SECRET }}" \
-            --refresh-token "${{ secrets.YOUTUBE_REFRESH_TOKEN }}"
-
-      - name: 📡 Call Cloud Run Status Endpoint
-        run: |
+          echo "📝 YouTube 컨텐츠 생성 및 업로드 중..."
           ID_TOKEN=$(gcloud auth print-identity-token)
+          
+          # 컨텐츠 생성 및 업로드 요청
           curl -X POST \
             -H "Authorization: Bearer ${ID_TOKEN}" \
             -H "Content-Type: application/json" \
-            ${{ env.CLOUD_RUN_URL }}/status \
-            -d '{"action":"check"}'
+            -d '{"action": "generate_and_upload", "topics": ["AI기술", "프로그래밍", "창업", "투자", "부업"]}' \
+            ${{ env.CLOUD_RUN_URL }}/api/content/generate \
+            --max-time 300 \
+            --retry 3 \
+            --retry-delay 10
 
-      - name: 🧹 Cleanup Old Docker Images
+      - name: 📊 Check Status
         if: always()
         run: |
-          chmod +x cleanup-repo-fixed.sh
-          ./cleanup-repo-fixed.sh
+          echo "📊 상태 확인 중..."
+          ID_TOKEN=$(gcloud auth print-identity-token)
+          curl -X GET \
+            -H "Authorization: Bearer ${ID_TOKEN}" \
+            ${{ env.CLOUD_RUN_URL }}/api/status \
+            --max-time 30
+
+      - name: 🧹 Cleanup Old Images
+        if: always()
+        run: |
+          echo "🧹 오래된 이미지 정리 중..."
+          # 최근 5개 버전만 유지
+          gcloud artifacts docker images list ${{ env.ARTIFACT_REGISTRY }}/${{ env.IMAGE_NAME }} \
+            --format="value(IMAGE)" \
+            --sort-by="~UPDATE_TIME" \
+            --limit=100 | tail -n +6 | xargs -r gcloud artifacts docker images delete --quiet || echo "정리할 이미지가 없습니다."
