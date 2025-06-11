@@ -4,8 +4,6 @@ on:
   push:
     branches: [ main ]
   workflow_dispatch:
-  schedule:
-    - cron: '0 */6 * * *'  # 6시간마다 실행 (하루 4번)
 
 env:
   SERVICE_NAME: gcp-youtube-automation
@@ -30,8 +28,8 @@ jobs:
       id: auth
       uses: google-github-actions/auth@v2
       with:
-        workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
-        service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+        workload_identity_provider: 'projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions'
+        service_account: 'github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com'
         create_credentials_file: true
         access_token_lifetime: 3600s
     
