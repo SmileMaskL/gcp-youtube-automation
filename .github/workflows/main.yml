@@ -66,7 +66,8 @@ jobs:
           --secret="openai-api-key" \
           --project="${{ env.PROJECT_ID }}" \
           --account="${{ secrets.WIF_SERVICE_ACCOUNT }}" \
-          --impersonate-service-account)
+          --impersonate-service-account github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
+          --format="value(data)")
         echo "OPENAI_API_KEY=$OPENAI_API_KEY" >> $GITHUB_ENV
         
         # Gemini API Key
@@ -74,7 +75,8 @@ jobs:
           --secret="gemini-api-key" \
           --project="${{ env.PROJECT_ID }}" \
           --account="${{ secrets.WIF_SERVICE_ACCOUNT }}" \
-          --impersonate-service-account)
+          --impersonate-service-account github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
+          --format="value(data)")
         echo "GEMINI_API_KEY=$GEMINI_API_KEY" >> $GITHUB_ENV
         
         # ElevenLabs API Key
@@ -82,7 +84,8 @@ jobs:
           --secret="elevenlabs-api-key" \
           --project="${{ env.PROJECT_ID }}" \
           --account="${{ secrets.WIF_SERVICE_ACCOUNT }}" \
-          --impersonate-service-account)
+          --impersonate-service-account github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
+          --format="value(data)")
         echo "ELEVENLABS_API_KEY=$ELEVENLABS_API_KEY" >> $GITHUB_ENV
         
         # YouTube OAuth Credentials
@@ -90,7 +93,8 @@ jobs:
           --secret="youtube-oauth-credentials" \
           --project="${{ env.PROJECT_ID }}" \
           --account="${{ secrets.WIF_SERVICE_ACCOUNT }}" \
-          --impersonate-service-account)
+          --impersonate-service-account github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
+          --format="value(data)")
         echo "YOUTUBE_CREDENTIALS=$YOUTUBE_CREDENTIALS" >> $GITHUB_ENV
         
         # Storage Bucket Name
@@ -98,7 +102,8 @@ jobs:
           --secret="storage-bucket-name" \
           --project="${{ env.PROJECT_ID }}" \
           --account="${{ secrets.WIF_SERVICE_ACCOUNT }}" \
-          --impersonate-service-account)
+          --impersonate-service-account github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
+          --format="value(data)")
         echo "STORAGE_BUCKET=$STORAGE_BUCKET" >> $GITHUB_ENV
 
   generate-content:
