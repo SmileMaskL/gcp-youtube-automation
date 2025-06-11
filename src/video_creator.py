@@ -1,170 +1,331 @@
 import os
-import requests
+import cv2
+import numpy as np
+from moviepy.editor import *
+from PIL import Image, ImageDraw, ImageFont
 import logging
-import tempfile
-import time
-import shutil
-from moviepy.editor import ImageClip, TextClip, concatenate_videoclips, CompositeVideoClip, AudioFileClip, ColorClip, CompositeAudioClip
-from PIL import Image
-from .utils import get_secret
+from datetime import datetime
+import random
 
 logger = logging.getLogger(__name__)
 
-# API 키
-PEXELS_API_KEY = get_secret("PEXELS_API_KEY")
-ELEVENLABS_API_KEY = get_secret("ELEVENLABS_API_KEY")
-ELEVENLABS_VOICE_ID = "uyVNoMrnUku1dZyVEXwD"  # 안나 킴 음성
-
-# 해상도 설정 (480p 고정)
-RESOLUTION = "480p"
-RESOLUTIONS = {
-    "480p": (854, 480),
-    "720p": (1280, 720),
-    "1080p": (1920, 1080)
-}
-TARGET_SIZE = RESOLUTIONS[RESOLUTION]
-
-def download_file(url, path):
-    """파일 다운로드 유틸리티"""
-    response = requests.get(url, stream=True)
-    with open(path, 'wb') as f:
-        for chunk in response.iter_content(chunk_size=8192):
-            f.write(chunk)
-
-def download_pexels_image(query):
-    """Pexels에서 이미지 다운로드 (480p 크기로 리사이즈)"""
-    try:
-        url = f"https://api.pexels.com/v1/search?query={query}&per_page=1"
-        headers = {"Authorization": PEXELS_API_KEY}
-        response = requests.get(url, headers=headers, timeout=15)
-        data = response.json()
+class VideoCreator:
+    def __init__(self):
+        self.output_width = 1080
+        self.output_height = 1920  # 9:16 비율 (세로)
+        self.font_path = os.path.join(os.path.dirname(__file__), '..', 'fonts', 'Catfont.ttf')
         
-        if data.get('photos'):
-            image_url = data['photos'][0]['src']['large']
-            temp_dir = tempfile.mkdtemp()
-            img_path = os.path.join(temp_dir, "background.jpg")
-            download_file(image_url, img_path)
-            
-            # 480p 크기로 리사이즈
-            img = Image.open(img_path)
-            img = img.resize(TARGET_SIZE, Image.LANCZOS)
-            img.save(img_path)
-            return img_path
-    except Exception as e:
-        logger.error(f"⚠️ Pexels 이미지 오류: {str(e)}")
-    return None
-
-def generate_audio_from_text(text, voice_id):
-    """ElevenLabs 음성 생성"""
-    try:
-        url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
-        headers = {
-            "xi-api-key": ELEVENLABS_API_KEY,
-            "Content-Type": "application/json"
-        }
-        data = {
-            "text": text,
-            "model_id": "eleven_multilingual_v2",
-            "voice_settings": {"stability": 0.5, "similarity_boost": 0.75}
-        }
-        
-        temp_dir = tempfile.mkdtemp()
-        audio_path = os.path.join(temp_dir, "voiceover.mp3")
-        
-        response = requests.post(url, json=data, headers=headers)
-        with open(audio_path, 'wb') as f:
-            f.write(response.content)
-            
-        return audio_path
-        
-    except Exception as e:
-        logger.error(f"⚠️ 음성 생성 오류: {str(e)}")
-        return None
-
-def create_video(script, output_path, duration=60):
-    """영상 생성 메인 함수 (480p 고정)"""
-    temp_files = []
-    try:
-        # 1. 배경 이미지 (480p 크기)
-        image_path = download_pexels_image("abstract")
-        if image_path:
-            temp_files.append(os.path.dirname(image_path))
-            bg_clip = ImageClip(image_path)
-        else:
-            bg_clip = ColorClip(TARGET_SIZE, color=(0, 0, 0))
-        
-        # 2. 스크립트 분할 및 음성 생성
-        sentences = [s.strip() for s in script.split('\n') if s.strip()]
-        audio_clips = []
-        text_clips = []
-        current_time = 0
-        
-        for sentence in sentences:
-            audio_path = generate_audio_from_text(sentence, ELEVENLABS_VOICE_ID)
-            if audio_path:
-                temp_files.append(os.path.dirname(audio_path))
-                audio_clip = AudioFileClip(audio_path)
-                audio_clips.append(audio_clip)
-                
-                # 텍스트 클립 생성 (480p에 맞춰 폰트 크기 조정)
-                txt_clip = TextClip(
-                    sentence,
-                    fontsize=30,  # 480p에 최적화된 크기
-                    color='yellow',
-                    font="fonts/Catfont.ttf",
-                    stroke_color='black',
-                    stroke_width=2,
-                    size=(TARGET_SIZE[0]-100, None),
-                    method='caption'
-                ).set_position('center').set_duration(audio_clip.duration)
-                
-                text_clips.append(txt_clip.set_start(current_time))
-                current_time += audio_clip.duration
-        
-        # 3. 배경 음악 추가
-        bgm_path = None
+    def create_shorts_video(self, video_files, audio_path, script, topic):
+        """YouTube Shorts용 세로 비디오 생성"""
         try:
-            bgm_url = "https://cdn.pixabay.com/download/audio/2024/02/22/audio_1d0a0d6d1b.mp3"
-            bgm_path = "background_music.mp3"
-            if not os.path.exists(bgm_path):
-                download_file(bgm_url, bgm_path)
-                
-            bgm = AudioFileClip(bgm_path).volumex(0.2)
-            if current_time > 0:
-                bgm = bgm.set_duration(current_time)
+            logger.info("🎬 YouTube Shorts 비디오 생성 시작")
+            
+            # 오디오 클립 로드하여 길이 확인
+            audio_clip = AudioFileClip(audio_path)
+            target_duration = audio_clip.duration
+            
+            logger.info(f"📏 목표 비디오 길이: {target_duration:.2f}초")
+            
+            # 비디오 클립들 처리
+            video_clips = []
+            total_video_duration = 0
+            
+            for video_file in video_files:
+                try:
+                    clip = VideoFileClip(video_file)
+                    
+                    # 세로 비율로 크롭 (9:16)
+                    clip_resized = self.crop_to_vertical(clip)
+                    
+                    # 비디오 속도 조정 (더 다이나믹하게)
+                    speed_factor = random.uniform(0.8, 1.2)
+                    clip_speed = clip_resized.fx(speedx, speed_factor)
+                    
+                    video_clips.append(clip_speed)
+                    total_video_duration += clip_speed.duration
+                    
+                    if total_video_duration >= target_duration * 1.5:  # 충분한 소스 확보
+                        break
+                        
+                except Exception as e:
+                    logger.warning(f"⚠️ 비디오 파일 처리 실패: {video_file}, {str(e)}")
+                    continue
+            
+            if not video_clips:
+                logger.error("❌ 사용 가능한 비디오 클립이 없습니다")
+                return None
+            
+            # 비디오 클립들을 순서대로 연결하고 길이 맞추기
+            final_video = self.concatenate_and_fit_duration(video_clips, target_duration)
+            
+            # 텍스트 오버레이 추가
+            final_video_with_text = self.add_text_overlay(final_video, script, topic)
+            
+            # 오디오 추가
+            final_video_with_audio = final_video_with_text.set_audio(audio_clip)
+            
+            # 최종 효과 추가
+            final_video_enhanced = self.add_visual_effects(final_video_with_audio)
+            
+            # 출력 파일 경로
+            output_path = f"/tmp/youtube_shorts_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4"
+            
+            # 비디오 렌더링
+            final_video_enhanced.write_videofile(
+                output_path,
+                fps=30,
+                codec='libx264',
+                audio_codec='aac',
+                temp_audiofile_path="/tmp/temp_audio.m4a",
+                remove_temp=True,
+                preset='medium',
+                ffmpeg_params=['-crf', '23']
+            )
+            
+            # 메모리 정리
+            audio_clip.close()
+            for clip in video_clips:
+                clip.close()
+            final_video_enhanced.close()
+            
+            logger.info(f"✅ YouTube Shorts 비디오 생성 완료: {output_path}")
+            return output_path
+            
         except Exception as e:
-            logger.warning(f"⚠️ 배경 음악 오류: {str(e)}")
-            bgm = None
-        
-        # 4. 비디오 조립 (480p 크기)
-        final_audio = concatenate_audioclips(audio_clips)
-        if bgm:
-            final_audio = CompositeAudioClip([final_audio, bgm])
-        
-        video_duration = max(current_time, 10)
-        bg_clip = bg_clip.set_duration(video_duration).resize(TARGET_SIZE)
-        final_video = CompositeVideoClip([bg_clip] + text_clips, size=TARGET_SIZE).set_audio(final_audio)
-        
-        # 5. 영상 저장 (480p 출력)
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        final_video.write_videofile(
-            output_path,
-            fps=24,
-            codec='libx264',
-            audio_codec='aac',
-            threads=4,
-            preset='fast',
-            ffmpeg_params=['-vf', f'scale={TARGET_SIZE[0]}:{TARGET_SIZE[1]}']  # 480p 강제 적용
-        )
-        
-        return output_path
-        
-    except Exception as e:
-        logger.error(f"❌ 영상 생성 실패: {str(e)}\n{traceback.format_exc()}")
-        return None
-        
-    finally:
-        # 임시 파일 정리
-        for path in temp_files:
-            if os.path.exists(path):
-                shutil.rmtree(path)
+            logger.error(f"❌ 비디오 생성 실패: {str(e)}")
+            return None
+    
+    def crop_to_vertical(self, clip):
+        """비디오를 9:16 세로 비율로 크롭"""
+        try:
+            w, h = clip.size
+            target_ratio = 9/16
+            current_ratio = w/h
+            
+            if current_ratio > target_ratio:
+                # 너무 넓음 - 좌우 크롭
+                new_width = int(h * target_ratio)
+                x_center = w // 2
+                x1 = x_center - new_width // 2
+                x2 = x_center + new_width // 2
+                cropped = clip.crop(x1=x1, x2=x2)
+            else:
+                # 너무 높음 - 상하 크롭
+                new_height = int(w / target_ratio)
+                y_center = h // 2
+                y1 = y_center - new_height // 2
+                y2 = y_center + new_height // 2
+                cropped = clip.crop(y1=y1, y2=y2)
+            
+            # 최종 해상도로 리사이즈
+            resized = cropped.resize((self.output_width, self.output_height))
+            
+            return resized
+            
+        except Exception as e:
+            logger.error(f"❌ 비디오 크롭 실패: {str(e)}")
+            return clip.resize((self.output_width, self.output_height))
+    
+    def concatenate_and_fit_duration(self, video_clips, target_duration):
+        """비디오 클립들을 연결하고 목표 길이에 맞추기"""
+        try:
+            # 클립들을 무작위로 섞기
+            random.shuffle(video_clips)
+            
+            # 필요한 길이만큼 클립 선택 및 연결
+            selected_clips = []
+            current_duration = 0
+            
+            while current_duration < target_duration:
+                for clip in video_clips:
+                    if current_duration >= target_duration:
+                        break
+                    
+                    remaining_time = target_duration - current_duration
+                    if clip.duration <= remaining_time:
+                        selected_clips.append(clip)
+                        current_duration += clip.duration
+                    else:
+                        # 클립을 필요한 길이만큼 자르기
+                        trimmed_clip = clip.subclip(0, remaining_time)
+                        selected_clips.append(trimmed_clip)
+                        current_duration += remaining_time
+                        break
+                
+                if current_duration >= target_duration:
+                    break
+            
+            # 클립들 연결
+            if selected_clips:
+                concatenated = concatenate_videoclips(selected_clips)
+                return concatenated
+            else:
+                # 첫 번째 클립만 사용하고 길이 조정
+                return video_clips[0].subclip(0, min(target_duration, video_clips[0].duration))
+                
+        except Exception as e:
+            logger.error(f"❌ 비디오 연결 실패: {str(e)}")
+            return video_clips[0].subclip(0, min(target_duration, video_clips[0].duration))
+    
+    def add_text_overlay(self, video_clip, script, topic):
+        """텍스트 오버레이 추가"""
+        try:
+            # 대본에서 주요 문장 추출
+            sentences = self.extract_key_sentences(script)
+            
+            # 텍스트 클립들 생성
+            text_clips = []
+            
+            # 제목 텍스트 (처음 3초)
+            title_text = topic[:30] + "..." if len(topic) > 30 else topic
+            title_clip = self.create_text_clip(
+                text=title_text,
+                fontsize=60,
+                color='white',
+                stroke_color='black',
+                stroke_width=3,
+                duration=3,
+                position=('center', 'top'),
+                start_time=0
+            )
+            text_clips.append(title_clip)
+            
+            # 핵심 문장들을 시간대별로 배치
+            if sentences:
+                duration_per_sentence = (video_clip.duration - 3) / len(sentences)
+                
+                for i, sentence in enumerate(sentences):
+                    start_time = 3 + (i * duration_per_sentence)
+                    sentence_clip = self.create_text_clip(
+                        text=sentence,
+                        fontsize=45,
+                        color='yellow',
+                        stroke_color='black',
+                        stroke_width=2,
+                        duration=min(duration_per_sentence + 1, 4),  # 최대 4초
+                        position=('center', 'center'),
+                        start_time=start_time
+                    )
+                    text_clips.append(sentence_clip)
+            
+            # CTA 텍스트 (마지막 3초)
+            cta_text = "👍 구독 & 좋아요!"
+            cta_clip = self.create_text_clip(
+                text=cta_text,
+                fontsize=50,
+                color='red',
+                stroke_color='white',
+                stroke_width=2,
+                duration=3,
+                position=('center', 'bottom'),
+                start_time=max(0, video_clip.duration - 3)
+            )
+            text_clips.append(cta_clip)
+            
+            # 모든 텍스트 클립을 비디오에 합성
+            final_video = CompositeVideoClip([video_clip] + text_clips)
+            
+            return final_video
+            
+        except Exception as e:
+            logger.error(f"❌ 텍스트 오버레이 실패: {str(e)}")
+            return video_clip
+    
+    def create_text_clip(self, text, fontsize, color, stroke_color, stroke_width, duration, position, start_time):
+        """텍스트 클립 생성"""
+        try:
+            # 텍스트를 여러 줄로 나누기
+            words = text.split()
+            lines = []
+            current_line = []
+            max_chars_per_line = 20
+            
+            for word in words:
+                if len(' '.join(current_line + [word])) <= max_chars_per_line:
+                    current_line.append(word)
+                else:
+                    if current_line:
+                        lines.append(' '.join(current_line))
+                        current_line = [word]
+                    else:
+                        lines.append(word)
+            
+            if current_line:
+                lines.append(' '.join(current_line))
+            
+            final_text = '\n'.join(lines)
+            
+            # TextClip 생성
+            if os.path.exists(self.font_path):
+                txt_clip = TextClip(
+                    final_text,
+                    fontsize=fontsize,
+                    color=color,
+                    font=self.font_path,
+                    stroke_color=stroke_color,
+                    stroke_width=stroke_width,
+                    method='caption',
+                    align='center'
+                ).set_duration(duration).set_start(start_time).set_position(position)
+            else:
+                # 기본 폰트 사용
+                txt_clip = TextClip(
+                    final_text,
+                    fontsize=fontsize,
+                    color=color,
+                    stroke_color=stroke_color,
+                    stroke_width=stroke_width,
+                    method='caption',
+                    align='center'
+                ).set_duration(duration).set_start(start_time).set_position(position)
+            
+            return txt_clip
+            
+        except Exception as e:
+            logger.error(f"❌ 텍스트 클립 생성 실패: {str(e)}")
+            return None
+    
+    def extract_key_sentences(self, script):
+        """대본에서 핵심 문장 추출"""
+        try:
+            # 특수 문자 제거
+            clean_script = script.replace('[훅]', '').replace('[메인 내용]', '').replace('[마무리/CTA]', '').replace('[마무리]', '')
+            
+            # 문장 분리
+            sentences = [s.strip() for s in clean_script.split('.') if s.strip()]
+            sentences = [s for s in sentences if len(s) > 10]  # 너무 짧은 문장 제외
+            
+            # 핵심 키워드가 포함된 문장 우선 선택
+            keywords = ['방법', '비밀', '팁', '중요', '핵심', '성공', '수익', '돈']
+            priority_sentences = []
+            other_sentences = []
+            
+            for sentence in sentences:
+                if any(keyword in sentence for keyword in keywords):
+                    priority_sentences.append(sentence)
+                else:
+                    other_sentences.append(sentence)
+            
+            # 최대 4개 문장 선택
+            final_sentences = (priority_sentences + other_sentences)[:4]
+            
+            return final_sentences
+            
+        except Exception as e:
+            logger.error(f"❌ 핵심 문장 추출 실패: {str(e)}")
+            return []
+    
+    def add_visual_effects(self, video_clip):
+        """비주얼 효과 추가"""
+        try:
+            # 밝기 및 대비 조정
+            enhanced_video = video_clip.fx(colorx, 1.1)  # 약간 밝게
+            
+            # 페이드 인/아웃 효과
+            enhanced_video = enhanced_video.fadein(0.5).fadeout(0.5)
+            
+            return enhanced_video
+            
+        except Exception as e:
+            logger.error(f"❌ 비주얼 효과 적용 실패: {str(e)}")
+            return video_clip
