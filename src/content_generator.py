@@ -1,249 +1,330 @@
 import os
-import requests
 import json
 import logging
+import time
+import random
 from datetime import datetime
+from typing import Dict, Optional, List
+import requests
+from google.cloud import storage
+from google.api_core.exceptions import GoogleAPICallError
 import openai
+from google.generativeai import configure as configure_gemini
 import google.generativeai as genai
-from elevenlabs import generate, save
+from elevenlabs import generate, play, set_api_key, voices
 from PIL import Image, ImageDraw, ImageFont
-import cv2
+import moviepy.editor as mpe
+from moviepy.video.tools.drawing import color_gradient
 import numpy as np
-from moviepy.editor import VideoFileClip, AudioFileClip, CompositeVideoClip, CompositeAudioClip
-from src.video_creator import VideoCreator
-from src.thumbnail_generator import ThumbnailGenerator
-import traceback
 
+# 로깅 설정
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 class ContentGenerator:
-    def __init__(self, pexels_api_key, openai_api_key, gemini_api_key, elevenlabs_api_key, elevenlabs_voice_id):
-        self.pexels_api_key = pexels_api_key
+    def __init__(self, openai_api_key: str, gemini_api_key: str, elevenlabs_api_key: str, storage_bucket: str):
+        """초기화"""
         self.openai_api_key = openai_api_key
         self.gemini_api_key = gemini_api_key
         self.elevenlabs_api_key = elevenlabs_api_key
-        self.elevenlabs_voice_id = elevenlabs_voice_id
+        self.storage_bucket = storage_bucket
+        self.gcs_client = storage.Client() if storage_bucket else None
         
-        # API 클라이언트 설정
-        openai.api_key = self.openai_api_key
-        genai.configure(api_key=self.gemini_api_key)
+        # API 설정
+        openai.api_key = openai_api_key
+        if gemini_api_key:
+            configure_gemini(api_key=gemini_api_key)
+        if elevenlabs_api_key:
+            set_api_key(elevenlabs_api_key)
         
-        # 모델 설정
-        self.gemini_model = genai.GenerativeModel('gemini-pro')
-        
-        # 비디오 및 썸네일 생성기
-        self.video_creator = VideoCreator()
-        self.thumbnail_generator = ThumbnailGenerator()
-        
-    def generate_script(self, topic):
-        """AI를 사용해 대본 생성 (Gemini 사용)"""
-        try:
-            prompt = f"""
-            주제: {topic}
-            
-            YouTube Shorts용 60초 분량의 매력적인 대본을 작성해주세요.
-            
-            요구사항:
-            1. 첫 3초 안에 시청자의 관심을 끌어야 함
-            2. 실용적이고 가치 있는 정보 제공
-            3. 수익 창출과 관련된 구체적인 팁 포함
-            4. 친근하고 에너지 넘치는 톤
-            5. 마지막에 구독과 좋아요 유도
-            6. 총 150-200단어 내외
-            
-            대본 형식:
-            [훅] (첫 3초)
-            [메인 내용] (40초)
-            [마무리/CTA] (15초)
-            """
-            
-            response = self.gemini_model.generate_content(prompt)
-            script = response.text
-            
-            logger.info("✅ AI 대본 생성 완료")
-            return script
-            
-        except Exception as e:
-            logger.error(f"❌ 대본 생성 실패: {str(e)}")
-            # 백업 대본
-            return f"""
-            [훅] {topic}로 돈 버는 방법, 3초만 투자하세요!
-            
-            [메인 내용] 
-            첫 번째, 기초부터 탄탄히 공부하세요. 무료 강의와 책을 활용하면 충분합니다.
-            두 번째, 실전 경험을 쌓으세요. 작은 프로젝트부터 시작해서 포트폴리오를 만드세요.
-            세 번째, 네트워킹이 핵심입니다. 온라인 커뮤니티에서 활발히 활동하세요.
-            네 번째, 꾸준함이 성공의 열쇠입니다. 매일 조금씩이라도 계속 발전시키세요.
-            
-            [마무리] 
-            이 방법들을 실천하면 분명 성과를 볼 수 있을 거예요. 
-            더 많은 수익 팁이 궁금하다면 구독과 좋아요 눌러주세요!
-            """
+        # 초기화 확인
+        logger.info("ContentGenerator 초기화 완료")
     
-    def generate_tts_audio(self, script):
-        """텍스트를 음성으로 변환 (ElevenLabs)"""
+    def generate_script(self, topic: str, style: str = "informative", duration: int = 60) -> Optional[Dict]:
+        """스크립트 생성"""
         try:
-            # 대본에서 특수 문자 제거
-            clean_script = script.replace('[훅]', '').replace('[메인 내용]', '').replace('[마무리/CTA]', '').replace('[마무리]', '')
-            clean_script = clean_script.strip()
+            logger.info(f"스크립트 생성 시작: {topic}")
             
-            audio = generate(
-                text=clean_script,
-                voice=self.elevenlabs_voice_id,
-                api_key=self.elevenlabs_api_key,
-                model="eleven_multilingual_v2"
-            )
+            # 프롬프트 생성
+            prompt = self._create_script_prompt(topic, style, duration)
             
-            # 임시 파일로 저장
-            audio_path = f"/tmp/audio_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3"
-            save(audio, audio_path)
+            # 모델 선택 (Gemini가 있으면 사용, 없으면 OpenAI)
+            if self.gemini_api_key:
+                model = genai.GenerativeModel('gemini-pro')
+                response = model.generate_content(prompt)
+                script = response.text
+            else:
+                response = openai.ChatCompletion.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {"role": "system", "content": "You are a helpful YouTube script writer."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.7,
+                    max_tokens=2000
+                )
+                script = response.choices[0].message.content
             
-            logger.info("✅ TTS 음성 생성 완료")
-            return audio_path
+            # 스크립트 파싱
+            parsed_script = self._parse_script(script)
+            
+            if not parsed_script:
+                logger.error("스크립트 파싱 실패")
+                return None
+            
+            logger.info("스크립트 생성 완료")
+            return parsed_script
             
         except Exception as e:
-            logger.error(f"❌ TTS 생성 실패: {str(e)}")
+            logger.error(f"스크립트 생성 오류: {e}")
             return None
     
-    def search_pexels_videos(self, query, per_page=10):
-        """Pexels에서 비디오 검색"""
-        try:
-            url = "https://api.pexels.com/videos/search"
-            headers = {"Authorization": self.pexels_api_key}
-            params = {
-                "query": query,
-                "per_page": per_page,
-                "orientation": "portrait",  # 세로 영상
-                "size": "medium"
-            }
-            
-            response = requests.get(url, headers=headers, params=params)
-            response.raise_for_status()
-            
-            data = response.json()
-            videos = data.get('videos', [])
-            
-            logger.info(f"✅ Pexels 비디오 검색 완료: {len(videos)}개")
-            return videos
-            
-        except Exception as e:
-            logger.error(f"❌ Pexels 비디오 검색 실패: {str(e)}")
-            return []
+    def _create_script_prompt(self, topic: str, style: str, duration: int) -> str:
+        """스크립트 생성을 위한 프롬프트 생성"""
+        styles = {
+            "informative": "정보 전달 위주로 전문적이면서도 이해하기 쉽게",
+            "funny": "유머러스하고 재미있는 방식으로",
+            "dramatic": "극적이고 감동적인 스토리텔링으로",
+            "casual": "편안하고 대화체로"
+        }
+        
+        selected_style = styles.get(style, styles["informative"])
+        
+        return f"""다음 요구사항에 맞는 유튜브 동영상 스크립트를 작성해주세요.
+
+주제: {topic}
+스타일: {selected_style}
+길이: 약 {duration}초 분량 (약 {int(duration/60)}분)
+
+스크립트 형식:
+[제목]: 동영상 제목
+[소개]: 2-3문장으로 간단한 소개
+[본문]: 
+- 주요 내용을 3-5개의 섹션으로 나누어 작성
+- 각 섹션은 2-3문장으로 구성
+- 자연스러운 말투로 작성
+[마무리]: 시청자에게 질문이나 액션 유도 (좋아요, 구독 등)
+
+실제로 {topic}으로 성공한 방법을 알려드리겠습니다. 시작해볼까요?"""
     
-    def download_video(self, video_url, filename):
-        """비디오 다운로드"""
+    def _parse_script(self, script_text: str) -> Dict:
+        """생성된 스크립트 파싱"""
         try:
-            response = requests.get(video_url, stream=True)
-            response.raise_for_status()
-            
-            with open(filename, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    f.write(chunk)
-            
-            logger.info(f"✅ 비디오 다운로드 완료: {filename}")
-            return filename
-            
-        except Exception as e:
-            logger.error(f"❌ 비디오 다운로드 실패: {str(e)}")
-            return None
-    
-    def generate_video_content(self, topic):
-        """전체 비디오 컨텐츠 생성 프로세스"""
-        try:
-            logger.info(f"🎬 비디오 컨텐츠 생성 시작: {topic}")
-            
-            # 1. AI 대본 생성
-            script = self.generate_script(topic)
-            logger.info("1/6 대본 생성 완료")
-            
-            # 2. TTS 음성 생성
-            audio_path = self.generate_tts_audio(script)
-            if not audio_path:
-                logger.error("❌ 음성 생성 실패")
-                return None
-            logger.info("2/6 음성 생성 완료")
-            
-            # 3. 관련 비디오 검색 및 다운로드
-            search_terms = [
-                "business success", "money making", "entrepreneur", 
-                "investment", "technology", "programming", "startup"
-            ]
-            
-            videos = []
-            for term in search_terms[:3]:  # 최대 3개 검색어
-                pexels_videos = self.search_pexels_videos(term, 5)
-                videos.extend(pexels_videos[:2])  # 각 검색어당 2개씩
-            
-            if not videos:
-                logger.error("❌ 적절한 비디오를 찾을 수 없음")
-                return None
-            
-            # 비디오 다운로드
-            video_files = []
-            for i, video in enumerate(videos[:3]):  # 최대 3개 비디오
-                video_url = video['video_files'][0]['link']
-                filename = f"/tmp/video_{i}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4"
-                downloaded_file = self.download_video(video_url, filename)
-                if downloaded_file:
-                    video_files.append(downloaded_file)
-            
-            logger.info("3/6 비디오 다운로드 완료")
-            
-            # 4. 비디오 편집 (음성 길이에 맞춰)
-            final_video_path = self.video_creator.create_shorts_video(
-                video_files=video_files,
-                audio_path=audio_path,
-                script=script,
-                topic=topic
-            )
-            
-            if not final_video_path:
-                logger.error("❌ 비디오 편집 실패")
-                return None
-            
-            logger.info("4/6 비디오 편집 완료")
-            
-            # 5. 썸네일 생성
-            thumbnail_path = self.thumbnail_generator.create_thumbnail(
-                topic=topic,
-                script=script[:100] + "..."  # 첫 100자만 사용
-            )
-            
-            logger.info("5/6 썸네일 생성 완료")
-            
-            # 6. 메타데이터 생성
-            title = self.generate_title(topic)
-            description = self.generate_description(topic, script)
-            tags = self.generate_tags(topic)
-            
-            logger.info("6/6 메타데이터 생성 완료")
-            
-            # 결과 반환
             result = {
-                'title': title,
-                'description': description,
-                'tags': tags,
-                'script': script,
-                'video_path': final_video_path,
-                'thumbnail_path': thumbnail_path,
-                'audio_path': audio_path,
-                'topic': topic,
-                'created_at': datetime.now().isoformat()
+                "title": "",
+                "introduction": "",
+                "sections": [],
+                "conclusion": ""
             }
             
-            logger.info("✅ 전체 비디오 컨텐츠 생성 완료")
+            lines = script_text.split('\n')
+            current_section = None
+            
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+                
+                if line.startswith("[제목]:"):
+                    result["title"] = line.replace("[제목]:", "").strip()
+                elif line.startswith("[소개]:"):
+                    result["introduction"] = line.replace("[소개]:", "").strip()
+                elif line.startswith("- "):
+                    if current_section:
+                        current_section["content"].append(line[2:].strip())
+                elif line.endswith(":"):
+                    if current_section:
+                        result["sections"].append(current_section)
+                    current_section = {
+                        "title": line[:-1].strip(),
+                        "content": []
+                    }
+                elif line.startswith("[마무리]:"):
+                    result["conclusion"] = line.replace("[마무리]:", "").strip()
+            
+            if current_section:
+                result["sections"].append(current_section)
+            
             return result
             
         except Exception as e:
-            logger.error(f"❌ 비디오 컨텐츠 생성 중 오류: {str(e)}")
-            logger.error(traceback.format_exc())
+            logger.error(f"스크립트 파싱 오류: {e}")
             return None
     
-    def generate_title(self, topic):
-        """매력적인 제목 생성"""
-        titles = [
-            f"{topic}로 월 100만원 벌기 (실제 후기)",
-            f"이것만 알면 {topic} 마스터 #Shorts",
-            f"{topic} 비밀 공개 (99%가 모름)",
-            f"{topic}로 부자 되는 법 (3분 요약)",
-            f"실제로 {topic}으로 성공한 방법"
+    def generate_audio(self, text: str, output_filename: str = "audio.mp3") -> Optional[str]:
+        """오디오 생성"""
+        try:
+            logger.info("오디오 생성 시작")
+            
+            if not self.elevenlabs_api_key:
+                logger.warning("ElevenLabs API 키가 없습니다. 오디오 생성 건너뜁니다.")
+                return None
+            
+            # ElevenLabs에서 오디오 생성
+            audio = generate(
+                text=text,
+                voice="Rachel",  # 기본 음성 설정
+                model="eleven_monolingual_v2"
+            )
+            
+            # 로컬에 저장
+            local_path = f"/tmp/{output_filename}"
+            with open(local_path, "wb") as f:
+                f.write(audio)
+            
+            # GCS에 업로드
+            gcs_path = self._upload_to_gcs(local_path, output_filename)
+            
+            logger.info(f"오디오 생성 완료: {gcs_path}")
+            return gcs_path
+            
+        except Exception as e:
+            logger.error(f"오디오 생성 오류: {e}")
+            return None
+    
+    def generate_thumbnail(self, title: str, output_filename: str = "thumbnail.png") -> Optional[str]:
+        """썸네일 생성"""
+        try:
+            logger.info("썸네일 생성 시작")
+            
+            # 이미지 생성 (간단한 버전)
+            img = Image.new('RGB', (1280, 720), color=(73, 109, 137))
+            d = ImageDraw.Draw(img)
+            
+            # 제목 텍스트 추가
+            try:
+                font = ImageFont.truetype("arial.ttf", 60)
+            except:
+                font = ImageFont.load_default()
+            
+            d.text((100, 300), title, fill=(255, 255, 255), font=font)
+            
+            # 로컬에 저장
+            local_path = f"/tmp/{output_filename}"
+            img.save(local_path)
+            
+            # GCS에 업로드
+            gcs_path = self._upload_to_gcs(local_path, output_filename)
+            
+            logger.info(f"썸네일 생성 완료: {gcs_path}")
+            return gcs_path
+            
+        except Exception as e:
+            logger.error(f"썸네일 생성 오류: {e}")
+            return None
+    
+    def generate_video(self, audio_path: str, thumbnail_path: str, output_filename: str = "video.mp4") -> Optional[str]:
+        """비디오 생성"""
+        try:
+            logger.info("비디오 생성 시작")
+            
+            # 오디오 파일 로드
+            audio_clip = mpe.AudioFileClip(audio_path)
+            
+            # 썸네일 이미지 로드 및 비디오 클립 생성
+            image_clip = mpe.ImageClip(thumbnail_path, duration=audio_clip.duration)
+            
+            # 색상 그라데이션 배경 생성
+            def make_frame(t):
+                progress = t / audio_clip.duration
+                r = int(50 + progress * 205)
+                g = int(100 + progress * 155)
+                b = int(150 + progress * 105)
+                return np.array([[[r, g, b]] * 1280 * 720, dtype=np.uint8).reshape(720, 1280, 3)
+            
+            color_clip = mpe.VideoClip(make_frame, duration=audio_clip.duration)
+            
+            # 최종 비디오 조합
+            final_clip = mpe.CompositeVideoClip([
+                color_clip,
+                image_clip.set_position(('center', 'center'))
+            ]).set_audio(audio_clip)
+            
+            # 로컬에 저장
+            local_path = f"/tmp/{output_filename}"
+            final_clip.write_videofile(local_path, fps=24, codec='libx264', audio_codec='aac')
+            
+            # GCS에 업로드
+            gcs_path = self._upload_to_gcs(local_path, output_filename)
+            
+            logger.info(f"비디오 생성 완료: {gcs_path}")
+            return gcs_path
+            
+        except Exception as e:
+            logger.error(f"비디오 생성 오류: {e}")
+            return None
+    
+    def _upload_to_gcs(self, local_path: str, destination_name: str) -> Optional[str]:
+        """GCS에 파일 업로드"""
+        if not self.storage_bucket or not self.gcs_client:
+            logger.warning("GCS 버킷이 설정되지 않았습니다. 로컬 경로 반환")
+            return local_path
+            
+        try:
+            bucket = self.gcs_client.bucket(self.storage_bucket)
+            blob = bucket.blob(destination_name)
+            
+            blob.upload_from_filename(local_path)
+            
+            # 공개 URL 생성
+            blob.make_public()
+            
+            logger.info(f"GCS 업로드 완료: {blob.public_url}")
+            return blob.public_url
+            
+        except GoogleAPICallError as e:
+            logger.error(f"GCS 업로드 오류: {e}")
+            return local_path
+    
+    def generate_complete_content(self, topic: str, style: str = "informative", duration: int = 60) -> Optional[Dict]:
+        """완전한 컨텐츠 생성 (스크립트 + 오디오 + 썸네일 + 비디오)"""
+        try:
+            logger.info(f"전체 컨텐츠 생성 시작: {topic}")
+            
+            # 1. 스크립트 생성
+            script = self.generate_script(topic, style, duration)
+            if not script:
+                logger.error("스크립트 생성 실패")
+                return None
+            
+            full_text = f"{script['title']}\n\n{script['introduction']}\n\n"
+            for section in script['sections']:
+                full_text += f"{section['title']}\n"
+                for content in section['content']:
+                    full_text += f"- {content}\n"
+                full_text += "\n"
+            full_text += script['conclusion']
+            
+            # 2. 오디오 생성
+            audio_path = self.generate_audio(full_text, "audio.mp3")
+            if not audio_path:
+                logger.error("오디오 생성 실패")
+                return None
+            
+            # 3. 썸네일 생성
+            thumbnail_path = self.generate_thumbnail(script['title'], "thumbnail.png")
+            if not thumbnail_path:
+                logger.error("썸네일 생성 실패")
+                return None
+            
+            # 4. 비디오 생성
+            video_path = self.generate_video(audio_path, thumbnail_path, "video.mp4")
+            if not video_path:
+                logger.error("비디오 생성 실패")
+                return None
+            
+            logger.info("전체 컨텐츠 생성 완료")
+            return {
+                "title": script['title'],
+                "script": script,
+                "audio_path": audio_path,
+                "thumbnail_path": thumbnail_path,
+                "video_path": video_path
+            }
+            
+        except Exception as e:
+            logger.error(f"전체 컨텐츠 생성 오류: {e}")
+            return None
