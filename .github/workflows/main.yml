@@ -28,15 +28,11 @@ jobs:
       id: auth
       uses: google-github-actions/auth@v2
       with:
-        workload_identity_provider: 'projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions'
+        workload_identity_provider: 'projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1'
         service_account: 'github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com'
         create_credentials_file: true
         access_token_lifetime: 3600s
-    
-    - name: Set up Cloud SDK
-      uses: google-github-actions/setup-gcloud@v2
-      with:
-        project_id: ${{ env.PROJECT_ID }}
+        audience: 'https://token.actions.githubusercontent.com'
 
   deploy:
     runs-on: ubuntu-latest
@@ -137,7 +133,6 @@ jobs:
         
         echo "Service URL: $SERVICE_URL"
         
-        # 컨텐츠 생성 트리거 (수익화 가능한 주제로 변경)
         curl -X POST "$SERVICE_URL/generate" \
           -H "Content-Type: application/json" \
           -d '{
@@ -176,7 +171,6 @@ jobs:
           --region=${{ env.REGION }} \
           --format='value(status.url)')
         
-        # 수익화 가능한 주제 리스트 (실제로 검증된 주제들)
         MONETIZABLE_TOPICS=(
           "AI로 유튜브 자동화해서 수익 올리는 법"
           "2024년 가장 수익률 높은 부업 TOP5"
@@ -193,7 +187,6 @@ jobs:
         for topic in "${MONETIZABLE_TOPICS[@]}"; do
           echo "Generating monetizable content for: $topic"
           
-          # 랜덤한 영상 길이 (3~8분 사이)
           DURATION=$(( 180 + RANDOM % 300 ))
           
           curl -X POST "$SERVICE_URL/generate" \
@@ -209,7 +202,6 @@ jobs:
             --retry 2 \
             --retry-delay 30
           
-          # 각 생성 사이에 5~10분 랜덤 대기 (API 제한 회피)
           SLEEP_TIME=$(( 300 + RANDOM % 300 ))
           echo "Waiting for $SLEEP_TIME seconds before next generation..."
           sleep $SLEEP_TIME
