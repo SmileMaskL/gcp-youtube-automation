@@ -7,7 +7,7 @@ on:
 
 env:
   SERVICE_NAME: gcp-youtube-automation
-  REGION: asia-northeast3
+  REGION: us-central1
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
 
 permissions:
@@ -45,7 +45,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.11'
+        python-version: '3.10.13'
     
     - name: Install dependencies
       run: |
