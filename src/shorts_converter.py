@@ -1,55 +1,247 @@
+"""
+긴 동영상을 YouTube Shorts로 변환하는 모듈
+"""
 import os
 import logging
+import subprocess
+from typing import List, Dict, Tuple, Optional
+from pathlib import Path
+import json
+import ffmpeg
+from utils import FileManager, config_manager, retry_on_failure
 
 logger = logging.getLogger(__name__)
 
-def convert_to_shorts(video_path):
-    """
-    영상을 9:16 비율의 YouTube Shorts 형식으로 변환합니다.
-    원본 영상이 이미 해당 비율이거나 변환이 불필요한 경우 원본 경로를 반환합니다.
-    """
-    if not os.path.exists(video_path):
-        logger.error(f"Shorts 변환 실패: 원본 영상 파일이 존재하지 않습니다. {video_path}")
-        return video_path # 원본이 없으면 변환 불가
-
-    output_dir = os.path.dirname(video_path)
-    output_filename = os.path.basename(video_path).replace('.mp4', '_shorts.mp4')
-    output_path = os.path.join(output_dir, output_filename)
-
-    try:
-        # FFmpeg를 사용하여 영상 비율을 9:16으로 자르고, 오디오는 복사
-        # -vf "scale=-1:1920,crop=1080:1920" 또는 "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920"
-        # Shorts 권장 해상도 1080x1920 (9:16)
-        # crop=ih*9/16:ih: (세로를 기준으로 가로를 9:16으로 자름)
-        # scale=1080:-1: (가로를 1080으로 맞추고 세로는 비율 유지)
-        # pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black (여백 추가)
-        # 여기서는 가장 간단한 중앙 크롭 방식 사용
-        cmd = [
-            "ffmpeg",
-            "-i", video_path,
-            "-vf", "crop=ih*9/16:ih", # 가로를 세로의 9/16으로 중앙 크롭
-            "-c:v", "libx264", # 비디오 코덱 지정 (안정성)
-            "-preset", "fast", # 인코딩 속도 (low-spec PC 고려)
-            "-crf", "23", # 품질 (낮을수록 고품질)
-            "-c:a", "aac", # 오디오 코덱 지정
-            "-b:a", "128k", # 오디오 비트레이트
-            "-y", # 덮어쓰기 허용
-            output_path
-        ]
+class ShortsConverter:
+    """YouTube Shorts 변환기"""
+    
+    def __init__(self, output_dir: str = "./output/shorts"):
+        self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
         
-        # os.system 대신 subprocess를 사용하여 안정성 향상 및 에러 확인
-        import subprocess
-        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        # Shorts 사양
+        self.shorts_width = 1080
+        self.shorts_height = 1920
+        self.shorts_max_duration = 60  # 초
+        self.shorts_min_duration = 15  # 초
         
-        if result.returncode != 0:
-            logger.error(f"Shorts 변환 FFmpeg 오류: {result.stderr}")
-            return video_path # 변환 실패 시 원본 반환
+        # 설정 로드
+        self.config = config_manager.get('shorts', {
+            'segment_duration': 30,
+            'overlap_duration': 2,
+            'fade_duration': 1,
+            'quality': 'high',
+            'bitrate': '8M',
+            'fps': 30
+        })
+    
+    def get_video_info(self, video_path: str) -> Dict:
+        """비디오 정보 조회"""
+        try:
+            probe = ffmpeg.probe(video_path)
+            video_stream = next((stream for stream in probe['streams'] 
+                               if stream['codec_type'] == 'video'), None)
+            
+            if not video_stream:
+                raise ValueError("비디오 스트림을 찾을 수 없습니다")
+            
+            return {
+                'duration': float(probe['format']['duration']),
+                'width': int(video_stream['width']),
+                'height': int(video_stream['height']),
+                'fps': eval(video_stream['r_frame_rate']),  # "30/1" -> 30.0
+                'bitrate': int(probe['format'].get('bit_rate', 0))
+            }
+        except Exception as e:
+            logger.error(f"비디오 정보 조회 실패: {e}")
+            raise
+    
+    def detect_interesting_segments(self, video_path: str, info: Dict) -> List[Tuple[float, float]]:
+        """흥미로운 구간 자동 감지"""
+        segments = []
+        duration = info['duration']
+        segment_duration = self.config['segment_duration']
+        overlap = self.config['overlap_duration']
         
-        logger.info(f"Shorts 변환 성공: {output_path}")
-        return output_path
-    except FileNotFoundError:
-        logger.error("FFmpeg이 설치되어 있지 않거나 PATH에 없습니다. Dockerfile 확인 필요.")
-        return video_path
-    except Exception as e:
-        logger.error(f"Shorts 변환 중 예외 발생: {str(e)}\n{traceback.format_exc()}")
-        return video_path # 실패 시 원본 반환
+        # 기본 전략: 균등 분할 + 겹치기
+        current_time = 0
+        while current_time < duration - self.shorts_min_duration:
+            end_time = min(current_time + segment_duration, duration)
+            
+            # 최소 길이 확보
+            if end_time - current_time >= self.shorts_min_duration:
+                segments.append((current_time, end_time))
+            
+            current_time += segment_duration - overlap
+            
+            # 최대 10개 세그먼트로 제한
+            if len(segments) >= 10:
+                break
+        
+        # 고급 감지 (오디오 레벨 기반)
+        try:
+            audio_segments = self._detect_audio_peaks(video_path, info)
+            if audio_segments:
+                segments = audio_segments[:10]  # 상위 10개만 선택
+        except Exception as e:
+            logger.warning(f"오디오 피크 감지 실패, 기본 세그먼트 사용: {e}")
+        
+        return segments
+    
+    def _detect_audio_peaks(self, video_path: str, info: Dict) -> List[Tuple[float, float]]:
+        """오디오 피크를 기반으로 흥미로운 구간 감지"""
+        segments = []
+        temp_audio = self.output_dir / "temp_audio.wav"
+        
+        try:
+            # 오디오 추출
+            (
+                ffmpeg
+                .input(video_path)
+                .output(str(temp_audio), acodec='pcm_s16le', ac=1, ar='22050')
+                .overwrite_output()
+                .run(quiet=True)
+            )
+            
+            # 오디오 레벨 분석
+            cmd = [
+                'ffmpeg', '-i', str(temp_audio),
+                '-af', 'volumedetect',
+                '-f', 'null', '-'
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True, stderr=subprocess.STDOUT)
+            
+            # 결과 파싱하여 세그먼트 생성 (간단한 구현)
+            duration = info['duration']
+            segment_duration = self.config['segment_duration']
+            
+            # 오디오 분석 결과를 바탕으로 세그먼트 조정
+            num_segments = max(1, int(duration / segment_duration))
+            for i in range(min(num_segments, 10)):
+                start_time = i * (duration / num_segments)
+                end_time = min(start_time + segment_duration, duration)
+                
+                if end_time - start_time >= self.shorts_min_duration:
+                    segments.append((start_time, end_time))
+            
+            return segments
+            
+        except Exception as e:
+            logger.warning(f"오디오 피크 감지 중 오류: {e}")
+            return []
+        finally:
+            if temp_audio.exists():
+                temp_audio.unlink()
+    
+    @retry_on_failure(max_retries=3)
+    def convert_segment_to_shorts(self, video_path: str, start_time: float, 
+                                end_time: float, output_path: str) -> bool:
+        """비디오 세그먼트를 Shorts 형태로 변환"""
+        try:
+            input_stream = ffmpeg.input(video_path, ss=start_time, t=end_time - start_time)
+            
+            # 세로형으로 크롭 및 리사이즈
+            video = (
+                input_stream
+                .video
+                .filter('scale', self.shorts_width, self.shorts_height, force_original_aspect_ratio='increase')
+                .filter('crop', self.shorts_width, self.shorts_height)
+            )
+            
+            # 페이드 효과 추가
+            fade_duration = self.config['fade_duration']
+            segment_duration = end_time - start_time
+            
+            if segment_duration > fade_duration * 2:
+                video = video.filter('fade', t='in', st=0, d=fade_duration)
+                video = video.filter('fade', t='out', st=segment_duration - fade_duration, d=fade_duration)
+            
+            # 오디오 처리
+            audio = input_stream.audio
+            
+            # 출력 설정
+            output = ffmpeg.output(
+                video, audio, output_path,
+                vcodec='libx264',
+                acodec='aac',
+                video_bitrate=self.config['bitrate'],
+                audio_bitrate='128k',
+                r=self.config['fps'],
+                pix_fmt='yuv420p'
+            )
+            
+            ffmpeg.run(output, overwrite_output=True, quiet=True)
+            
+            # 결과 검증
+            if not os.path.exists(output_path):
+                raise FileNotFoundError("출력 파일이 생성되지 않았습니다")
+            
+            # 파일 크기 확인
+            if os.path.getsize(output_path) < 1024:  # 1KB 미만이면 오류
+                raise ValueError("출력 파일이 너무 작습니다")
+            
+            logger.info(f"Shorts 변환 완료: {output_path}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Shorts 변환 실패: {e}")
+            if os.path.exists(output_path):
+                os.unlink(output_path)
+            return False
+    
+    def add_shorts_effects(self, video_path: str, output_path: str) -> bool:
+        """Shorts에 특화된 효과 추가"""
+        try:
+            input_stream = ffmpeg.input(video_path)
+            
+            # 비디오 효과
+            video = input_stream.video
+            
+            # 샤프닝 필터
+            video = video.filter('unsharp', luma_msize_x=5, luma_msize_y=5, luma_amount=1.0)
+            
+            # 색상 보정
+            video = video.filter('eq', contrast=1.1, brightness=0.05, saturation=1.2)
+            
+            # 오디오 효과
+            audio = input_stream.audio
+            
+            # 오디오 정규화
+            audio = audio.filter('loudnorm', I=-16, LRA=11, TP=-1.5)
+            
+            # 출력
+            output = ffmpeg.output(
+                video, audio, output_path,
+                vcodec='libx264',
+                acodec='aac',
+                crf=18,  # 고품질
+                preset='slow'
+            )
+            
+            ffmpeg.run(output, overwrite_output=True, quiet=True)
+            return True
+            
+        except Exception as e:
+            logger.error(f"효과 추가 실패: {e}")
+            return False
+    
+    def create_shorts_from_video(self, video_path: str, max_shorts: int = 5) -> List[str]:
+        """긴 동영상에서 여러 Shorts 생성"""
+        if not os.path.exists(video_path):
+            raise FileNotFoundError(f"입력 비디오를 찾을 수 없습니다: {video_path}")
+        
+        logger.info(f"Shorts 변환 시작: {video_path}")
+        
+        # 비디오 정보 조회
+        info = self.get_video_info(video_path)
+        logger.info(f"비디오 정보 - 길이: {info['duration']:.1f}초, 해상도: {info['width']}x{info['height']}")
+        
+        # 흥미로운 구간 감지
+        segments = self.detect_interesting_segments(video_path, info)
+        logger.info(f"{len(segments)}개 세그먼트 감지됨")
+        
+        # 최대 개수 제한
+        segments = segments[:max_shorts]
+        
+        # 각 세그먼트를
