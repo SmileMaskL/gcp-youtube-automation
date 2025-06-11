@@ -8,7 +8,9 @@ on:
 env:
   SERVICE_NAME: gcp-youtube-automation
   REGION: us-central1
-  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  PROJECT_ID: youtube-fully-automated
+  WORKLOAD_IDENTITY_PROVIDER: projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1
+  SERVICE_ACCOUNT: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
 
 permissions:
   contents: 'read'
@@ -19,135 +21,132 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       project_id: ${{ env.PROJECT_ID }}
+      workload_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+      service_account: ${{ env.SERVICE_ACCOUNT }}
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
     
-    - name: Authenticate to Google Cloud
-      id: auth
+    - name: Google Cloud 인증
       uses: google-github-actions/auth@v2
       with:
-        workload_identity_provider: 'projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1'
-        service_account: 'github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com'
-        create_credentials_file: true
+        workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ env.SERVICE_ACCOUNT }}
         access_token_lifetime: 3600s
-        audience: 'https://token.actions.githubusercontent.com'
 
   deploy:
     runs-on: ubuntu-latest
     needs: setup-auth
+    env:
+      PROJECT_ID: ${{ needs.setup-auth.outputs.project_id }}
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
     
-    - name: Set up Python
+    - name: Python 환경 설정
       uses: actions/setup-python@v4
       with:
         python-version: '3.10.13'
     
-    - name: Install dependencies
+    - name: 의존성 설치
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
     
-    - name: Configure Docker for GCR
-      run: |
-        gcloud auth configure-docker asia-northeast3-docker.pkg.dev
+    - name: Docker for GCR 설정
+      run: gcloud auth configure-docker asia-northeast3-docker.pkg.dev
     
-    - name: Get secrets from Secret Manager
-      id: secrets
+    - name: Secret Manager에서 시크릿 로드
       run: |
-        echo "Getting secrets from Secret Manager..."
+        echo "🔐 시크릿 로드 시작"
         
-        # OpenAI API Key
-        OPENAI_API_KEY=$(gcloud secrets versions access latest \
-          --secret="openai-api-key" \
-          --project="${{ env.PROJECT_ID }}" \
-          --account="${{ secrets.WIF_SERVICE_ACCOUNT }}" \
-          --impersonate-service-account github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com \
-          --format="value(data)")
-        echo "OPENAI_API_KEY=$OPENAI_API_KEY" >> $GITHUB_ENV
+        # 환경 변수 매핑 테이블
+        declare -A secret_map=(
+          ["OPENAI_API_KEY"]="openai-api-key"
+          ["GEMINI_API_KEY"]="gemini-api-key"
+          ["ELEVENLABS_API_KEY"]="elevenlabs-api-key"
+          ["YOUTUBE_CREDENTIALS"]="youtube-oauth-credentials"
+          ["STORAGE_BUCKET"]="storage-bucket-name"
+        )
         
-        # Gemini API Key
-        GEMINI_API_KEY=$(gcloud secrets versions access latest \
-          --secret="gemini-api-key" \
-          --project="${{ env.PROJECT_ID }}" \
-          --account="${{ secrets.WIF_SERVICE_ACCOUNT }}" \
-          --impersonate-service-account github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com \
-          --format="value(data)")
-        echo "GEMINI_API_KEY=$GEMINI_API_KEY" >> $GITHUB_ENV
-        
-        # ElevenLabs API Key
-        ELEVENLABS_API_KEY=$(gcloud secrets versions access latest \
-          --secret="elevenlabs-api-key" \
-          --project="${{ env.PROJECT_ID }}" \
-          --account="${{ secrets.WIF_SERVICE_ACCOUNT }}" \
-          --impersonate-service-account github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com \
-          --format="value(data)")
-        echo "ELEVENLABS_API_KEY=$ELEVENLABS_API_KEY" >> $GITHUB_ENV
-        
-        # YouTube OAuth Credentials
-        YOUTUBE_CREDENTIALS=$(gcloud secrets versions access latest \
-          --secret="youtube-oauth-credentials" \
-          --project="${{ env.PROJECT_ID }}" \
-          --account="${{ secrets.WIF_SERVICE_ACCOUNT }}" \
-          --impersonate-service-account github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com \
-          --format="value(data)")
-        echo "YOUTUBE_CREDENTIALS=$YOUTUBE_CREDENTIALS" >> $GITHUB_ENV
-        
-        # Storage Bucket Name
-        STORAGE_BUCKET=$(gcloud secrets versions access latest \
-          --secret="storage-bucket-name" \
-          --project="${{ env.PROJECT_ID }}" \
-          --account="${{ secrets.WIF_SERVICE_ACCOUNT }}" \
-          --impersonate-service-account github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com \
-          --format="value(data)")
-        echo "STORAGE_BUCKET=$STORAGE_BUCKET" >> $GITHUB_ENV
+        for env_var in "${!secret_map[@]}"; do
+          secret_name=${secret_map[$env_var]}
+          echo "[$env_var] 시크릿 접근: $secret_name"
+          
+          secret_value=$(gcloud secrets versions access latest \
+            --secret=$secret_name \
+            --project=$PROJECT_ID \
+            --format="value(data)")
+            
+          # 멀티라인 시크릿 처리
+          if [[ $secret_name == *"credentials"* ]]; then
+            echo "$env_var<<EOF" >> $GITHUB_ENV
+            echo "$secret_value" >> $GITHUB_ENV
+            echo "EOF" >> $GITHUB_ENV
+          else
+            echo "$env_var=$secret_value" >> $GITHUB_ENV
+          fi
+          echo "✅ $env_var 설정 완료"
+        done
 
   generate-content:
     runs-on: ubuntu-latest
     needs: deploy
-    if: github.event_name == 'schedule'
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+    env:
+      PROJECT_ID: ${{ needs.setup-auth.outputs.project_id }}
+      WORKLOAD_PROVIDER: ${{ needs.setup-auth.outputs.workload_provider }}
+      SERVICE_ACCOUNT: ${{ needs.setup-auth.outputs.service_account }}
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
     
-    - name: Authenticate to Google Cloud
+    - name: Google Cloud 인증
       uses: google-github-actions/auth@v2
       with:
-        workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
-        service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+        workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ env.SERVICE_ACCOUNT }}
     
-    - name: Set up Cloud SDK
+    - name: Cloud SDK 설정
       uses: google-github-actions/setup-gcloud@v2
-      with:
-        project_id: ${{ env.PROJECT_ID }}
     
-    - name: Generate and upload monetizable content
+    - name: 수익화 콘텐츠 생성 및 업로드
+      env:
+        OPENAI_API_KEY: ${{ env.OPENAI_API_KEY }}
+        GEMINI_API_KEY: ${{ env.GEMINI_API_KEY }}
+        ELEVENLABS_API_KEY: ${{ env.ELEVENLABS_API_KEY }}
+        YOUTUBE_CREDENTIALS: ${{ env.YOUTUBE_CREDENTIALS }}
+        STORAGE_BUCKET: ${{ env.STORAGE_BUCKET }}
       run: |
-        SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
-          --region=${{ env.REGION }} \
+        SERVICE_URL=$(gcloud run services describe $SERVICE_NAME \
+          --region=$REGION \
+          --project=$PROJECT_ID \
           --format='value(status.url)')
         
+        # 수익화 가능 주제 배열
         MONETIZABLE_TOPICS=(
           "AI로 유튜브 자동화해서 수익 올리는 법"
-          "2024년 가장 수익률 높은 부업 TOP5"
-          "집에서 컴퓨터만으로 월 200만원 버는 방법"
-          "초보자를 위한 주식 투자 가이드"
-          "유튜브 알고리즘을 활용한 조회수 폭증 전략"
+          "2025년 가장 수익률 높은 부업 TOP5"
           "무료 AI 도구로 콘텐츠 제작하는 법"
-          "파이썬 자동화로 수익 창출하기"
-          "구글 애드센스 승인을 위한 필수 가이드"
           "노코드로 시작하는 온라인 비즈니스"
           "챗GPT로 유튜브 스크립트 자동 생성하기"
+          "구글 애드센스 승인을 위한 필수 가이드"
+          "유튜브 알고리즘을 활용한 조회수 폭증 전략"
+          "파이썬 자동화로 수익 창출하기"
         )
         
+        # 동적 실행 간격 계산
+        MIN_INTERVAL=300  # 5분
+        MAX_INTERVAL=600  # 10분
+        MIN_DURATION=180  # 3분
+        MAX_DURATION=480  # 8분
+        
         for topic in "${MONETIZABLE_TOPICS[@]}"; do
-          echo "Generating monetizable content for: $topic"
-          DURATION=$(( 180 + RANDOM % 300 ))
+          echo "📹 생성 시작: $topic"
+          DURATION=$(( MIN_DURATION + RANDOM % (MAX_DURATION - MIN_DURATION + 1) ))
           
           curl -X POST "$SERVICE_URL/generate" \
             -H "Content-Type: application/json" \
@@ -162,7 +161,7 @@ jobs:
             --retry 2 \
             --retry-delay 30
           
-          SLEEP_TIME=$(( 300 + RANDOM % 300 ))
-          echo "Waiting for $SLEEP_TIME seconds before next generation..."
+          SLEEP_TIME=$(( MIN_INTERVAL + RANDOM % (MAX_INTERVAL - MIN_INTERVAL + 1) ))
+          echo "⏱ 다음 생성까지 대기: $((SLEEP_TIME/60))분"
           sleep $SLEEP_TIME
         done
