@@ -38,8 +38,6 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: setup-auth
-    env:
-      PROJECT_ID: ${{ env.PROJECT_ID }}
     
     steps:
     - name: Checkout code
@@ -64,8 +62,6 @@ jobs:
   generate-content:
     runs-on: ubuntu-latest
     needs: setup-auth
-    env:
-      PROJECT_ID: ${{ env.PROJECT_ID }}
     
     steps:
     - name: Checkout code
@@ -150,13 +146,4 @@ jobs:
           fi
           
           echo "🤑 수익화 영상 생성: $topic"
-          python3 src/content_generator.py --topic "$topic"
-          python3 src/video_creator.py --topic "$topic"
-          python3 src/thumbnail_generator.py --topic "$topic"
-          python3 src/youtube_uploader.py --topic "$topic"
-          
-          ((VIDEO_COUNT++))
-          sleep 300
-        done
-        
-        echo "✅ 총 $VIDEO_COUNT개 영상 생성 완료! 예상 수익: $(($VIDEO_COUNT * 30000))원"
+          python3 src/content
