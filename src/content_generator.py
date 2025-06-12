@@ -233,7 +233,7 @@ class ContentGenerator:
                 r = int(50 + progress * 205)
                 g = int(100 + progress * 155)
                 b = int(150 + progress * 105)
-                return np.array([[[r, g, b]] * 1280 * 720, dtype=np.uint8).reshape(720, 1280, 3)
+                return np.array([[[r, g, b]] * (1280 * 720)], dtype=np.uint8).reshape(720, 1280, 3)
             
             color_clip = mpe.VideoClip(make_frame, duration=audio_clip.duration)
             
