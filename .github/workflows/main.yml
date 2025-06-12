@@ -38,6 +38,12 @@ jobs:
           token_format: access_token
           access_token_scopes: "https://www.googleapis.com/auth/cloud-platform"
           audience: https://token.actions.githubusercontent.com
+          export_environment_variables: true
+          create_credentials_file: true
+          universe: googleapis.com
+          cleanup_credentials: true
+          access_token_lifetime: 3600s
+          id_token_include_email: false
 
   deploy:
     runs-on: ubuntu-latest
@@ -102,6 +108,14 @@ jobs:
           workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ env.SERVICE_ACCOUNT }}
           token_format: access_token
+          export_environment_variables: true
+          create_credentials_file: true
+          universe: googleapis.com
+          cleanup_credentials: true
+          access_token_lifetime: 3600s
+          access_token_scopes: https://www.googleapis.com/auth/cloud-platform
+          id_token_include_email: false
+          audience: https://token.actions.githubusercontent.com
 
       - name: Setup gcloud SDK
         uses: google-github-actions/setup-gcloud@v2
