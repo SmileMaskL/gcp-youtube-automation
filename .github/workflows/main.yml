@@ -19,29 +19,27 @@ permissions:
 jobs:
   setup-auth:
     runs-on: ubuntu-latest
-    outputs:
-      project_id: ${{ env.PROJECT_ID }}
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
       
     - name: Google Cloud 인증
-      id: auth  # id를 여기서 지정
+      id: auth
       uses: google-github-actions/auth@v2
       with:
         workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
         service_account: ${{ env.SERVICE_ACCOUNT }}
         token_format: "access_token"
-        access_token_scopes: "https://www.googleapis.com/auth/cloud-platform"
         audience: "https://token.actions.githubusercontent.com"
-        access_token_lifetime: 3600s
+        access_token_scopes: "https://www.googleapis.com/auth/cloud-platform"
+        access_token_lifetime: 3600
 
   deploy:
     runs-on: ubuntu-latest
     needs: setup-auth
     env:
-      PROJECT_ID: ${{ needs.setup-auth.outputs.project_id }}
+      PROJECT_ID: ${{ env.PROJECT_ID }}
     
     steps:
     - name: Checkout code
@@ -65,9 +63,9 @@ jobs:
 
   generate-content:
     runs-on: ubuntu-latest
-    needs: setup-auth  # deploy 대신 setup-auth만 필요
+    needs: setup-auth
     env:
-      PROJECT_ID: ${{ needs.setup-auth.outputs.project_id }}
+      PROJECT_ID: ${{ env.PROJECT_ID }}
     
     steps:
     - name: Checkout code
@@ -79,9 +77,12 @@ jobs:
         workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
         service_account: ${{ env.SERVICE_ACCOUNT }}
         token_format: "access_token"
+        audience: "https://token.actions.githubusercontent.com"
+        access_token_scopes: "https://www.googleapis.com/auth/cloud-platform"
+        access_token_lifetime: 3600
 
     - name: Cloud SDK 설정
-      uses: google-github-actions/setup-gcloud@v2  # 인증 후 SDK 설정
+      uses: google-github-actions/setup-gcloud@v2
     
     - name: Secret Manager에서 시크릿 로드
       run: |
@@ -131,10 +132,8 @@ jobs:
         STORAGE_BUCKET: ${{ env.STORAGE_BUCKET }}
         PEXELS_API_KEY: ${{ env.PEXELS_API_KEY }}
       run: |
-        # 무료 한도 내 최대 생산량 (월 $300 한도 고려)
-        MAX_VIDEOS=5  # 1개 영상당 약 $0.5 예상
+        MAX_VIDEOS=5
         
-        # 검증된 수익화 주제 목록 (2025년 기준)
         MONETIZABLE_TOPICS=(
           "AI로 월 1000만원 버는 방법"
           "무료 GCP 활용 전략"
@@ -157,7 +156,7 @@ jobs:
           python3 src/youtube_uploader.py --topic "$topic"
           
           ((VIDEO_COUNT++))
-          sleep 300  # 5분 대기 (API 한도 회피)
+          sleep 300
         done
         
         echo "✅ 총 $VIDEO_COUNT개 영상 생성 완료! 예상 수익: $(($VIDEO_COUNT * 30000))원"
