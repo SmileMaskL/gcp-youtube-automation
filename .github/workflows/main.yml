@@ -37,6 +37,7 @@ jobs:
           service_account: ${{ env.SERVICE_ACCOUNT }}
           token_format: access_token
           access_token_scopes: "https://www.googleapis.com/auth/cloud-platform"
+          audience: https://token.actions.githubusercontent.com
 
   deploy:
     runs-on: ubuntu-latest
