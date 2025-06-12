@@ -6,6 +6,7 @@ google-auth==2.29.0
 google-auth-oauthlib==1.2.0
 google-api-core==2.11.1
 google-resumable-media==2.6.0
+google-cloud-secret-manager==2.24.0
 
 # Media
 moviepy==1.0.3
