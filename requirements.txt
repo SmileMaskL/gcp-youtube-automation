@@ -13,3 +13,5 @@ pillow==10.1.0
 opencv-python==4.8.1.78
 moviepy==1.0.3
 numpy==1.25.2
+imageio==2.31.1
+imageio-ffmpeg==0.4.8
