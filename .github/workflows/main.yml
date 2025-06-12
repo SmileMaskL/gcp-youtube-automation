@@ -55,6 +55,12 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+
+    - name: 썸네일 자동 생성
+      run: python3 src/thumbnail_generator.py
+
+    - name: 댓글 자동화
+      run: python3 src/comment_poster.py
     
     - name: Python 환경 설정
       uses: actions/setup-python@v4
