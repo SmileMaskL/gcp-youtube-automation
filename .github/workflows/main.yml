@@ -4,14 +4,14 @@ on:
   push:
     branches: [ main ]
   workflow_dispatch:
+  schedule:
+    - cron: '0 12 * * *'  # 매일 12시 UTC (한국 시간 21시)
 
 env:
   SERVICE_NAME: gcp-youtube-automation
   REGION: us-central1
   PROJECT_ID: youtube-fully-automated
-  # ▼▼▼ 중요! 여기서 audience 값 수정 ▼▼▼
   WORKLOAD_IDENTITY_PROVIDER: "projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1"
-  audience: "https://token.actions.githubusercontent.com"
   SERVICE_ACCOUNT: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
 
 permissions:
@@ -19,50 +19,48 @@ permissions:
   id-token: 'write'
 
 jobs:
-  setup-auth:
+  setup:  # setup-auth 대신 setup으로 통합
     runs-on: ubuntu-latest
-    outputs:
-      project_id: ${{ env.PROJECT_ID }}
-    
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-      
-    - name: Google Cloud 인증 (100% 오류 해결 버전)
+    - name: Google Cloud 인증
       id: auth
       uses: google-github-actions/auth@v2
       with:
-        workload_identity_provider: "projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1"
-        service_account: "github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com"
-        token_format: "access_token"  # ID 토큰 대신 액세스 토큰 사용
-        access_token_scopes: "https://www.googleapis.com/auth/cloud-platform"
-        audience: "https://token.actions.githubusercontent.com"
+        workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ env.SERVICE_ACCOUNT }}
         access_token_lifetime: 3600s
-        "repository": "SmileMaskL/gcp-youtube-automation"
-        
-    - name: Print OIDC Token Payload (base64 decoded)
-      id: decode
-      shell: bash
-      run: |
-       echo "${{ steps.auth.outputs.id_token }}" | cut -d '.' -f2 | base64 -d | jq
+        # audience는 기본값 사용
+
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
+
+    - name: Configure Docker
+      run: gcloud auth configure-docker asia-northeast3-docker.pkg.dev
 
   deploy:
     runs-on: ubuntu-latest
-    needs: setup-auth
-    env:
-      PROJECT_ID: ${{ needs.setup-auth.outputs.project_id }}
-    
+    needs: setup
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-    
+
+    - name: Google Cloud 인증
+      uses: google-github-actions/auth@v2
+      with:
+        workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ env.SERVICE_ACCOUNT }}
+
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
+
     - name: Python 환경 설정
       uses: actions/setup-python@v4
       with:
         python-version: '3.10.13'
-        workload_identity_provider: "projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1"
-    
+
     - name: 의존성 설치
       run: |
         python -m pip install --upgrade pip
@@ -73,27 +71,42 @@ jobs:
 
     - name: 댓글 자동화
       run: python3 src/comment_poster.py
-    
-    - name: Docker for GCR 설정
-      run: gcloud auth configure-docker asia-northeast3-docker.pkg.dev
-    
-    - name: Secret Manager에서 시크릿 로드 (실제 수익화용)
+
+    # 여기서는 시크릿을 로드하지 않음. generate-content에서 로드
+
+  generate-content:
+    runs-on: ubuntu-latest
+    needs: [setup]  # deploy는 필요없음
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Google Cloud 인증
+      uses: google-github-actions/auth@v2
+      with:
+        workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ env.SERVICE_ACCOUNT }}
+
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
+
+    - name: Secret Manager에서 시크릿 로드
+      id: load-secrets
       run: |
-        echo "🔐 실제 수익화에 필요한 시크릿 로드 시작"
+        echo "🔐 시크릿 로드 시작"
         
-        # 실제 시크릿 이름에 맞춰 매핑 (오류 100% 해결)
         declare -A secret_map=(
-          ["OPENAI_API_KEY"]="openai-api-keys"       # 실제 시크릿 이름
-          ["GEMINI_API_KEY"]="gemini-api-key"        # 실제 시크릿 이름
-          ["ELEVENLABS_API_KEY"]="elevenlabs-api-key" # 실제 시크릿 이름
+          ["OPENAI_API_KEY"]="openai-api-keys"
+          ["GEMINI_API_KEY"]="gemini-api-key"
+          ["ELEVENLABS_API_KEY"]="elevenlabs-api-key"
           ["YOUTUBE_CREDENTIALS"]="youtube-oauth-credentials"
           ["STORAGE_BUCKET"]="storage-bucket-name"
-          ["PEXELS_API_KEY"]="PEXELS_API_KEY"        # 추가된 시크릿
+          ["PEXELS_API_KEY"]="PEXELS_API_KEY"
         )
         
         for env_var in "${!secret_map[@]}"; do
           secret_name=${secret_map[$env_var]}
-          echo "[수익화] $env_var 로드: $secret_name"
+          echo "[시크릿] $env_var 로드: $secret_name"
           
           secret_value=$(gcloud secrets versions access latest \
             --secret=$secret_name \
@@ -108,53 +121,40 @@ jobs:
           else
             echo "$env_var=$secret_value" >> $GITHUB_ENV
           fi
-          echo "✅ $env_var 설정 완료 (매일 수익화 가능)"
+          echo "✅ $env_var 설정 완료"
         done
 
-  generate-content:
-    runs-on: ubuntu-latest
-    needs: deploy
-    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
-    env:
-      PROJECT_ID: ${{ needs.setup-auth.outputs.project_id }}
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Google Cloud 인증
-      uses: google-github-actions/auth@v2
+    - name: Python 환경 설정
+      uses: actions/setup-python@v4
       with:
-        workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
-        service_account: ${{ env.SERVICE_ACCOUNT }}
-        token_format: "access_token"  # 동일하게 적용
-    
-    - name: Cloud SDK 설정
-      uses: google-github-actions/setup-gcloud@v2
-    
-    - name: 매일 수익화되는 콘텐츠 생성 (실전 버전)
+        python-version: '3.10.13'
+
+    - name: 의존성 설치
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: 매일 수익화되는 콘텐츠 생성
       env:
         OPENAI_API_KEY: ${{ env.OPENAI_API_KEY }}
         GEMINI_API_KEY: ${{ env.GEMINI_API_KEY }}
         ELEVENLABS_API_KEY: ${{ env.ELEVENLABS_API_KEY }}
         YOUTUBE_CREDENTIALS: ${{ env.YOUTUBE_CREDENTIALS }}
         STORAGE_BUCKET: ${{ env.STORAGE_BUCKET }}
-        PEXELS_API_KEY: ${{ env.PEXELS_API_KEY }}  # 추가된 API 키
+        PEXELS_API_KEY: ${{ env.PEXELS_API_KEY }}
       run: |
-        # 실제 수익화 가능한 주제들 (2025년 검증된 주제)
-        python3 scripts/content_generator.py
-        python3 scripts/video_creator.py
-        python3 scripts/thumbnail_generator.py
-        python3 scripts/youtube_uploader.py
-
-        # python3 scripts/content_generator.py
-        # python3 scripts/video_creator.py
-        # python3 scripts/thumbnail_generator.py
-        # python3 scripts/youtube_uploader.py
-         
+        # 무료 한도 내에서 실행 (하루 3개)
+        MAX_VIDEOS=3
         
-        # 무료 한도 내 최대 생산량 계산
-        MAX_VIDEOS=8  # GCP 무료 한도 내 가능 개수
+        # 수익화 가능한 주제 리스트
+        MONETIZABLE_TOPICS=(
+          "인공지능으로 수익내는 법"
+          "무인 자동화 시스템 구축"
+          "코딩 없이 AI로 매일 50만원 버는 방법"
+          "유튜브 자동화로 월 1억 만들기"
+          "구글 클라우드 무료 활용법"
+        )
+        
         VIDEO_COUNT=0
         
         for topic in "${MONETIZABLE_TOPICS[@]}"; do
@@ -166,15 +166,11 @@ jobs:
           echo "🤑 수익화 영상 생성: $topic"
           DURATION=$(( 180 + RANDOM % 300 ))  # 3~8분
           
-          curl -X POST "https://$SERVICE_NAME-run-$REGION.a.run.app/generate" \
-            -H "Content-Type: application/json" \
-            -d "{
-              \"topic\": \"$topic\",
-              \"duration\": $DURATION,
-              \"monetization\": true,
-              \"pexels_api_key\": \"$PEXELS_API_KEY\"  # 실제 영상 제작에 사용
-            }" \
-            --retry 2
+          # 실제 스크립트 실행
+          python3 src/content_generator.py --topic "$topic"
+          python3 src/video_creator.py --topic "$topic" --duration $DURATION
+          python3 src/thumbnail_generator.py --topic "$topic"
+          python3 src/youtube_uploader.py --topic "$topic"
           
           SLEEP_TIME=$(( 300 + RANDOM % 300 ))  # 5~10분 대기
           echo "⏱ 다음 영상까지 $(($SLEEP_TIME/60))분 후"
@@ -184,14 +180,3 @@ jobs:
         done
         
         echo "✅ 오늘 총 $VIDEO_COUNT개 수익화 영상 생성 완료! 예상 수익: $(($VIDEO_COUNT * 50000))원"
-      
-    - name: 인증된 gcloud 설치
-      uses: google-github-actions/setup-gcloud@v2
-      with:
-        project_id: ${{ env.PROJECT_ID }}
-
-    - name: Cloud Run Job 수동 트리거
-      run: |
-        gcloud run jobs run $SERVICE_NAME \
-        --region $REGION \
-        --project $PROJECT_ID
