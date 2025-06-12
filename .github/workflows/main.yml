@@ -4,7 +4,6 @@ on:
   push:
     branches: [ main ]
   workflow_dispatch:
-  schedule:
 
 env:
   SERVICE_NAME: gcp-youtube-automation
