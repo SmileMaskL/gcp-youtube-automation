@@ -177,3 +177,14 @@ jobs:
         done
         
         echo "✅ 오늘 총 $VIDEO_COUNT개 수익화 영상 생성 완료! 예상 수익: $(($VIDEO_COUNT * 50000))원"
+      
+    - name: 인증된 gcloud 설치
+      uses: google-github-actions/setup-gcloud@v2
+      with:
+        project_id: ${{ env.PROJECT_ID }}
+
+    - name: Cloud Run Job 수동 트리거
+      run: |
+        gcloud run jobs run $SERVICE_NAME \
+        --region $REGION \
+        --project $PROJECT_ID
