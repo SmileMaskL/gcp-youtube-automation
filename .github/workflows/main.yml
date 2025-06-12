@@ -73,16 +73,7 @@ jobs:
 
       - name: Configure Docker for GCR
         run: gcloud auth configure-docker asia-northeast3-docker.pkg.dev
-
-      - name: ▶️ Run content generator
-        run: python3 src/content_generator.py
-
-      - name: ▶️ Run video creator
-        run: python3 src/video_creator.py
-
-      - name: ▶️ Run YouTube uploader
-        run: python3 src/youtube_uploader.py
-
+        
       - name: Load secrets from Secret Manager
         run: |
           declare -A secret_map=(
