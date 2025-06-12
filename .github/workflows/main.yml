@@ -135,16 +135,16 @@ jobs:
         PEXELS_API_KEY: ${{ env.PEXELS_API_KEY }}  # 추가된 API 키
       run: |
         # 실제 수익화 가능한 주제들 (2025년 검증된 주제)
-        MONETIZABLE_TOPICS=(
-          "AI로 유튜브 자동화해서 월 100만원 버는 법"
-          "2025년 부업 수익률 1위는 이거다"
-          "무료 AI 도구만으로 영상 제작하는 법"
-          "파이썬 한 줄 코드로 유튜브 자동화"
-          "구글 애드센스 3일 만에 통과하는 법"
-          "유튜브 알고리즘 정복하는 5가지 비법"
-          "노코드로 만드는 수익형 채널"
-          "챗GPT로 10분만에 영상 대본 만들기"
-        )
+        python3 scripts/content_generator.py
+        python3 scripts/video_creator.py
+        python3 scripts/thumbnail_generator.py
+        python3 scripts/youtube_uploader.py
+
+        # python3 scripts/content_generator.py
+        # python3 scripts/video_creator.py
+        # python3 scripts/thumbnail_generator.py
+        # python3 scripts/youtube_uploader.py
+         
         
         # 무료 한도 내 최대 생산량 계산
         MAX_VIDEOS=8  # GCP 무료 한도 내 가능 개수
