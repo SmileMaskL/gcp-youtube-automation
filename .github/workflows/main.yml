@@ -28,7 +28,8 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip setuptools wheel
-          pip install --force-reinstall -r requirements.txt
+          pip cache purge
+          pip install --force-reinstall --no-cache-dir -r requirements.txt
           pip list
 
       - name: Authenticate to Google Cloud
