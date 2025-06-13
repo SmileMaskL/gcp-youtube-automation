@@ -1,41 +1,48 @@
-name: YouTube Automation
+name: YouTube Automation (수익 창출 봇)
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # 수동 실행 기능
 
 jobs:
-  build:
+  build-and-upload:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
+    - name:  checkout code
       uses: actions/checkout@v4
 
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.10'
+        cache: 'pip'
 
-    - name: Install system libraries  
-      run: |  
-        sudo apt-get update  
-        sudo apt-get install -y libjpeg-dev zlib1g-dev libfreetype6-dev  
-
-    - name: Install dependencies
+    # 🔥 여기가 두 번째 핵심! Pillow에 필요한 그림 도구를 먼저 설치합니다.
+    - name: Install System Dependencies for Pillow
       run: |
-        pip cache purge
-        python -m pip install --upgrade pip==23.1.2
-        pip install wheel
-        pip install --no-cache-dir --force-reinstall -r requirements.txt
-        pip list | grep -E "numpy|gtts|pillow"
+        sudo apt-get update
+        sudo apt-get install -y libjpeg-dev zlib1g-dev libfreetype6-dev
 
-    - name: Run YouTube Automation
+    - name: Install Python Dependencies
+      run: |
+        set -e # 에러 발생 시 즉시 중단
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    # 🔥 여기가 세 번째 핵심! OpenCV가 설치되지 않았는지 확인사살합니다.
+    - name: Verify No OpenCV Installation
+      run: |
+        echo "🚫 OpenCV 설치 여부 확인 (설치되어 있으면 여기서 실패해야 정상)"
+        # 아래 명령어가 성공하면(cv2가 없으면) 다음 단계로 넘어갑니다.
+        ! python -c "import cv2" && echo "✅ 좋습니다! OpenCV가 설치되지 않았습니다."
+
+    - name: Run YouTube Automation Bot
       env:
-        OPENAI_KEYS_JSON: ${{ secrets.OPENAI_KEYS }}
+        # 🔥 중요: GitHub Secrets 이름과 정확히 일치시켜야 합니다.
+        OPENAI_KEYS_JSON: ${{ secrets.OPENAI_KEYS_JSON }}
         GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
         PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-        YOUTUBE_OAUTH_CREDENTIALS: ${{ secrets.YOUTUBE_OAUTH }}
+        YOUTUBE_OAUTH_CREDENTIALS: ${{ secrets.YOUTUBE_OAUTH_CREDENTIALS }}
       run: |
-        cd src
-        python main.py
+        python src/main.py
