@@ -51,7 +51,6 @@ jobs:
       - name: Set PYTHONPATH
         run: echo "PYTHONPATH=$PWD/src" >> $GITHUB_ENV
 
-
       - name: Run main.py
         env:
           OPENAI_KEYS_JSON: ${{ env.OPENAI_KEYS_JSON }}
