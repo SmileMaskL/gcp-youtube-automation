@@ -1,13 +1,19 @@
 import os
 import openai
-import google.generativeai as genai
 from typing import Optional
 
+try:
+    import google.generativeai as genai
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
+    print("⚠️ Google GenerativeAI 모듈이 없습니다. OpenAI로 대체합니다.")
+
 def generate_content(topic: str) -> Optional[str]:
-    """주제에 맞는 콘텐츠 생성"""
+    """주제에 맞는 콘텐츠 생성 (Gemini 없어도 작동)"""
     try:
-        # 1. 먼저 무료 Gemini 시도
-        if os.getenv("GEMINI_API_KEY"):
+        # 1. Gemini 사용 시도 (가능한 경우만)
+        if GEMINI_AVAILABLE and os.getenv("GEMINI_API_KEY"):
             genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
             model = genai.GenerativeModel('gemini-pro')
             response = model.generate_content(
@@ -16,7 +22,7 @@ def generate_content(topic: str) -> Optional[str]:
             )
             return response.text
         
-        # 2. OpenAI 사용
+        # 2. 무조건 작동하는 OpenAI 버전
         openai.api_key = os.getenv("OPENAI_API_KEY")
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
