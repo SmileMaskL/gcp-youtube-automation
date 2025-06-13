@@ -1,34 +1,58 @@
 import os
+import tempfile
+import logging
 from moviepy.editor import *
-from gtts import gTTS
-import requests
-from pexels_api import API
+from PIL import Image
+import numpy as np
+from gtts import gTTS  # ✅ 직접 임포트
+
+logger = logging.getLogger(__name__)
 
 def create_video(script: str, topic: str) -> str:
-    """스크립트를 바탕으로 영상 생성"""
     try:
-        # 1. 텍스트를 음성으로 변환 (무료 gTTS 사용)
-        tts = gTTS(script, lang='ko')
-        audio_file = f"{topic}_audio.mp3"
-        tts.save(audio_file)
+        # 1. 음성 생성
+        audio_path = "audio.mp3"
+        tts = gTTS(text=script, lang='ko', slow=False)
+        tts.save(audio_path)
+        logger.info("✅ 음성 파일 생성 완료")
+
+        # 2. 동영상 클립 준비
+        clips = []
+        width, height = 1920, 1080
         
-        # 2. Pexels에서 무료 영상 다운로드
-        pexels = API(os.getenv("PEXELS_API_KEY"))
-        search = pexels.search_video(topic, page=1, results_per_page=1)
-        if search['videos']:
-            video_url = search['videos'][0]['video_files'][0]['link']
-            video_content = requests.get(video_url).content
-            with open(f"{topic}_bg.mp4", 'wb') as f:
-                f.write(video_content)
+        # 3. OpenCV 시도 (가능한 경우만)
+        try:
+            import cv2
+            cap = cv2.VideoCapture(0)
+            if cap.isOpened():
+                ret, frame = cap.read()
+                if ret:
+                    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    frame = cv2.resize(frame, (width, height))
+                    clips.append(ImageClip(frame).set_duration(5))
+                cap.release()
+                logger.info("✅ OpenCV 영상 캡처 성공")
+        except Exception as e:
+            logger.warning(f"⚠️ OpenCV 사용 불가: {e}")
         
-        # 3. 영상 편집
-        clip = VideoFileClip(f"{topic}_bg.mp4").subclip(0, 60)  # 60초 영상
-        audio = AudioFileClip(audio_file)
-        final = clip.set_audio(audio)
-        output_file = f"{topic}_final.mp4"
-        final.write_videofile(output_file, fps=24)
+        # 4. 기본 영상 생성 (OpenCV 실패 시)
+        if not clips:
+            color_clip = ColorClip(size=(width, height), color=(0, 0, 0))
+            text_clip = TextClip(topic, fontsize=70, color='white', size=(width-100, None))
+            text_clip = text_clip.set_position('center').set_duration(5)
+            clips = [CompositeVideoClip([color_clip, text_clip])]
+            logger.info("✅ 기본 영상 생성 (OpenCV 없음)")
         
-        return output_file
+        # 5. 음성과 영상 결합
+        final_clip = concatenate_videoclips(clips)
+        final_clip = final_clip.set_audio(AudioFileClip(audio_path))
+        
+        # 6. 최종 출력
+        output_path = f"{topic.replace(' ', '_')}_final.mp4"
+        final_clip.write_videofile(output_path, fps=24)
+        logger.info(f"✅ 동영상 저장 완료: {output_path}")
+        return output_path
+        
     except Exception as e:
-        print(f"❌ 영상 생성 오류: {e}")
-        raise
+        logger.error(f"❌ 동영상 생성 실패: {str(e)}")
+        return None
