@@ -1,42 +1,42 @@
+# src/content_generator.py (전체 코드)
+
 import os
-import openai
-from typing import Optional
+import google.generativeai as genai
+import logging
 
-# Gemini 모듈 사용 가능 여부 초기화
-GEMINI_AVAILABLE = False
-try:
-    import google.generativeai as genai
-    # 모듈 기능 테스트 (유효하지 않은 키로 시도)
-    genai.configure(api_key="dummy_key")
-    GEMINI_AVAILABLE = True
-except Exception as e:
-    print(f"⚠️ Google GenerativeAI 모듈 초기화 실패: {str(e)[:100]}. OpenAI로 대체합니다.")
-    GEMINI_AVAILABLE = False
+logger = logging.getLogger(__name__)
 
-def generate_content(topic: str) -> Optional[str]:
-    """주제에 맞는 콘텐츠 생성 (Gemini 없어도 작동)"""
+def generate_content(topic: str) -> str:
+    """
+    Google Gemini AI를 사용하여 주어진 주제에 대한 유튜브 대본을 생성합니다.
+    """
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        logger.error("❌ GEMINI_API_KEY 환경변수가 설정되지 않았습니다.")
+        return f"'{topic}'에 대한 기본 스크립트입니다. AI 대본 생성에 실패했습니다."
+
     try:
-        # 1. Gemini 사용 시도 (가능한 경우만)
-        gemini_api_key = os.getenv("GEMINI_API_KEY")
-        if GEMINI_AVAILABLE and gemini_api_key:
-            genai.configure(api_key=gemini_api_key)
-            model = genai.GenerativeModel('gemini-pro')
-            response = model.generate_content(
-                f"유튜브 영상 대본을 작성해주세요. 주제: {topic}. "
-                "재미있고 실용적인 내용으로 500자 정도 작성해주세요."
-            )
-            return response.text
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel('gemini-1.5-flash') # 빠르고 효율적인 모델
+
+        prompt = f"""
+        당신은 시청자의 눈길을 사로잡는 유튜브 쇼츠 비디오 스크립트 작가입니다.
+        주어진 주제에 대해 150자 내외의 간결하고 흥미로운 스크립트를 작성해주세요.
+        반드시 다음 규칙을 지켜주세요:
+        1. 첫 문장에서 시청자의 호기심을 자극하세요.
+        2. 어려운 단어 대신 쉽고 친근한 단어를 사용하세요.
+        3. 문장은 짧고 명확하게 끊어서 말해주세요.
+        4. 마지막은 다음 영상에 대한 기대감을 주는 문장으로 마무리하세요.
         
-        # 2. 무조건 작동하는 OpenAI 버전
-        openai.api_key = os.getenv("OPENAI_API_KEY")
-        response = openai.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "당신은 유튜버입니다. 조회수가 높은 영상 대본을 작성해주세요."},
-                {"role": "user", "content": f"주제: {topic}. 대본을 작성해주세요."}
-            ]
-        )
-        return response.choices[0].message.content
+        주제: "{topic}"
+        """
+
+        response = model.generate_content(prompt)
+        script = response.text.strip()
+        
+        logger.info(f"✅ Gemini AI가 '{topic}'에 대한 대본을 성공적으로 생성했습니다.")
+        return script
+
     except Exception as e:
-        print(f"❌ 콘텐츠 생성 오류: {e}")
-        return None
+        logger.error(f"❌ Gemini AI 대본 생성 중 오류 발생: {str(e)}")
+        return f"'{topic}'에 대한 기본 스크립트입니다. AI 대본 생성 중 오류가 발생했습니다."
