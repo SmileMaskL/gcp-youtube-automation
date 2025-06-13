@@ -1,8 +1,11 @@
+# 📌 필수 버전 명시 (충돌 방지)
+numpy==1.26.0
+gtts==2.4.0
+Pillow==10.3.0  # OpenCV 대체용
+
+# 📌 기존 필수 라이브러리
 openai==1.30.1
 google-api-python-client==2.123.0
-google-auth==2.29.0
-google-auth-oauthlib==1.2.0
-google-auth-httplib2==0.2.0
 google-generativeai==0.3.2
 moviepy==1.0.3
 imageio==2.34.1
@@ -11,7 +14,5 @@ elevenlabs==1.3.1
 requests==2.31.0
 python-dotenv==1.0.1
 pexels_api==1.0.1
-gtts==2.4.0
-Pillow==10.3.0
-numpy==1.26.4
-# opencv-python는 사용 금지! (라인 완전 삭제)
+
+# ❌ opencv-python 제거! 절대 사용 금지
