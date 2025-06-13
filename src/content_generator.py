@@ -16,6 +16,7 @@ from PIL import Image, ImageDraw, ImageFont
 import moviepy.editor as mpe
 from moviepy.video.tools.drawing import color_gradient
 import numpy as np
+from google.generativeai import configure as configure_gemini
 
 # 로깅 설정
 logging.basicConfig(
