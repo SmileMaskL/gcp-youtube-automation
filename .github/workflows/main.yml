@@ -9,7 +9,7 @@ jobs:
 
     permissions:
       contents: read
-      id-token: write  # Workload Identity Federation 인증에 필요
+      id-token: write  # 필수!
 
     steps:
       - uses: actions/checkout@v3
@@ -18,9 +18,9 @@ jobs:
         uses: google-github-actions/auth@v1
         with:
           token_format: 'access_token'
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}  # 반드시 GCP 콘솔에서 정확한 값 넣기
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
-          audience: 'https://token.actions.githubusercontent.com'
+          audience: 'https://token.actions.githubusercontent.com'  # GCP 프로바이더에서 설정한 audience와 같아야 함!
 
       - name: Setup Python 3.10.13
         uses: actions/setup-python@v4
