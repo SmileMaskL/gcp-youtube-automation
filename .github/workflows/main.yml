@@ -14,11 +14,13 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - id: auth
+      - id: 'auth'
         uses: google-github-actions/auth@v1
         with:
+          token_format: 'access_token'
           workload_identity_provider: projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1
           service_account: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
+          audience: 'https://token.actions.githubusercontent.com'
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v4
