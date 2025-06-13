@@ -19,7 +19,7 @@ python-dotenv==1.0.1
 
 # 📌 AI 라이브러리 (수익 창출 핵심!)
 openai==1.30.1
-elevenlabs==0.2.27
+elevenlabs==0.2.26
 
 # 📌 비디오/오디오 처리 (유튜브용)
 moviepy==1.0.3
