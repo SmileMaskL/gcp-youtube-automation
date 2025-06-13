@@ -29,9 +29,10 @@ jobs:
         run: |
           pip cache purge
           python -m pip install --upgrade pip==23.1.2
-          pip install wheel  
+          pip install wheel setuptools==65.5.0
           pip install --no-cache-dir --force-reinstall -r requirements.txt
-          pip list | grep -E "numpy|gtts|opencv"  # ✅ 필수 패키지 확인
+          echo "==== 설치 패키지 확인 ===="
+          pip list | grep -E "numpy|opencv|gtts|moviepy"  # ✅ 필수 패키지 확인
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v1
