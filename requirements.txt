@@ -1,23 +1,31 @@
-# 📌 필수 버전 명시 (호환성 보장)
-numpy==1.26.0
-gtts==2.5.1
-Pillow==10.3.0
-
-# 📌 핵심 라이브러리
-moviepy==1.0.3
-imageio==2.34.1
-imageio-ffmpeg==0.4.9
-
-# 📌 AI 및 API 라이브러리
-openai==1.30.1
+# requirements.txt - 프로젝트 루트에 생성
+# 📌 Google 패키지 (제일 먼저 설치)
+google==3.0.0
+google-api-core==2.15.0
+google-api-python-client==2.123.0
+google-auth==2.27.0
+google-auth-oauthlib==1.2.0
+google-auth-httplib2==0.2.0
 google-generativeai==0.5.4
-elevenlabs==1.3.1
+googleapis-common-protos==1.62.0
+
+# 📌 기본 라이브러리
+numpy==1.26.0
+Pillow==10.3.0
 requests==2.31.0
 python-dotenv==1.0.1
 
-# 📌 유튜브 업로드를 위한 라이브러리 (3개)
-google-api-python-client==2.123.0
-google-auth-oauthlib==1.2.0 
-google-auth==2.27.0  
+# 📌 AI 라이브러리
+openai==1.30.1
+elevenlabs==1.3.1
 
-google==5.0.0 
+# 📌 비디오/오디오 처리
+moviepy==1.0.3
+imageio==2.34.1
+imageio-ffmpeg==0.4.9
+gtts==2.5.1
+
+# 📌 기타 유틸리티
+beautifulsoup4==4.12.2
+lxml==4.9.3
+tqdm==4.66.1
