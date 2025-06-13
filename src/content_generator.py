@@ -2,12 +2,14 @@ import os
 import openai
 from typing import Optional
 
+GEMINI_AVAILABLE = False
 try:
     import google.generativeai as genai
+    genai.configure(api_key="test")
     GEMINI_AVAILABLE = True
 except ImportError:
-    GEMINI_AVAILABLE = False
     print("⚠️ Google GenerativeAI 모듈이 없습니다. OpenAI로 대체합니다.")
+    GEMINI_AVAILABLE = False
 
 def generate_content(topic: str) -> Optional[str]:
     """주제에 맞는 콘텐츠 생성 (Gemini 없어도 작동)"""
