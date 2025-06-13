@@ -56,7 +56,7 @@ def upload_video(video_path: str, title: str, description: str, tags: list,
             },
             "status": {
                 "privacyStatus": privacy_status, # 🔥 '비공개' 대신 '공개(public)'로 설정 가능
-                "PLCSyGdRKPP9EdD1hNyNOWXVLcNPm8D8aJ": False # 🔥 '아니요, 아동용이 아닙니다' 자동 설정!
+                "selfDeclaredMadeForKids": False # 🔥 '아니요, 아동용이 아닙니다' 자동 설정!
             }
         }
 
