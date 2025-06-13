@@ -2,10 +2,10 @@ import os
 import json
 import random
 from google.cloud import secretmanager
-from src.content_generator import generate_content
-from src.video_creator import create_video
-from src.thumbnail_generator import generate_thumbnail
-from src.youtube_uploader import upload_to_youtube
+from content_generator import generate_content
+from video_creator import create_video
+from thumbnail_generator import generate_thumbnail
+from youtube_uploader import upload_to_youtube
 
 class APIKeyManager:
     def __init__(self, project_id="youtube-fully-automated"):
