@@ -1,51 +1,36 @@
-name: YouTube Auto Upload Pipeline
+name: YouTube Automation
 
 on:
   workflow_dispatch:
 
 jobs:
-  build-and-run:
+  build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-
-    permissions:
-      contents: read
-      id-token: write
 
     steps:
-      - uses: actions/checkout@v3
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      - name: Set up Python 3.10
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.10.13"
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
+    - name: Install dependencies
+      run: |
+        pip cache purge
+        python -m pip install --upgrade pip==23.1.2
+        pip install wheel
+        pip install --no-cache-dir --force-reinstall -r requirements.txt
+        pip list | grep -E "numpy|gtts|pillow"
 
-      - name: Install Python dependencies
-        run: |
-          pip cache purge
-          python -m pip install --upgrade pip==23.1.2
-          pip install wheel setuptools==65.5.0
-          pip install --no-cache-dir --force-reinstall -r requirements.txt
-          echo "==== 설치 패키지 확인 ===="
-          pip list | grep -E "numpy|opencv|gtts|moviepy"  # ✅ 필수 패키지 확인
-
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v1
-        with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
-
-      - name: Run YouTube Automation
-        env:
-          OPENAI_KEYS_JSON: ${{ secrets.OPENAI_KEYS_JSON }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
-          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-          YOUTUBE_OAUTH_CREDENTIALS: ${{ secrets.YOUTUBE_OAUTH_CREDENTIALS }}
-        run: |
-          python src/main.py
+    - name: Run YouTube Automation
+      env:
+        OPENAI_KEYS_JSON: ${{ secrets.OPENAI_KEYS }}
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+        PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+        YOUTUBE_OAUTH_CREDENTIALS: ${{ secrets.YOUTUBE_OAUTH }}
+      run: |
+        cd src
+        python main.py
