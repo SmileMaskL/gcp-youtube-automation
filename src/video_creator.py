@@ -1,10 +1,9 @@
 import os
-import tempfile
 import logging
 from moviepy.editor import *
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
+from gtts import gTTS
 import numpy as np
-from gtts import gTTS  # ✅ 직접 임포트
 
 logger = logging.getLogger(__name__)
 
@@ -16,38 +15,35 @@ def create_video(script: str, topic: str) -> str:
         tts.save(audio_path)
         logger.info("✅ 음성 파일 생성 완료")
 
-        # 2. 동영상 클립 준비
-        clips = []
+        # 2. 동영상 생성 (OpenCV 없이 Pillow 사용)
         width, height = 1920, 1080
+        duration = 5  # 초 단위
         
-        # 3. OpenCV 시도 (가능한 경우만)
+        # 3. 정적 배경 + 텍스트 영상 생성
+        clips = []
+        background = Image.new('RGB', (width, height), color=(0, 0, 0))
+        draw = ImageDraw.Draw(background)
+        
+        # 한국어 폰트 설정 (기본 폰트 사용)
         try:
-            import cv2
-            cap = cv2.VideoCapture(0)
-            if cap.isOpened():
-                ret, frame = cap.read()
-                if ret:
-                    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    frame = cv2.resize(frame, (width, height))
-                    clips.append(ImageClip(frame).set_duration(5))
-                cap.release()
-                logger.info("✅ OpenCV 영상 캡처 성공")
-        except Exception as e:
-            logger.warning(f"⚠️ OpenCV 사용 불가: {e}")
+            font = ImageFont.truetype("malgun.ttf", 60)  # Windows 기본 폰트
+        except:
+            font = ImageFont.load_default()
         
-        # 4. 기본 영상 생성 (OpenCV 실패 시)
-        if not clips:
-            color_clip = ColorClip(size=(width, height), color=(0, 0, 0))
-            text_clip = TextClip(topic, fontsize=70, color='white', size=(width-100, None))
-            text_clip = text_clip.set_position('center').set_duration(5)
-            clips = [CompositeVideoClip([color_clip, text_clip])]
-            logger.info("✅ 기본 영상 생성 (OpenCV 없음)")
+        text_width, text_height = draw.textsize(topic, font=font)
+        text_position = ((width - text_width) // 2, (height - text_height) // 2)
+        draw.text(text_position, topic, font=font, fill=(255, 255, 255))
         
-        # 5. 음성과 영상 결합
+        # PIL 이미지를 NumPy 배열로 변환 → ImageClip으로 변환
+        frame = np.array(background)
+        clip = ImageClip(frame).set_duration(duration)
+        clips.append(clip)
+        
+        # 4. 음성과 영상 결합
         final_clip = concatenate_videoclips(clips)
         final_clip = final_clip.set_audio(AudioFileClip(audio_path))
         
-        # 6. 최종 출력
+        # 5. 파일 저장
         output_path = f"{topic.replace(' ', '_')}_final.mp4"
         final_clip.write_videofile(output_path, fps=24)
         logger.info(f"✅ 동영상 저장 완료: {output_path}")
