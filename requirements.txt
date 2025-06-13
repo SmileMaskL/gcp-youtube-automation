@@ -1,5 +1,3 @@
-# requirements.txt (전체 코드)
-
 # 📌 필수 버전 명시 (호환성 보장)
 numpy==1.26.0
 gtts==2.5.1
@@ -12,8 +10,11 @@ imageio-ffmpeg==0.4.9
 
 # 📌 AI 및 API 라이브러리
 openai==1.30.1
-google-generativeai==0.5.4 # 최신 안정 버전
+google-generativeai==0.5.4
 elevenlabs==1.3.1
 requests==2.31.0
 python-dotenv==1.0.1
+
+# 📌 유튜브 업로드를 위한 라이브러리 (2개)
 google-api-python-client==2.123.0
+google-auth-oauthlib==1.2.0 # 🔥 유튜브 접속 통행증! (새로 추가)
