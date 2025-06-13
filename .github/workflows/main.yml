@@ -1,53 +1,71 @@
-# .github/workflows/main.yml (전체 코드)
-
-name: YouTube Automation (수익 창출 봇)
+# .github/workflows/main.yml
+name: YouTube 수익 자동화 봇 🚀
 
 on:
-  workflow_dispatch: # 수동 실행 기능
+  workflow_dispatch: # 수동 실행
 
 jobs:
-  build-and-upload:
+  youtube-automation:
     runs-on: ubuntu-latest
-
+    timeout-minutes: 60
+    
     steps:
-    - name: Checkout code
+    - name: 🔄 코드 체크아웃
       uses: actions/checkout@v4
-
-    - name: Set up Python
+    
+    - name: 🐍 Python 3.10 설정
       uses: actions/setup-python@v4
       with:
         python-version: '3.10'
         cache: 'pip'
-
-    - name: Install System Dependencies for Pillow
+    
+    - name: 🔧 시스템 의존성 설치
       run: |
-        sudo apt-get update
-        sudo apt-get install -y libjpeg-dev zlib1g-dev libfreetype6-dev
-
-    - name: Install Python Dependencies
+        sudo apt-get update -y
+        sudo apt-get install -y \
+          libjpeg-dev \
+          zlib1g-dev \
+          libfreetype6-dev \
+          ffmpeg \
+          imagemagick \
+          fonts-dejavu-core
+        echo "✅ 시스템 의존성 설치 완료"
+    
+    - name: 📦 Python 패키지 설치
       run: |
-        set -e
+        echo "🔄 pip 업그레이드 중..."
         python -m pip install --upgrade pip
+        
+        echo "🔄 requirements.txt 설치 중..."
         pip install -r requirements.txt
-
-    - name: Verify No OpenCV Installation
-      run: |
-        echo "🚫 OpenCV가 설치되지 않았는지 최종 확인합니다..."
-        # 이 단계가 성공해야 합니다. (cv2 모듈이 없어야 함)
-        if python -c "import cv2" 2>/dev/null; then
-          echo "❌ 실패: OpenCV(cv2)가 설치되어 있습니다! 이전 단계를 확인하세요."
-          exit 1
-        else
-          echo "✅ 성공: 좋습니다! OpenCV가 설치되지 않았습니다."
-        fi
-
-    - name: Run YouTube Automation Bot
+        
+        echo "✅ 모든 패키지 설치 완료"
+        
+        echo "🔍 Google 패키지 확인 중..."
+        python -c "import google.generativeai; print('✅ Google Generative AI 정상 설치됨')"
+        python -c "import google.auth; print('✅ Google Auth 정상 설치됨')"
+        python -c "from googleapiclient.discovery import build; print('✅ Google API Client 정상 설치됨')"
+    
+    - name: 🚀 YouTube 자동화 실행
       env:
         OPENAI_KEYS_JSON: ${{ secrets.OPENAI_KEYS_JSON }}
         GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
         PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
         YOUTUBE_OAUTH_CREDENTIALS: ${{ secrets.YOUTUBE_OAUTH_CREDENTIALS }}
+        PYTHONPATH: ${{ github.workspace }}/src
       run: |
-        # src 폴더로 이동하지 않고 바로 실행하여 경로 문제를 없앰
+        echo "🎬 YouTube 자동화 시작..."
+        cd ${{ github.workspace }}
         python src/main.py
+    
+    - name: 📊 실행 결과 업로드
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: automation-logs
+        path: |
+          *.log
+          output/
+          temp/
+        retention-days: 3
