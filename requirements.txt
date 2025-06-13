@@ -1,18 +1,20 @@
-# 📌 필수 버전 명시 (충돌 방지)
+# requirements.txt (전체 코드)
+
+# 📌 필수 버전 명시 (호환성 보장)
 numpy==1.26.0
 gtts==2.4.0
-Pillow==10.3.0  # OpenCV 대체용
+Pillow==10.3.0
 
-# 📌 기존 필수 라이브러리
-openai==1.30.1
-google-api-python-client==2.123.0
-google-generativeai==0.3.2
+# 📌 핵심 라이브러리
 moviepy==1.0.3
 imageio==2.34.1
 imageio-ffmpeg==0.4.9
+
+# 📌 AI 및 API 라이브러리
+openai==1.30.1
+google-generativeai==0.4.1 # 최신 안정 버전으로 업데이트
 elevenlabs==1.3.1
 requests==2.31.0
 python-dotenv==1.0.1
 pexels_api==1.0.1
-
-# ❌ opencv-python 제거! 절대 사용 금지
+google-api-python-client==2.123.0
