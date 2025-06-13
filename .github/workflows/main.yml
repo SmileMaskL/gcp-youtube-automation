@@ -1,53 +1,32 @@
-# .github/workflows/main.yml (전체 코드)
-
-name: YouTube Automation (수익 창출 봇)
+name: YouTube Shorts Automation
 
 on:
-  workflow_dispatch: # 수동 실행 기능
+  workflow_dispatch:
 
 jobs:
-  build-and-upload:
+  build:
     runs-on: ubuntu-latest
-
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-
-    - name: Set up Python
+      
+    - name: Setup Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.10'
-        cache: 'pip'
-
-    - name: Install System Dependencies for Pillow
+        
+    - name: Install dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install -y libjpeg-dev zlib1g-dev libfreetype6-dev
-
-    - name: Install Python Dependencies
-      run: |
-        set -e
-        python -m pip install --upgrade pip
         pip install -r requirements.txt
-
-    - name: Verify No OpenCV Installation
-      run: |
-        echo "🚫 OpenCV가 설치되지 않았는지 최종 확인합니다..."
-        # 이 단계가 성공해야 합니다. (cv2 모듈이 없어야 함)
-        if python -c "import cv2" 2>/dev/null; then
-          echo "❌ 실패: OpenCV(cv2)가 설치되어 있습니다! 이전 단계를 확인하세요."
-          exit 1
-        else
-          echo "✅ 성공: 좋습니다! OpenCV가 설치되지 않았습니다."
-        fi
-
-    - name: Run YouTube Automation Bot
+        sudo apt-get install -y libjpeg-dev zlib1g-dev
+        sudo apt-get install -y ffmpeg
+        
+    - name: Run Automation
       env:
-        OPENAI_KEYS_JSON: ${{ secrets.OPENAI_KEYS_JSON }}
         GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
         PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
         YOUTUBE_OAUTH_CREDENTIALS: ${{ secrets.YOUTUBE_OAUTH_CREDENTIALS }}
       run: |
-        # src 폴더로 이동하지 않고 바로 실행하여 경로 문제를 없앰
+        mkdir -p fonts output
         python src/main.py
