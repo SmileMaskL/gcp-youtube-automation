@@ -34,10 +34,11 @@ def create_video(script: str, topic: str) -> str:
                 font = ImageFont.load_default()
         
         # 텍스트 크기 계산 및 위치 조정
-        text_bbox = draw.textbbox((0, 0), topic, font=font)
-        text_width = text_bbox[2] - text_bbox[0]
-        text_height = text_bbox[3] - text_bbox[1]
-        text_position = ((width - text_width) // 2, (height - text_height) // 2)
+        text_bbox = font.getbbox(topic)  # getbbox()로 변경  
+        text_width = text_bbox[2] - text_bbox[0]  
+        text_height = text_bbox[3] - text_bbox[1]  
+        text_position = ((width - text_width) // 2, (height - text_height) // 2)  
+        draw.text(text_position, topic, font=font, fill=(255, 255, 255))  
         
         draw.text(text_position, topic, font=font, fill=(255, 255, 255))
         
