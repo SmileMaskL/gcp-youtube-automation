@@ -2,6 +2,9 @@
 유틸리티 함수들
 """
 import os
+from elevenlabs.client import ElevenLabs
+import uuid
+import tempfile
 import json
 import logging
 import time
