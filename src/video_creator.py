@@ -3,7 +3,8 @@ import logging
 import requests
 from moviepy.editor import ImageClip, AudioFileClip, concatenate_videoclips, ColorClip
 from PIL import Image, ImageDraw, ImageFont
-from elevenlabs import generate, save, set_api_key
+from elevenlabs.client import ElevenLabs
+from elevenlabs import save, set_api_key
 import numpy as np
 import tempfile
 
@@ -41,12 +42,20 @@ def create_video(script: str, topic: str) -> str:
         # 3. ElevenLabs 음성 생성
         def generate_audio(text):
             try:
-                set_api_key(os.getenv("ELEVENLABS_API_KEY"))
+                eleven_api_key = os.getenv("ELEVENLABS_API_KEY")
+                client = ElevenLabs(api_key=eleven_api_key)
+                
                 voice_id = "uyVNoMrnUku1dZyVEXwD"  # 안나 킴
-                audio = generate(text=text, voice=voice_id)
+                audio = client.generate(
+                    text=text,
+                    voice=voice_id,
+                    model="eleven_multilingual_v2"  # 또는 최신 모델로
+                )
+                
                 with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
-                    save(audio, f.name)
+                    f.write(audio)
                     return f.name
+                    
             except Exception as e:
                 logger.error(f"⚠️ ElevenLabs 오류: {e}. gTTS로 대체")
                 tts = gTTS(text=text, lang='ko', slow=False)
