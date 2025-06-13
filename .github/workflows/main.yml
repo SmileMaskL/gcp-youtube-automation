@@ -27,10 +27,11 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          python -m pip install --upgrade pip setuptools wheel
           pip cache purge
-          pip install --force-reinstall --no-cache-dir -r requirements.txt
-          pip list
+          python -m pip install --upgrade pip==23.1.2
+          pip install wheel  
+          pip install --no-cache-dir --force-reinstall -r requirements.txt
+          pip list | grep -E "numpy|gtts|opencv"  # ✅ 필수 패키지 확인
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v1
