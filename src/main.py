@@ -20,6 +20,10 @@ def load_environment():
             'PEXELS_API_KEY': os.getenv("PEXELS_API_KEY", ""),
             'YOUTUBE_OAUTH_CREDENTIALS': os.getenv("YOUTUBE_OAUTH_CREDENTIALS", "{}")
         })
+        # GEMINI_API_KEY가 비어있을 경우 명시적으로 설정
+        if not os.getenv("GEMINI_API_KEY"):
+            print("ℹ️ GEMINI_API_KEY가 설정되지 않았습니다. Gemini 기능을 사용할 수 없습니다.")
+        
         return True
     except Exception as e:
         print(f"❌ 환경 설정 오류: {e}")
