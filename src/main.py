@@ -11,12 +11,12 @@ class APIKeyManager:
     def __init__(self, project_id="youtube-fully-automated"):
         self.client = secretmanager.SecretManagerServiceClient()
         self.project_id = project_id
-        
+
     def get_secret(self, secret_id):
         name = f"projects/{self.project_id}/secrets/{secret_id}/versions/latest"
         response = self.client.access_secret_version(request={"name": name})
         return response.payload.data.decode("UTF-8")
-    
+
     def get_openai_keys(self):
         try:
             keys_json = self.get_secret("openai-api-keys")
@@ -27,7 +27,7 @@ class APIKeyManager:
         except Exception as e:
             print(f"❌ OpenAI API 키 파싱 실패: {e}")
             return []
-    
+
     def get_other_api_keys(self):
         secrets = {
             "gemini": "gemini-api-key",
@@ -57,7 +57,7 @@ def parse_youtube_credentials(credentials_str):
 def main():
     PROJECT_ID = "youtube-fully-automated"
     api_manager = APIKeyManager(PROJECT_ID)
-    
+
     openai_keys = api_manager.get_openai_keys()
     if not openai_keys:
         print("❌ OpenAI 키가 존재하지 않아 종료합니다.")
@@ -79,7 +79,7 @@ def main():
 
     print("=" * 60)
     print(f"✅ 프로젝트: {PROJECT_ID}")
-    print(f"🔑 OpenAI 키 로드 완료 (총 {len(openai_keys)}개) → 사용: {openai_api_key[:10]}...")
+    print(f"🔑 OpenAI 키 로드 완료 (총 {len(openai_keys)}개) → 사용 키 앞 10글자: {openai_api_key[:10]}...")
     print("🎥 API 키 및 인증 정보 환경변수 설정 완료")
     print("=" * 60)
 
