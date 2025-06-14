@@ -1,27 +1,25 @@
 name: YouTube Automation (수익 창출 봇)
 
 on:
-  workflow_dispatch: # 수동 실행 기능
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3,7,12,18,22 * * *'  # 한국 시간 기준 12시, 16시, 21시, 4시, 8시
 
 jobs:
   build-and-upload:
     runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      id-token: 'write'
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Clear cache
-      run: |
-        sudo rm -rf /usr/local/lib/python*
-        sudo rm -rf /usr/local/bin/python*
-        sudo rm -rf /opt/hostedtoolcache/Python/*
-
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.10'
-        cache: 'pip'  # 캐시 사용 안함
 
     - name: Install System Dependencies
       run: |
@@ -30,18 +28,22 @@ jobs:
           libjpeg-dev \
           zlib1g-dev \
           libfreetype6-dev \
-          ffmpeg
+          ffmpeg \
+          imagemagick
 
     - name: Install Python Dependencies
       run: |
         python -m pip install --upgrade pip
         pip install --no-cache-dir -r requirements.txt
 
-    - name: Verify Dependencies
-      run: |
-        echo "✅ 설치된 패키지 확인:"
-        pip list
-        python -c "import google.generativeai as genai; print('Gemini import 성공!')"
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v1
+      with:
+        workload_identity_provider: 'projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1'
+        service_account: 'github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com'
+
+    - name: Set up Google Cloud SDK
+      uses: google-github-actions/setup-gcloud@v1
 
     - name: Run YouTube Automation Bot
       env:
@@ -49,8 +51,7 @@ jobs:
         PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
         GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         YOUTUBE_OAUTH_CREDENTIALS: ${{ secrets.YOUTUBE_OAUTH_CREDENTIALS }}
+        ELEVENLABS_VOICE_ID: 'uyVNoMrnUku1dZyVEXwD'
       run: |
         mkdir -p temp output
-        python src/utils.py
         python src/main.py
-        
