@@ -15,12 +15,18 @@ from elevenlabs.client import ElevenLabs
 from dotenv import load_dotenv
 import google.generativeai as genai
 
-# 환경 변수 로드
+# ✅ 환경 변수 로드
 load_dotenv()
 
-# 로깅 설정
+# ✅ 로깅 설정
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+# ✅ HEX → RGB 변환 함수
+def hex_to_rgb(hex_color):
+    """HEX 문자열 (#RRGGBB) → RGB 튜플 (R, G, B)"""
+    hex_color = hex_color.lstrip('#')
+    return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
 
 class Config:
     """설정 클래스"""
@@ -108,9 +114,15 @@ def create_simple_video(duration: int = 60) -> str:
     """기본 배경 영상 생성"""
     try:
         Config.ensure_temp_dir()
-        colors = ["#1e3c72", "#2a5298", "#434343", "#000000"]
+        colors = ["#1e3c72", "#2a5298", "#434343", "#000000", (255, 0, 0), (0, 255, 0), (0, 0, 255)]
+        chosen_color = random.choice(colors)
+
+        # ✅ HEX 문자열일 경우 RGB로 변환
+        if isinstance(chosen_color, str):
+            chosen_color = hex_to_rgb(chosen_color)
+
         video_path = Config.TEMP_DIR / f"{uuid.uuid4()}.mp4"
-        clip = ColorClip(size=(Config.SHORTS_WIDTH, Config.SHORTS_HEIGHT), color=random.choice(colors), duration=duration)
+        clip = ColorClip(size=(Config.SHORTS_WIDTH, Config.SHORTS_HEIGHT), color=chosen_color, duration=duration)
         clip.write_videofile(str(video_path), fps=24, logger=None)
         logger.info(f"✅ 기본 영상 생성 완료: {video_path}")
         return str(video_path)
