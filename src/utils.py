@@ -161,11 +161,11 @@ def generate_viral_content(topic: str) -> dict:
           "prompt": "유튜브 쇼츠 콘텐츠를 생성해주세요.",
           "input": {{
             "topic": "{topic}",
-            "requirements": {
+            "requirements": {{
               "title_length": 25,
               "script_length": 300,
               "hashtags": 3
-            }
+            }}
           }}
         }}
         """
