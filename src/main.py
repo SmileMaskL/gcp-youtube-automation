@@ -1,78 +1,92 @@
 import os
 import logging
-import sys
 import time
-from content_generator import generate_content, get_hot_topics
-from video_creator import create_video
+from pathlib import Path
+from utils import (
+    generate_viral_content,
+    text_to_speech,
+    download_video_from_pexels,
+    add_text_to_clip,
+    Config
+)
 from youtube_uploader import upload_video
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(BASE_DIR)
-
+# 로깅 설정
 logging.basicConfig(
-    format='%(asctime)s - %(levelname)s - %(message)s',
     level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler(os.path.join(BASE_DIR, "youtube_shorts.log")),
+        logging.FileHandler("youtube_automation.log"),
         logging.StreamHandler()
     ]
 )
 logger = logging.getLogger(__name__)
 
+def get_hot_topics():
+    """수익형 키워드 자동 생성 (Gemini 활용)"""
+    try:
+        if not Config.GEMINI_API_KEY:
+            return ["돈 버는 방법", "부자 되는 비밀", "주식 투자", "부동산 수익", "온라인 수익 창출"]
+
+        genai.configure(api_key=Config.GEMINI_API_KEY)
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        response = model.generate_content(
+            "2025년 한국에서 가장 인기 있을 5가지 수익형 유튜브 쇼츠 주제를 JSON 배열로 출력해주세요."
+        )
+        return json.loads(response.text.strip("```json").strip())
+    except:
+        return ["부자 되는 습관", "주식 초보 탈출", "월 1000만원 버는 법", "재테크 비법", "유튜브 수익 창출"]
 
 def main():
-    logger.info("=" * 50)
-    logger.info("🎬 유튜브 Shorts 자동 생성 시스템 시작")
-    logger.info("=" * 50)
+    logger.info("="*50)
+    logger.info("💰 유튜브 수익형 자동화 시스템 시작")
+    logger.info("="*50)
 
-    # 1. 실시간 핫이슈 6개 수집
-    topics = get_hot_topics()
-    logger.info(f"📢 오늘의 대한민국 핫이슈 {len(topics)}개: {', '.join(topics)}")
-
-    # 2. 환경 변수 확인
-    required_envs = [
-        "GEMINI_API_KEY",
-        "ELEVENLABS_API_KEY",
-        "PEXELS_API_KEY",
-        "YOUTUBE_OAUTH_CREDENTIALS"]
-    missing = [env for env in required_envs if not os.getenv(env)]
-    if missing:
-        logger.error(f"❌ 필수 환경변수 누락: {', '.join(missing)}")
+    # 필수 환경 변수 확인
+    if not Config.validate():
+        logger.error("❌ 필수 API 키가 설정되지 않았습니다.")
         return
 
-    # 3. 주제별 영상 생성
-    for idx, topic in enumerate(topics):
-        logger.info(f"\n🔥 [{idx + 1}/6] 주제 처리 시작: {topic}")
-        try:
-            # 대본 생성
-            script = generate_content(topic)
-            if not script or len(script) < 20:
-                logger.warning("⚠️ 대본 생성 실패. 다음 주제로 넘어감")
-                continue
+    # 1. 인기 주제 수집
+    topics = get_hot_topics()
+    logger.info(f"🔥 오늘의 수익형 주제: {', '.join(topics)}")
 
-            # 동영상 생성
-            video_path = create_video(script, topic)
-            if not video_path or not os.path.exists(video_path):
-                logger.error("❌ 동영상 생성 실패")
-                continue
+    # 2. 주제별 영상 제작
+    for topic in topics:
+        try:
+            logger.info(f"\n📌 주제 처리 시작: {topic}")
+            
+            # 콘텐츠 생성
+            content = generate_viral_content(topic)
+            if len(content["script"]) < 50:
+                raise ValueError("대본이 너무 짧습니다.")
+
+            # 음성 생성
+            audio_path = text_to_speech(content["script"])
+            
+            # 영상 다운로드
+            video_path = download_video_from_pexels(topic)
+            
+            # 영상 편집
+            final_path = f"output/{uuid.uuid4()}.mp4"
+            add_text_to_clip(video_path, content["title"], final_path)
 
             # 업로드
             upload_video(
-                video_path=video_path,
-                title=f"{topic} 🔥 최신 이슈",
-                description=f"{topic} 관련 최신 정보. #Shorts #한국이슈 #실시간뉴스",
-                tags=["Shorts", "한국이슈", "실시간뉴스", topic],
+                video_path=final_path,
+                title=f"{content['title']} 💰",
+                description=f"{content['script']}\n\n{' '.join(content['hashtags'])}",
+                tags=content["hashtags"],
                 privacy_status="public"
             )
 
-            # 간격 유지
-            time.sleep(10)
+            time.sleep(10)  # API Rate Limit 방지
 
         except Exception as e:
-            logger.error(f"❌ 처리 실패: {str(e)}")
+            logger.error(f"❌ {topic} 처리 실패: {str(e)}")
+            continue
 
-    logger.info("\n✅ 모든 Shorts 생성 및 업로드 완료!")
-
+    logger.info("\n🎉 모든 영상 업로드 완료!")
 
 if __name__ == "__main__":
     main()
