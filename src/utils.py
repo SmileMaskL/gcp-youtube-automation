@@ -48,7 +48,8 @@ def text_to_speech(text: str, output_path: str) -> str:
 
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
         with open(output_path, "wb") as f:
-            f.write(audio)
+            for chunk in audio:  # 제너레이터에서 바이트 청크로 저장
+                f.write(chunk)
         
         logger.info(f"음성 파일 생성 완료: {output_path}")
         return output_path
