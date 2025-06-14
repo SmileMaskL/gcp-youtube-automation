@@ -1,9 +1,6 @@
 """
 유틸리티 함수들 (완전 수정 버전 - 수익 최적화)
 """
-"""
-유틸리티 함수들 (완전 수정 버전 - 수익 최적화)
-"""
 import os
 from elevenlabs.client import ElevenLabs
 import uuid
