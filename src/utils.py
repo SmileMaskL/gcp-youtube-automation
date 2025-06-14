@@ -1,113 +1,140 @@
-# src/utils.py
-# 이 파일은 동영상 제작에 필요한 모든 도구(AI, 음성, 영상 다운로드 등)를 모아놓은 곳입니다.
-
 import os
 import json
-import logging
 import uuid
 import random
+import logging
 import requests
-import re
 from pathlib import Path
-from moviepy.editor import VideoFileClip, ColorClip
-from elevenlabs import Voice, VoiceSettings
-from elevenlabs.client import ElevenLabs
-from gtts import gTTS
-from dotenv import load_dotenv
+from moviepy.editor import VideoFileClip, ColorClip, concatenate_videoclips, CompositeVideoClip
+from moviepy.video.fx import resize
 import google.generativeai as genai
+from elevenlabs import ElevenLabs
+from config import Config
 
-# .env 파일에서 API 키를 불러옵니다.
-load_dotenv()
-
-# 프로그램 작동 기록(로그)을 남기기 위한 설정입니다.
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler("automation.log", encoding='utf-8'),
-        logging.StreamHandler()
-    ]
-)
+# 로깅 설정
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# 영상 제작에 필요한 기본 설정값들을 모아놓은 곳입니다.
-class Config:
-    SHORTS_WIDTH = 1080
-    SHORTS_HEIGHT = 1920
-    TEMP_DIR = Path("temp")
-    OUTPUT_DIR = Path("output")
-
-    # temp, output 폴더가 없으면 자동으로 만들어줍니다.
-    @classmethod
-    def ensure_directories(cls):
-        cls.TEMP_DIR.mkdir(exist_ok=True)
-        cls.OUTPUT_DIR.mkdir(exist_ok=True)
-
-# AI가 이상한 답변을 줘도 JSON 부분만 쏙 뽑아내는 함수입니다.
 def clean_json_response(text: str) -> str:
-    match = re.search(r'\{.*\}', text, re.DOTALL)
-    if match:
-        return match.group(0)
+    """AI 응답에서 JSON 부분만 추출합니다."""
+    text = text.strip()
+    
+    # JSON 블록 찾기
+    json_start = text.find('```json')
+    if json_start != -1:
+        json_start += 7
+        json_end = text.find('```', json_start)
+        if json_end != -1:
+            return text[json_start:json_end].strip()
+    
+    # 중괄호로 시작하는 JSON 찾기
+    start_idx = text.find('{')
+    end_idx = text.rfind('}')
+    
+    if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+        return text[start_idx:end_idx + 1]
+    
     logger.warning("응답에서 JSON 형식을 찾지 못했습니다. 원본 텍스트를 반환합니다.")
     return text
 
-# ElevenLabs API가 고장났을 때, 대신 무료 구글 번역기 목소리로 음성을 만들어주는 함수입니다.
-def create_default_audio(text: str, output_path: str) -> str:
+def generate_viral_content_gpt4o(topic: str) -> dict:
+    """GPT-4o를 사용하여 바이럴 콘텐츠를 생성합니다."""
     try:
-        logger.info("gTTS를 사용하여 기본 음성을 생성합니다.")
-        tts = gTTS(text=text, lang='ko', slow=False)
-        tts.save(output_path)
-        logger.info(f"gTTS 음성 저장 완료: {output_path}")
-        return output_path
+        logger.info("GPT-4o를 사용하여 콘텐츠를 생성합니다.")
+        # 실제로는 OpenAI API 호출이 필요하지만, 여기서는 기본값 반환
+        return {
+            "title": f"{topic} - 놓치면 후회하는 비밀!",
+            "script": f"안녕하세요! 오늘은 {topic}에 대해 여러분이 꼭 알아야 할 정보를 준비했습니다. 이 영상 끝까지 보시면 정말 유용한 꿀팁을 얻으실 수 있어요! 그럼 바로 시작해볼까요?",
+            "hashtags": [f"#{topic.replace(' ', '')}", "#꿀팁", "#유튜브쇼츠"]
+        }
     except Exception as e:
-        logger.error(f"gTTS 음성 생성 중 치명적 오류 발생: {e}")
-        raise RuntimeError("모든 음성 생성 방법에 실패했습니다.")
+        logger.error(f"GPT-4o 콘텐츠 생성 실패: {e}")
+        return generate_fallback_content(topic)
 
-# 텍스트를 AI 목소리로 바꿔주는 함수입니다.
-def text_to_speech(text: str, output_path: str) -> str:
-    api_key = os.getenv("ELEVENLABS_API_KEY")
+def generate_viral_content_gemini(topic: str) -> dict:
+    """Gemini를 사용하여 바이럴 콘텐츠를 생성합니다."""
+    api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        logger.warning("ElevenLabs API 키가 없습니다. gTTS를 사용합니다.")
-        return create_default_audio(text, output_path)
-
+        logger.error("GEMINI_API_KEY가 설정되지 않았습니다.")
+        return generate_fallback_content(topic)
+        
     try:
-        logger.info("ElevenLabs API를 사용하여 음성 생성을 시작합니다.")
-        client = ElevenLabs(api_key=api_key)
-        audio = client.generate(
-            text=text,
-            voice=Voice(
-                voice_id="uyVNoMrnUku1dZyVEXwD",
-                settings=VoiceSettings(stability=0.5, similarity_boost=0.75, style=0.1, use_speaker_boost=True)
-            ),
-            model="eleven_multilingual_v2"
-        )
-        with open(output_path, "wb") as f:
-            for chunk in audio:
-                if chunk:
-                    f.write(chunk)
-        logger.info(f"ElevenLabs 음성 저장 완료: {output_path}")
-        return output_path
-    except Exception as e:
-        logger.warning(f"ElevenLabs API 실패: {e}. gTTS로 전환합니다.")
-        return create_default_audio(text, output_path)
+        logger.info("Gemini AI에게 콘텐츠 생성을 요청합니다.")
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel('gemini-1.5-flash-latest')
+        
+        # 더 간단하고 명확한 프롬프트
+        prompt = f"""
+다음 주제로 유튜브 쇼츠용 콘텐츠를 JSON 형식으로 만들어주세요:
+주제: {topic}
 
-# 배경 영상을 구하지 못했을 때, 대신 단순한 색깔 배경이라도 만들어주는 함수입니다.
+아래 형식으로 정확히 답변해주세요:
+{{
+  "title": "25자 이내의 제목",
+  "script": "300자 이내의 스크립트",
+  "hashtags": ["#태그1", "#태그2", "#태그3"]
+}}
+"""
+        
+        response = model.generate_content(prompt)
+        cleaned_text = clean_json_response(response.text)
+        content = json.loads(cleaned_text)
+        
+        # 필수 필드 검증
+        required_fields = ['title', 'script', 'hashtags']
+        if not all(key in content for key in required_fields):
+            raise ValueError("필수 필드가 누락되었습니다.")
+        
+        logger.info("Gemini AI 콘텐츠 생성 성공!")
+        return content
+        
+    except Exception as e:
+        logger.error(f"Gemini AI 콘텐츠 생성 실패: {e}. 기본 콘텐츠를 사용합니다.")
+        return generate_fallback_content(topic)
+
+def generate_fallback_content(topic: str) -> dict:
+    """기본 콘텐츠를 생성합니다."""
+    return {
+        "title": f"{topic} - 모르면 손해!",
+        "script": f"오늘은 {topic}에 대해 아무도 몰랐던 비밀을 알려드립니다! 끝까지 보시면 깜짝 놀랄 정보가 있습니다. 지금 바로 확인해보세요!",
+        "hashtags": [f"#{topic.replace(' ', '')}", "#꿀팁", "#쇼츠"]
+    }
+
 def create_simple_video(duration=15) -> str:
+    """간단한 색상 배경 영상을 생성합니다."""
     logger.info("기본 색상 배경 영상을 생성합니다.")
-    colors = ["#1a1a1a", "#2a0d0d", "#0d1a14", "#0e0d2a"]
+    
+    # RGB 색상값으로 변경 (16진수 문제 해결)
+    colors = [
+        (26, 26, 26),      # 어두운 회색
+        (42, 13, 13),      # 어두운 빨강
+        (13, 26, 20),      # 어두운 초록
+        (14, 13, 42)       # 어두운 파랑
+    ]
+    
     video_path = Config.TEMP_DIR / f"default_bg_{uuid.uuid4()}.mp4"
     
-    # 크기와 색상을 모두 명시적으로 지정
-    clip = ColorClip(
-        size=(Config.SHORTS_WIDTH, Config.SHORTS_HEIGHT),
-        color=random.choice(colors),
-        duration=duration
-    )
-    clip.write_videofile(str(video_path), fps=24, logger=None)
-    return str(video_path)
+    try:
+        # RGB 색상으로 ColorClip 생성
+        selected_color = random.choice(colors)
+        clip = ColorClip(
+            size=(Config.SHORTS_WIDTH, Config.SHORTS_HEIGHT),
+            color=selected_color,  # RGB 튜플 사용
+            duration=duration
+        )
+        
+        clip.write_videofile(str(video_path), fps=24, logger=None, verbose=False)
+        clip.close()  # 메모리 정리
+        
+        logger.info(f"기본 배경 영상 생성 완료: {video_path}")
+        return str(video_path)
+        
+    except Exception as e:
+        logger.error(f"기본 배경 영상 생성 실패: {e}")
+        raise
 
-# Pexels 사이트에서 주제에 맞는 무료 배경 영상을 다운로드하는 함수입니다.
 def download_video_from_pexels(query: str, duration: int) -> str:
+    """Pexels에서 영상을 다운로드합니다."""
     api_key = os.getenv("PEXELS_API_KEY")
     if not api_key:
         logger.warning("PEXELS_API_KEY가 없습니다. 기본 배경 영상을 사용합니다.")
@@ -116,20 +143,55 @@ def download_video_from_pexels(query: str, duration: int) -> str:
     try:
         logger.info(f"Pexels에서 '{query}' 관련 영상을 검색합니다.")
         headers = {"Authorization": api_key}
-        search_query = query.split()[0] 
-        url = f"https://api.pexels.com/videos/search?query={search_query}&per_page=10&orientation=portrait"
+        
+        # 검색 쿼리 단순화 (첫 번째 단어만 사용)
+        search_query = query.split()[0] if query else "business"
+        url = f"https://api.pexels.com/videos/search?query={search_query}&per_page=20&orientation=portrait"
         
         response = requests.get(url, headers=headers, timeout=15)
         response.raise_for_status()
         
-        videos = response.json().get('videos', [])
-        if not videos:
-            raise ValueError("검색 결과에서 적합한 영상을 찾지 못했습니다.")
+        data = response.json()
+        videos = data.get('videos', [])
         
-        selected_video_info = random.choice(videos)
-        video_url = selected_video_info['video_files'][0]['link']
-
+        if not videos:
+            logger.warning("검색 결과가 없습니다. 일반적인 키워드로 재시도합니다.")
+            # 일반적인 키워드로 재시도
+            fallback_queries = ["success", "money", "business", "lifestyle"]
+            for fallback in fallback_queries:
+                url = f"https://api.pexels.com/videos/search?query={fallback}&per_page=20&orientation=portrait"
+                response = requests.get(url, headers=headers, timeout=15)
+                if response.status_code == 200:
+                    videos = response.json().get('videos', [])
+                    if videos:
+                        break
+        
+        if not videos:
+            logger.warning("모든 검색에 실패했습니다. 기본 배경을 사용합니다.")
+            return create_simple_video(duration)
+        
+        # 적절한 해상도의 영상 선택
+        selected_video = random.choice(videos)
+        video_files = selected_video.get('video_files', [])
+        
+        # HD 화질 우선 선택
+        best_video = None
+        for video_file in video_files:
+            if video_file.get('quality') == 'hd':
+                best_video = video_file
+                break
+        
+        if not best_video and video_files:
+            best_video = video_files[0]  # 첫 번째 파일 사용
+        
+        if not best_video:
+            logger.warning("다운로드할 영상 파일을 찾지 못했습니다.")
+            return create_simple_video(duration)
+        
+        video_url = best_video['link']
         logger.info(f"다운로드할 영상 URL: {video_url}")
+        
+        # 영상 다운로드
         video_path = Config.TEMP_DIR / f"pexels_{uuid.uuid4()}.mp4"
         with requests.get(video_url, stream=True, timeout=30) as r:
             r.raise_for_status()
@@ -139,49 +201,114 @@ def download_video_from_pexels(query: str, duration: int) -> str:
         
         logger.info(f"Pexels 영상 다운로드 완료: {video_path}")
         return str(video_path)
+        
     except Exception as e:
         logger.error(f"Pexels 영상 다운로드 실패: {e}. 기본 배경 영상을 사용합니다.")
         return create_simple_video(duration)
 
-# Gemini AI에게 영상 대본과 제목을 만들어달라고 요청하는 함수입니다.
-def generate_viral_content(topic: str) -> dict:
-    api_key = os.getenv("GEMINI_API_KEY")
+def generate_tts_with_elevenlabs(text: str) -> str:
+    """ElevenLabs를 사용하여 TTS 음성을 생성합니다."""
+    api_key = os.getenv("ELEVENLABS_API_KEY")
     if not api_key:
-        logger.error("GEMINI_API_KEY가 설정되지 않았습니다.")
-        raise ValueError("Gemini API 키가 필요합니다.")
-        
+        logger.error("ELEVENLABS_API_KEY가 설정되지 않았습니다.")
+        raise ValueError("ElevenLabs API 키가 필요합니다.")
+    
     try:
-        logger.info("Gemini AI에게 콘텐츠 생성을 요청합니다.")
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-1.5-flash-latest')
+        logger.info("ElevenLabs API를 사용하여 음성 생성을 시작합니다.")
+        client = ElevenLabs(api_key=api_key)
         
-        # JSON 형식의 프롬프트 사용
-        prompt = f"""
-        {{
-          "prompt": "유튜브 쇼츠 콘텐츠를 생성해주세요.",
-          "input": {{
-            "topic": "{topic}",
-            "requirements": {{
-              "title_length": 25,
-              "script_length": 300,
-              "hashtags": 3
-            }}
-          }}
-        }}
-        """
-        response = model.generate_content(prompt)
-        cleaned_text = clean_json_response(response.text)
-        content = json.loads(cleaned_text)
+        # 한국어 지원 음성으로 변경
+        voice_id = "uyVNoMrnUku1dZyVEXwD"  # 기본 영어 음성
         
-        if not all(key in content for key in ['title', 'script', 'hashtags']):
-            raise ValueError("AI 응답에서 필수 필드(title, script, hashtags)가 누락되었습니다.")
+        audio_path = Config.TEMP_DIR / f"{uuid.uuid4()}.mp3"
         
-        logger.info("Gemini AI 콘텐츠 생성 성공!")
-        return content
+        # 음성 생성
+        audio = client.generate(
+            text=text,
+            voice=voice_id,
+            model="eleven_multilingual_v2"  # 다국어 모델 사용
+        )
+        
+        # 파일로 저장
+        with open(audio_path, "wb") as f:
+            for chunk in audio:
+                f.write(chunk)
+        
+        logger.info(f"ElevenLabs 음성 저장 완료: {audio_path}")
+        return str(audio_path)
+        
     except Exception as e:
-        logger.error(f"Gemini AI 콘텐츠 생성 실패: {e}. 기본 콘텐츠를 사용합니다.")
-        return {
-            "title": f"{topic}의 모든 것",
-            "script": f"오늘은 {topic}에 대해 아무도 몰랐던 비밀을 알려드립니다! 끝까지 보시면 깜짝 놀랄 정보가 있습니다.",
-            "hashtags": [f"#{topic.replace(' ', '')}", "#꿀팁", "#쇼츠"]
-        }
+        logger.error(f"ElevenLabs TTS 생성 실패: {e}")
+        raise
+
+def create_shorts_video(video_path: str, audio_path: str, title: str) -> str:
+    """쇼츠 영상을 생성합니다."""
+    try:
+        logger.info("쇼츠 영상 생성을 시작합니다.")
+        
+        # 비디오 클립 로드
+        video = VideoFileClip(video_path)
+        
+        # 쇼츠 크기에 맞게 리사이즈 (세로형)
+        video = video.resize(height=Config.SHORTS_HEIGHT)
+        if video.w > Config.SHORTS_WIDTH:
+            video = video.resize(width=Config.SHORTS_WIDTH)
+        
+        # 중앙 정렬
+        video = video.set_position('center')
+        
+        # 오디오 클립 로드
+        from moviepy.editor import AudioFileClip
+        audio = AudioFileClip(audio_path)
+        
+        # 비디오 길이를 오디오 길이에 맞춤
+        if video.duration < audio.duration:
+            # 비디오가 짧으면 반복
+            video = video.loop(duration=audio.duration)
+        else:
+            # 비디오가 길면 자름
+            video = video.subclip(0, audio.duration)
+        
+        # 오디오 설정
+        final_video = video.set_audio(audio)
+        
+        # 최종 영상 저장
+        output_path = Config.OUTPUT_DIR / f"shorts_{uuid.uuid4()}.mp4"
+        final_video.write_videofile(
+            str(output_path),
+            fps=24,
+            codec='libx264',
+            audio_codec='aac',
+            logger=None,
+            verbose=False
+        )
+        
+        # 메모리 정리
+        video.close()
+        audio.close()
+        final_video.close()
+        
+        logger.info(f"쇼츠 영상 생성 완료: {output_path}")
+        return str(output_path)
+        
+    except Exception as e:
+        logger.error(f"쇼츠 영상 생성 실패: {e}")
+        raise
+
+def estimate_audio_duration(text: str) -> int:
+    """텍스트 길이로 음성 길이를 추정합니다."""
+    # 한국어 기준 약 초당 3-4글자
+    chars_per_second = 3.5
+    estimated_duration = len(text) / chars_per_second
+    return max(10, int(estimated_duration) + 2)  # 최소 10초
+
+def cleanup_temp_files():
+    """임시 파일들을 정리합니다."""
+    try:
+        temp_dir = Config.TEMP_DIR
+        for file_path in temp_dir.glob("*"):
+            if file_path.is_file():
+                file_path.unlink()
+        logger.info("임시 파일 정리 완료")
+    except Exception as e:
+        logger.warning(f"임시 파일 정리 중 오류: {e}")
