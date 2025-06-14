@@ -215,7 +215,12 @@ def generate_tts_with_elevenlabs(text: str) -> str:
     
     try:
         logger.info("ElevenLabs API를 사용하여 음성 생성을 시작합니다.")
-        client = ElevenLabs(api_key=api_key)
+        set_api_key(api_key)  # 먼저 API 키 설정
+        audio = generate(
+            text=text,
+            voice=voice_id,
+            model="eleven_multilingual_v2"
+        )
         
         # 한국어 지원 음성으로 변경
         voice_id = "uyVNoMrnUku1dZyVEXwD"  # 기본 영어 음성
