@@ -2,67 +2,67 @@
 실시간 트렌딩 콘텐츠 생성기 (무료 API 버전)
 """
 
+import os
 import requests
 import logging
 import random
-from datetime import datetime
-from bs4 import BeautifulSoup
-from utils import Config
+import json
 
 logger = logging.getLogger(__name__)
 
-# 무료 트렌드 API 목록
-TREND_APIS = [
-    {
-        "name": "Google Trends",
-        "url": "https://trends.google.com/trends/api/dailytrends?geo=KR",
-        "parse": lambda data: [trend["title"] for trend in data["default"]["trendingSearchesDays"][0]["trendingSearches"]]
-    },
-    {
-        "name": "Daum 실검",
-        "url": "https://www.daum.net",
-        "parse": lambda soup: [a.text for a in soup.select('.list_mini .rank_cont > .link_issue')[:10]]
-    }
-]
-
 def get_hot_topics():
-    """실시간 인기 주제 수집 (에러 방지 버전)"""
-    for api in TREND_APIS:
-        try:
-            if api["name"] == "Daum 실검":
-                response = requests.get(api["url"], headers={"User-Agent": "Mozilla/5.0"})
-                soup = BeautifulSoup(response.text, 'html.parser')
-                topics = api["parse"](soup)
-            else:
-                response = requests.get(api["url"], timeout=5)
-                data = json.loads(response.text[5:])  # Google Trends는 특이한 형식
-                topics = api["parse"](data)
-                
+    """실시간 인기 주제 수집"""
+    try:
+        # 1. 뉴스 API 시도
+        news_api_key = os.getenv("NEWS_API_KEY")
+        if news_api_key:
+            url = f"https://newsapi.org/v2/top-headlines?country=kr&apiKey={news_api_key}"
+            response = requests.get(url, timeout=5)
+            data = response.json()
+            topics = [article['title'] for article in data.get('articles', [])[:5]]
             if topics:
-                logger.info(f"{api['name']}에서 {len(topics)}개 주제 수집")
-                return topics[:5]  # 상위 5개만
-                
-        except Exception as e:
-            logger.warning(f"{api['name']} 오류: {e}")
-            continue
-            
-    # 모두 실패 시 기본 주제
-    money_topics = [
+                return topics
+    except Exception as e:
+        logger.warning(f"뉴스 API 오류: {e}")
+
+    # 2. 기본 주제 리턴
+    return [
         "주식 투자 전략",
         "부업으로 월 100만원 버는 법",
         "암호화폐 최신 동향",
         "재테크 성공 비결",
         "온라인 수익 창출"
     ]
-    logger.warning("API 실패로 기본 주제 사용")
-    return money_topics
 
 def generate_content(topic: str) -> str:
-    """AI로 콘텐츠 생성 (무료 버전)"""
+    """AI로 콘텐츠 생성"""
     try:
-        from utils import generate_viral_content
-        content = generate_viral_content(topic)
-        return content["script"]
+        # Gemini API 키 확인
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            logger.error("GEMINI_API_KEY가 설정되지 않았습니다.")
+            return default_content(topic)
+            
+        import google.generativeai as genai
+        genai.configure(api_key=api_key)
+        
+        model = genai.GenerativeModel('gemini-pro')
+        response = model.generate_content(
+            f"'{topic}'에 대한 30초 YouTube Shorts 대본을 한국어로 작성해주세요. "
+            "첫 문장은 강렬한 훅 문장으로 시작하고, 2-3가지 핵심 내용을 간결하게 설명한 후 "
+            "시청자 참여를 유도하는 문구로 마무리해주세요."
+        )
+        
+        return response.text
     except Exception as e:
         logger.error(f"콘텐츠 생성 실패: {e}")
-        return f"{topic}에 대한 최신 정보입니다. 놀라운 내용을 확인해보세요!"
+        return default_content(topic)
+
+def default_content(topic: str) -> str:
+    """기본 콘텐츠 생성"""
+    return (
+        f"여러분은 {topic}에 대해 얼마나 알고 있나요? "
+        "오늘은 대부분이 모르는 3가지 비밀을 알려드리겠습니다. "
+        "첫째,... 둘째,... 마지막으로 가장 중요한 셋째는... "
+        "유용했다면 구독과 좋아요 부탁드립니다!"
+    )
