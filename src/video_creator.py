@@ -35,7 +35,7 @@ def create_video(script, topic):
 
         video = VideoFileClip(background_video).subclip(0, AudioFileClip(audio_path).duration)
         video = video.set_audio(AudioFileClip(audio_path))
-        video = add_text_to_clip(video, sentence)
+        video = add_text_to_clip(video.filename, sentence, "temp_text.mp4")  # 수정된 부분
         clips.append(video)
 
     if not clips:
