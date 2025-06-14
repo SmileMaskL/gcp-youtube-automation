@@ -7,7 +7,6 @@ import requests
 import logging
 import random
 import json
-import re
 
 os.environ['IMAGEMAGICK_BINARY'] = '/usr/bin/convert'  # ImageMagick 경로 지정
 from moviepy.editor import TextClip, CompositeVideoClip, VideoFileClip, concatenate_videoclips
