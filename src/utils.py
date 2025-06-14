@@ -1,6 +1,7 @@
 """
 유틸리티 함수들 (완전 수정 버전 - 수익 최적화)
 """
+
 import os
 from elevenlabs.client import ElevenLabs
 import uuid
@@ -66,9 +67,7 @@ def text_to_speech(text: str) -> str:
     try:
         client = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
         audio = client.generate(
-            text=text,
-            voice="Rachel",
-            model="eleven_multilingual_v2"
+            text=text, voice="Rachel", model="eleven_multilingual_v2"
         )
 
         temp_path = os.path.join(tempfile.gettempdir(), f"{uuid.uuid4()}.mp3")
@@ -87,10 +86,21 @@ def text_to_speech(text: str) -> str:
 def generate_trending_content() -> Dict[str, Any]:
     """수익 최적화를 위한 트렌딩 콘텐츠 생성"""
     trending_topics = [
-        "AI 기술 혁신", "암호화폐 투자", "부동산 투자", "주식 투자",
-        "온라인 비즈니스", "디지털 마케팅", "유튜브 수익화", "블로그 수익화",
-        "스타트업 창업", "사이드 프로젝트", "재테크", "경제 뉴스",
-        "기술 트렌드", "미래 전망", "성공 스토리"
+        "AI 기술 혁신",
+        "암호화폐 투자",
+        "부동산 투자",
+        "주식 투자",
+        "온라인 비즈니스",
+        "디지털 마케팅",
+        "유튜브 수익화",
+        "블로그 수익화",
+        "스타트업 창업",
+        "사이드 프로젝트",
+        "재테크",
+        "경제 뉴스",
+        "기술 트렌드",
+        "미래 전망",
+        "성공 스토리",
     ]
 
     topic = random.choice(trending_topics)
@@ -103,7 +113,7 @@ def generate_trending_content() -> Dict[str, Any]:
             "title": content["title"],
             "script": content["script"],
             "keywords": content["keywords"],
-            "hashtags": content["hashtags"]
+            "hashtags": content["hashtags"],
         }
     except Exception as e:
         logger.error(f"AI 콘텐츠 생성 실패: {e}")
@@ -143,10 +153,12 @@ def generate_ai_content(topic: str) -> Dict[str, Any]:
                 model="gpt-4o",
                 messages=[
                     {"role": "system", "content": "유튜브 쇼츠 콘텐츠 전문가입니다."},
-                    {"role": "user",
-                     "content": f"'{topic}' 주제로 유튜브 쇼츠 콘텐츠를 JSON 형식으로 만들어주세요."}
+                    {
+                        "role": "user",
+                        "content": f"'{topic}' 주제로 유튜브 쇼츠 콘텐츠를 JSON 형식으로 만들어주세요.",
+                    },
                 ],
-                max_tokens=500
+                max_tokens=500,
             )
 
             content = json.loads(response.choices[0].message.content)
@@ -163,12 +175,7 @@ def get_fallback_content(topic: str) -> Dict[str, Any]:
         "topic": topic,
         "title": f"{topic}에 대한 놀라운 사실!",
         "script": f"오늘은 {topic}에 대해 알아보겠습니다. 이 분야는 현재 매우 주목받고 있으며, 많은 기회가 있습니다. 여러분도 이 기회를 놓치지 마세요!",
-        "keywords": [
-            topic,
-            "투자",
-            "수익",
-            "기회",
-            "성공"],
+        "keywords": [topic, "투자", "수익", "기회", "성공"],
         "hashtags": [
             "#투자",
             "#수익",
@@ -179,7 +186,9 @@ def get_fallback_content(topic: str) -> Dict[str, Any]:
             "#부업",
             "#사업",
             "#창업",
-            "#미래"]}
+            "#미래",
+        ],
+    }
 
 
 def download_video_from_pexels(query: str = None) -> str:
@@ -198,7 +207,8 @@ def download_video_from_pexels(query: str = None) -> str:
             "future",
             "growth",
             "investment",
-            "digital"]
+            "digital",
+        ]
         search_query = query or random.choice(trending_queries)
 
         headers = {"Authorization": api_key}
@@ -214,8 +224,10 @@ def download_video_from_pexels(query: str = None) -> str:
             # 비디오 다운로드
             video_response = requests.get(video_url)
             temp_path = os.path.join(
-                tempfile.gettempdir(), f"{
-                    uuid.uuid4()}.mp4")
+                tempfile.gettempdir(),
+                f"{
+                    uuid.uuid4()}.mp4",
+            )
 
             with open(temp_path, "wb") as f:
                 f.write(video_response.content)
@@ -233,13 +245,7 @@ def create_simple_video() -> str:
     """간단한 비디오 생성 (백업용)"""
     try:
         # 컬러풀한 배경 비디오 생성
-        colors = [
-            "#FF6B6B",
-            "#4ECDC4",
-            "#45B7D1",
-            "#96CEB4",
-            "#FFEAA7",
-            "#DDA0DD"]
+        colors = ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#DDA0DD"]
         color = random.choice(colors)
 
         clip = ColorClip(size=(1080, 1920), color=color, duration=60)
@@ -258,16 +264,20 @@ def add_text_to_clip(video_path: str, text: str, output_path: str) -> str:
         video = VideoFileClip(video_path)
 
         # 텍스트 스타일 (수익 최적화)
-        txt_clip = TextClip(
-            text,
-            fontsize=60,
-            color='white',
-            font='Arial-Bold',
-            stroke_color='black',
-            stroke_width=3,
-            method='caption',
-            size=(video.w * 0.8, None)
-        ).set_position('center').set_duration(video.duration)
+        txt_clip = (
+            TextClip(
+                text,
+                fontsize=60,
+                color='white',
+                font='Arial-Bold',
+                stroke_color='black',
+                stroke_width=3,
+                method='caption',
+                size=(video.w * 0.8, None),
+            )
+            .set_position('center')
+            .set_duration(video.duration)
+        )
 
         # 텍스트를 비디오에 합성
         final_video = CompositeVideoClip([video, txt_clip])
@@ -292,21 +302,35 @@ def optimize_for_revenue() -> Dict[str, Any]:
         "upload_schedule": "daily",  # 매일 업로드
         "best_times": ["09:00", "12:00", "18:00", "21:00"],  # 최적 업로드 시간
         "content_types": [
-            "투자 팁", "부업 아이디어", "성공 스토리", "기술 트렌드",
-            "경제 뉴스", "재테크", "창업 아이디어", "온라인 비즈니스"
+            "투자 팁",
+            "부업 아이디어",
+            "성공 스토리",
+            "기술 트렌드",
+            "경제 뉴스",
+            "재테크",
+            "창업 아이디어",
+            "온라인 비즈니스",
         ],
         "monetization": {
             "enable_ads": True,
             "enable_memberships": True,
             "enable_super_chat": True,
-            "enable_super_thanks": True
+            "enable_super_thanks": True,
         },
         "seo_optimization": {
             "trending_keywords": [
-                "돈 버는 방법", "투자", "부업", "재테크", "성공",
-                "AI", "기술", "미래", "창업", "비즈니스"
+                "돈 버는 방법",
+                "투자",
+                "부업",
+                "재테크",
+                "성공",
+                "AI",
+                "기술",
+                "미래",
+                "창업",
+                "비즈니스",
             ]
-        }
+        },
     }
 
 
@@ -344,25 +368,18 @@ class ConfigManager:
                 "fps": 30,
                 "bitrate": "5000k",
                 "format": "mp4",
-                "duration": 60  # 쇼츠 최적 길이
+                "duration": 60,  # 쇼츠 최적 길이
             },
-            "audio": {
-                "bitrate": "128k",
-                "sample_rate": 44100
-            },
+            "audio": {"bitrate": "128k", "sample_rate": 44100},
             "upload": {
                 "auto_upload": True,
                 "privacy": "public",  # 수익을 위해 공개
                 "category": "22",  # People & Blogs
                 "schedule": "daily",
-                "times": ["09:00", "18:00"]
+                "times": ["09:00", "18:00"],
             },
             "revenue": optimize_for_revenue(),
-            "cleanup": {
-                "auto_cleanup": True,
-                "max_age_days": 7,
-                "max_size_gb": 3
-            }
+            "cleanup": {"auto_cleanup": True, "max_age_days": 7, "max_size_gb": 3},
         }
 
     def get(self, key: str, default: Any = None) -> Any:
@@ -400,8 +417,9 @@ class RateLimiter:
         """호출 가능 여부 확인"""
         now = time.time()
         # 시간 윈도우 내의 호출만 유지
-        self.calls = [call_time for call_time in self.calls
-                      if now - call_time < self.time_window]
+        self.calls = [
+            call_time for call_time in self.calls if now - call_time < self.time_window
+        ]
         return len(self.calls) < self.max_calls
 
     def make_call(self) -> None:
@@ -425,10 +443,8 @@ class APIClient:
     """API 클라이언트 기본 클래스"""
 
     def __init__(
-            self,
-            base_url: str,
-            api_key: str = None,
-            rate_limit: RateLimiter = None):
+        self, base_url: str, api_key: str = None, rate_limit: RateLimiter = None
+    ):
         self.base_url = base_url.rstrip('/')
         self.api_key = api_key
         self.rate_limiter = rate_limit or RateLimiter()
@@ -437,18 +453,15 @@ class APIClient:
         if api_key:
             self.session.headers.update({'Authorization': f'Bearer {api_key}'})
 
-    def make_request(
-            self,
-            method: str,
-            endpoint: str,
-            **kwargs) -> requests.Response:
+    def make_request(self, method: str, endpoint: str, **kwargs) -> requests.Response:
         """API 요청 실행"""
         # Rate limiting
         if not self.rate_limiter.can_make_call():
             wait_time = self.rate_limiter.wait_time()
             logger.info(
                 f"Rate limit reached. Waiting {
-                    wait_time:.2f} seconds...")
+                    wait_time:.2f} seconds..."
+            )
             time.sleep(wait_time)
 
         self.rate_limiter.make_call()
@@ -503,10 +516,7 @@ class CacheManager:
         """데이터를 캐시에 저장"""
         cache_file = self.get_cache_path(key)
 
-        cache_data = {
-            'timestamp': datetime.now().isoformat(),
-            'data': data
-        }
+        cache_data = {'timestamp': datetime.now().isoformat(), 'data': data}
 
         try:
             with open(cache_file, 'w', encoding='utf-8') as f:
@@ -557,6 +567,7 @@ def format_filesize(size_bytes: int) -> str:
 
 def retry_on_failure(max_retries: int = 3, delay: float = 1.0):
     """재시도 데코레이터"""
+
     def decorator(func):
         def wrapper(*args, **kwargs):
             last_exception = None
@@ -568,11 +579,14 @@ def retry_on_failure(max_retries: int = 3, delay: float = 1.0):
                     if attempt < max_retries - 1:
                         logger.warning(
                             f"시도 {
-                                attempt + 1}/{max_retries} 실패. {delay}초 후 재시도... ({e})")
+                                attempt + 1}/{max_retries} 실패. {delay}초 후 재시도... ({e})"
+                        )
                         time.sleep(delay)
             logger.error(f"{func.__name__} 실패: 최대 재시도 횟수 초과.")
             raise last_exception
+
         return wrapper
+
     return decorator
 
 
