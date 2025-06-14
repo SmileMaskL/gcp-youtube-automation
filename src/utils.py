@@ -87,7 +87,6 @@ def text_to_speech(text: str) -> str:
         silent_audio.write_audiofile(temp_path, logger=None)
         return temp_path
 
-
 def generate_trending_content() -> Dict[str, Any]:
     """수익 최적화를 위한 트렌딩 콘텐츠 생성"""
     trending_topics = [
