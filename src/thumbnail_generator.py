@@ -3,25 +3,31 @@ import requests
 import os
 from pathlib import Path
 import random
+import logging
+
+# 로거 설정 추가
+logger = logging.getLogger(__name__)
 
 def generate_thumbnail(topic: str) -> str:
     """썸네일 이미지 생성"""
     try:
         # 1. Pexels에서 이미지 다운로드
         api_key = os.getenv("PEXELS_API_KEY")
-        if api_key:
-            headers = {"Authorization": api_key}
-            url = f"https://api.pexels.com/v1/search?query={topic}&per_page=1"
-            response = requests.get(url, headers=headers, timeout=10)
+        if not api_key:
+            logger.warning("PEXELS_API_KEY가 없습니다. 기본 배경 사용")
+            return create_default_thumbnail(topic)
             
-            if response.status_code == 200 and response.json().get('photos'):
-                photo = response.json()['photos'][0]
-                img_url = photo['src']['original']
-                img_content = requests.get(img_url).content
-            else:
-                raise ValueError("Pexels에서 이미지를 가져오지 못함")
-        else:
-            raise ValueError("PEXELS_API_KEY가 없음")
+        headers = {"Authorization": api_key}
+        url = f"https://api.pexels.com/v1/search?query={topic}&per_page=1"
+        response = requests.get(url, headers=headers, timeout=10)
+        
+        if response.status_code != 200 or not response.json().get('photos'):
+            logger.warning("Pexels에서 이미지를 가져오지 못함. 기본 배경 사용")
+            return create_default_thumbnail(topic)
+            
+        photo = response.json()['photos'][0]
+        img_url = photo['src']['original']
+        img_content = requests.get(img_url).content
             
         # 2. 임시 파일 저장
         temp_dir = Path("temp")
@@ -75,4 +81,33 @@ def generate_thumbnail(topic: str) -> str:
         
     except Exception as e:
         logger.error(f"썸네일 생성 실패: {str(e)}")
+        return create_default_thumbnail(topic)
+
+def create_default_thumbnail(topic: str) -> str:
+    """기본 썸네일 생성"""
+    try:
+        temp_dir = Path("temp")
+        temp_dir.mkdir(exist_ok=True)
+        thumbnail_path = temp_dir / f"{topic}_default_thumbnail.jpg"
+        
+        img = Image.new('RGB', (1080, 1920), color=(70, 130, 180))
+        draw = ImageDraw.Draw(img)
+        
+        try:
+            font_path = "fonts/Catfont.ttf"
+            font = ImageFont.truetype(font_path, 80)
+        except:
+            font = ImageFont.load_default()
+            
+        text = topic.upper()
+        bbox = draw.textbbox((0, 0), text, font=font)
+        x = (1080 - (bbox[2] - bbox[0])) / 2
+        y = (1920 - (bbox[3] - bbox[1])) / 2
+        
+        draw.text((x, y), text, font=font, fill="white")
+        img.save(thumbnail_path)
+        
+        return str(thumbnail_path)
+    except Exception as e:
+        logger.error(f"기본 썸네일 생성 실패: {str(e)}")
         raise
