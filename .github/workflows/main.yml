@@ -51,4 +51,6 @@ jobs:
         YOUTUBE_OAUTH_CREDENTIALS: ${{ secrets.YOUTUBE_OAUTH_CREDENTIALS }}
       run: |
         mkdir -p temp output
+        python src/utils.py
         python src/main.py
+        
