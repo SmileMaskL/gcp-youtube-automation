@@ -3,8 +3,9 @@ secrets/
 *.txt
 output/
 .env
-__pycache__/
 *.pyc
 logs/
 *.env
 service-account.json
+**/__pycache__/
+**/*.py[cod]
