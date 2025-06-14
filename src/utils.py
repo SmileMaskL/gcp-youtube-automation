@@ -15,17 +15,17 @@ from elevenlabs.client import ElevenLabs
 from dotenv import load_dotenv
 import google.generativeai as genai
 
+load_dotenv()
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
 class Config:
     """설정 클래스"""
     SHORTS_WIDTH = 1080
     SHORTS_HEIGHT = 1920
     MAX_DURATION = 60
     MIN_DURATION = 15
-
-load_dotenv()
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
 
 def text_to_speech(text: str, output_path: str) -> str:
     """음성 생성 (ElevenLabs API 사용)"""
