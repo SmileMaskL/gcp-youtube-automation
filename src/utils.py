@@ -1,6 +1,9 @@
 """
 유틸리티 함수들 (완전 수정 버전 - 수익 최적화)
 """
+"""
+유틸리티 함수들 (완전 수정 버전 - 수익 최적화)
+"""
 import os
 from elevenlabs.client import ElevenLabs
 import uuid
@@ -60,7 +63,7 @@ class FileManager:
             return 0
 
 def text_to_speech(text: str) -> str:
-    """텍스트를 음성으로 변환 (수정된 버전) - 들여쓰기 완전 수정"""
+    """텍스트를 음성으로 변환 (완전 수정 버전)"""
     try:
         client = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
         audio = client.generate(
