@@ -14,6 +14,7 @@ from pathlib import Path
 from moviepy.editor import *
 from elevenlabs.client import ElevenLabs
 from dotenv import load_dotenv
+import google.generativeai as genai
 
 # 환경변수 로드
 load_dotenv()
