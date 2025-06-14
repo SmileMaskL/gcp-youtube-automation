@@ -9,7 +9,7 @@ from moviepy.editor import VideoFileClip, ColorClip, concatenate_videoclips, Com
 from moviepy.video.fx import resize
 import google.generativeai as genai
 from elevenlabs import generate, set_api_key, Voice, VoiceSettings
-from config import Config
+from src.config import Config
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -100,19 +100,26 @@ def generate_fallback_content(topic: str) -> dict:
         "hashtags": [f"#{topic.replace(' ', '')}", "#꿀팁", "#쇼츠"]
     }
 
-def create_simple_video(duration=15) -> str:
+def create_simple_video(duration=60)
     """간단한 색상 배경 영상을 생성합니다."""
-    logger.info("기본 색상 배경 영상을 생성합니다.")
+    Config.ensure_directories()
     
     # RGB 색상값으로 변경 (16진수 문제 해결)
     colors = [
         (26, 26, 26),      # 어두운 회색
         (42, 13, 13),      # 어두운 빨강
-        (13, 26, 20),      # 어두운 초록
-        (14, 13, 42)       # 어두운 파랑
+        (13, 42, 13),      # 어두운 초록
+        (13, 13, 42)       # 어두운 파랑
     ]
     
-    video_path = Config.TEMP_DIR / f"default_bg_{uuid.uuid4()}.mp4"
+    video_path = Config.TEMP_DIR / f"bg_{uuid.uuid4()}.mp4"
+    clip = ColorClip(
+        size=(Config.SHORTS_WIDTH, Config.SHORTS_HEIGHT),
+        color=random.choice(colors),
+        duration=duration
+    )
+    clip.write_videofile(str(video_path), fps=24, logger=None)
+    return str(video_path)
     
     try:
         # RGB 색상으로 ColorClip 생성
