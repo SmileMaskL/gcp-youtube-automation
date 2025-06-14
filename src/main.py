@@ -6,14 +6,18 @@ import logging
 import time
 import json
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime
 import random
+from dotenv import load_dotenv
 
-from utils import generate_viral_content, text_to_speech, download_video_from_pexels
+from utils import generate_viral_content
+from thumbnail_generator import generate_thumbnail
 from video_creator import create_final_video
 from youtube_uploader import upload_video
-from thumbnail_generator import generate_thumbnail
 from content_generator import get_hot_topics
+
+# 환경변수 로드
+load_dotenv()
 
 # 로깅 설정
 Path("logs").mkdir(exist_ok=True)
@@ -32,16 +36,16 @@ class YouTubeAutomation:
         self.today = datetime.now().strftime("%Y-%m-%d")
         self.used_topics = set()
         self.load_used_topics()
-        
+
     def load_used_topics(self):
         if Path("used_topics.json").exists():
             with open("used_topics.json", "r") as f:
                 self.used_topics = set(json.load(f))
-    
+
     def save_used_topics(self):
         with open("used_topics.json", "w") as f:
             json.dump(list(self.used_topics), f)
-    
+
     def get_fresh_topic(self):
         """중복되지 않은 새로운 주제 가져오기"""
         max_retries = 5
@@ -60,40 +64,47 @@ class YouTubeAutomation:
         logger.info("💰 유튜브 수익형 자동화 시스템 시작 💰")
         logger.info("="*50)
 
-        try:
+        GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+        if not GEMINI_API_KEY:
+            logger.error("❌ 오류: GEMINI_API_KEY가 설정되지 않았습니다. .env 파일에 키를 추가하세요.")
+            return
 
-            # 1. 새로운 주제 선정
+        try:
+            # 1. 주제 선정
             topic = self.get_fresh_topic()
             logger.info(f"🔥 오늘의 주제: {topic}")
-            
-            # 2. AI로 콘텐츠 생성
-            content = generate_viral_content(topic)
-            if not content or len(content.get("script", "")) < 50:
-                raise ValueError("생성된 대본이 너무 짧습니다.")
 
-            # 기본 제목 설정
+            # 2. 콘텐츠 생성
+            content = None
+            try:
+                content = generate_viral_content(topic)
+            except Exception as e:
+                logger.error(f"❌ 콘텐츠 생성 실패: {e}")
+                return
+
+            script = content.get("script") if content else None
+            if not script or len(script) < 50:
+                logger.error("❌ 오류: 생성된 스크립트가 없습니다 또는 너무 짧습니다.")
+                return
+            logger.info(f"📜 생성된 대본 길이: {len(script)}자")
+
             title = f"{topic}의 비밀"
             hashtags = [f"#{topic.replace(' ', '')}", "#꿀팁", "#자기계발"]
-            
             logger.info(f"📝 생성된 제목: {title}")
-            logger.info(f"📜 생성된 대본 길이: {len(script)}자")
-            
+
             # 3. 썸네일 생성
-            from thumbnail_generator import generate_thumbnail
             thumbnail_path = generate_thumbnail(topic)
             logger.info(f"🖼️ 썸네일 생성 완료: {thumbnail_path}")
-            
-            # 4. 최종 영상 제작
-            from video_creator import create_final_video
+
+            # 4. 영상 생성
             final_video_path = create_final_video(topic, title, script)
             if not final_video_path:
-                raise ValueError("영상 생성 실패")
-            
+                logger.error("❌ 영상 생성 실패")
+                return
             logger.info(f"🎥 영상 생성 완료: {final_video_path}")
-            
+
             # 5. 유튜브 업로드
-            from youtube_uploader import upload_video
-            upload_result = upload_video(
+            result = upload_video(
                 video_path=final_video_path,
                 title=f"{title} #shorts",
                 description=f"{script}\n\n{' '.join(hashtags)}",
@@ -101,17 +112,15 @@ class YouTubeAutomation:
                 privacy_status="public",
                 thumbnail_path=thumbnail_path
             )
-            
-            if upload_result:
+            if result:
                 logger.info("✅ 업로드 성공!")
-                # 업로드 후 파일 정리
                 Path(final_video_path).unlink(missing_ok=True)
                 Path(thumbnail_path).unlink(missing_ok=True)
             else:
                 logger.error("❌ 업로드 실패")
 
         except Exception as e:
-            logger.error(f"❌ 오류 발생: {str(e)}", exc_info=True)
+            logger.error(f"❌ 전체 시스템 오류: {e}", exc_info=True)
 
 def main():
     automation = YouTubeAutomation()
