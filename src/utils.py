@@ -153,22 +153,19 @@ def generate_viral_content(topic: str) -> dict:
         genai.configure(api_key=api_key)
         model = genai.GenerativeModel('gemini-1.5-flash-latest')
         
+        # JSON 형식의 프롬프트 사용
         prompt = f"""
-        당신은 최고의 유튜브 쇼츠 콘텐츠 제작자입니다. 다음 주제에 대해 시청자들이 끝까지 볼 수밖에 없는 바이럴 쇼츠 콘텐츠를 만들어주세요.
-        규칙:
-        1. 시청자의 시선을 사로잡는 강력한 제목 (25자 이내)
-        2. 빠르고 간결하며 핵심만 담은 대본 (300자 내외)
-        3. 영상과 관련된 인기 해시태그 3개 이상
-        4. 절대 다른 말 하지 말고, 아래 JSON 형식만 반환할 것.
-
-        ```json
         {{
-          "title": "여기에 제목 작성",
-          "script": "여기에 대본 작성",
-          "hashtags": ["#해시태그1", "#해시태그2", "#해시태그3"]
+          "prompt": "유튜브 쇼츠 콘텐츠를 생성해주세요.",
+          "input": {{
+            "topic": "{topic}",
+            "requirements": {
+              "title_length": 25,
+              "script_length": 300,
+              "hashtags": 3
+            }
+          }}
         }}
-        ```
-        주제: {topic}
         """
         response = model.generate_content(prompt)
         cleaned_text = clean_json_response(response.text)
