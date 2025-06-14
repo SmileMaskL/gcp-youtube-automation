@@ -175,3 +175,15 @@ def generate_viral_content(topic: str) -> dict:
             "script": f"여러분은 {topic}에 대해 얼마나 알고 있나요? 오늘은 대부분이 모르는 3가지 비밀을 알려드리겠습니다. 첫째,... 둘째,... 마지막으로 가장 중요한 셋째는... 유용했다면 구독과 좋아요 부탁드립니다!",
             "hashtags": [f"#{topic.replace(' ', '')}", "#꿀팁", "#자기계발"]
         }
+위에 나의 코드에 
+def create_default_audio(text: str, output_path: str) -> str:
+    """gTTS를 이용한 기본 음성 생성"""
+    try:
+        from gtts import gTTS
+        tts = gTTS(text=text, lang='ko')
+        tts.save(output_path)
+        return output_path
+    except Exception as e:
+        logger.error(f"기본 음성 생성 실패: {str(e)}")
+        raise
+위의 코드를 추가, 수정, 보완해서 보여줘!!
