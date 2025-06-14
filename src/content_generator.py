@@ -7,6 +7,7 @@ import requests
 import logging
 import random
 import json
+import re
 
 logger = logging.getLogger(__name__)
 
