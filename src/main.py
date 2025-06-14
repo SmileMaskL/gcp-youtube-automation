@@ -12,7 +12,8 @@ from pathlib import Path
 from datetime import datetime
 import random
 from dotenv import load_dotenv
-
+import sys
+sys.path.append('./src')
 from utils import generate_viral_content
 from thumbnail_generator import generate_thumbnail
 from video_creator import create_final_video
