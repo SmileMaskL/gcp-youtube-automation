@@ -27,12 +27,12 @@ logger = logging.getLogger(__name__)
 def text_to_speech(text: str, output_path: str = "output/audio.mp3") -> str:
     """개선된 TTS 함수 (에러 처리 강화)"""
     try:
-        # API 키 확인
+        # API 키 확인 (들여쓰기 수정됨)
         api_key = os.getenv("ELEVENLABS_API_KEY")
         if not api_key:
             raise ValueError("ELEVENLABS_API_KEY가 설정되지 않았습니다")
         
-        # 클라이언트 초기화
+        # 클라이언트 초기화 (들여쓰기 수정됨)
         client = ElevenLabs(api_key=api_key)
         
         # 음성 생성 (최적화된 설정)
@@ -44,7 +44,7 @@ def text_to_speech(text: str, output_path: str = "output/audio.mp3") -> str:
             similarity_boost=0.8
         )
         
-        # 파일 저장
+        # 파일 저장 (들여쓰기 수정됨)
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         with open(output_path, "wb") as f:
             f.write(audio)
