@@ -22,14 +22,15 @@ import google.generativeai as genai
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 class FileManager:
     """파일 관리 유틸리티"""
-    
+
     @staticmethod
     def ensure_dir(path: str) -> None:
         """디렉터리가 없으면 생성"""
         Path(path).mkdir(parents=True, exist_ok=True)
-    
+
     @staticmethod
     def clean_filename(filename: str) -> str:
         """파일명에서 특수문자 제거"""
@@ -37,7 +38,7 @@ class FileManager:
         for char in invalid_chars:
             filename = filename.replace(char, '_')
         return filename[:255]
-    
+
     @staticmethod
     def get_file_hash(filepath: str) -> str:
         """파일의 MD5 해시값 반환"""
@@ -50,7 +51,7 @@ class FileManager:
         except Exception as e:
             logger.error(f"파일 해시 계산 실패: {e}")
             return ""
-    
+
     @staticmethod
     def get_file_size(filepath: str) -> int:
         """파일 크기 반환 (bytes)"""
@@ -58,6 +59,7 @@ class FileManager:
             return os.path.getsize(filepath)
         except Exception:
             return 0
+
 
 def text_to_speech(text: str) -> str:
     """텍스트를 음성으로 변환 (완전 수정 버전)"""
@@ -68,18 +70,19 @@ def text_to_speech(text: str) -> str:
             voice="Rachel",
             model="eleven_multilingual_v2"
         )
-        
+
         temp_path = os.path.join(tempfile.gettempdir(), f"{uuid.uuid4()}.mp3")
         with open(temp_path, "wb") as f:
             f.write(audio)
-        
+
         return temp_path
     except Exception as e:
         logger.error(f"음성 생성 실패: {e}")
         temp_path = os.path.join(tempfile.gettempdir(), f"{uuid.uuid4()}.mp3")
-        silent_audio = AudioClip(lambda t: 0, duration=len(text)*0.1)
+        silent_audio = AudioClip(lambda t: 0, duration=len(text) * 0.1)
         silent_audio.write_audiofile(temp_path, logger=None)
         return temp_path
+
 
 def generate_trending_content() -> Dict[str, Any]:
     """수익 최적화를 위한 트렌딩 콘텐츠 생성"""
@@ -140,7 +143,8 @@ def generate_ai_content(topic: str) -> Dict[str, Any]:
                 model="gpt-4o",
                 messages=[
                     {"role": "system", "content": "유튜브 쇼츠 콘텐츠 전문가입니다."},
-                    {"role": "user", "content": f"'{topic}' 주제로 유튜브 쇼츠 콘텐츠를 JSON 형식으로 만들어주세요."}
+                    {"role": "user",
+                     "content": f"'{topic}' 주제로 유튜브 쇼츠 콘텐츠를 JSON 형식으로 만들어주세요."}
                 ],
                 max_tokens=500
             )
@@ -151,6 +155,7 @@ def generate_ai_content(topic: str) -> Dict[str, Any]:
         except Exception as e2:
             logger.error(f"GPT-4o도 실패: {e2}")
             raise
+
 
 def get_fallback_content(topic: str) -> Dict[str, Any]:
     """AI 실패시 사용할 백업 콘텐츠"""
