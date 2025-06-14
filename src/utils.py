@@ -304,18 +304,15 @@ def retry_on_failure(max_retries: int = 3, delay: float = 1.0):
     def decorator(func):
         def wrapper(*args, **kwargs):
             last_exception = None
-            
             for attempt in range(max_retries):
                 try:
                     return func(*args, **kwargs)
                 except Exception as e:
                     last_exception = e
                     if attempt < max_retries - 1:
-                        logger.warning(f"함수 {func.__name__} 실행 실패 (시도 {attempt + 1}/{max_retries}): {e}")
-                        time.sleep(delay * (2 ** attempt))  # 지수적 백오프
-                    else:
-                        logger.error(f"함수 {func.__name__} 최종 실패: {e}")
-            
+                        logger.warning(f"시도 {attempt + 1}/{max_retries} 실패. {delay}초 후 재시도... ({e})")
+                        time.sleep(delay)
+            logger.error(f"{func.__name__} 실패: 최대 재시도 횟수 초과.")
             raise last_exception
         return wrapper
     return decorator
