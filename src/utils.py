@@ -55,13 +55,13 @@ class FileManager:
             logger.error(f"파일 해시 계산 실패: {e}")
             return ""
 
-    @staticmethod
-    def get_file_size(filepath: str) -> int:
-        """파일 크기 반환 (bytes)"""
-        try:
-                return os.path.getsize(filepath)
-        except Exception:
-            return 0
+@staticmethod
+def get_file_size(filepath: str) -> int:
+    """파일 크기 반환 (bytes)"""
+    try:
+        return os.path.getsize(filepath)  # 공백 8개로 수정
+    except Exception:
+        return 0
 
 
 def text_to_speech(text: str) -> str:
