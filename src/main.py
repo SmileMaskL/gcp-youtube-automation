@@ -1,5 +1,5 @@
 """
-유튜브 자동화 메인 시스템 (무조건 실행되는 버전)
+유튜브 자동화 메인 시스템
 """
 import os
 import logging
@@ -11,7 +11,6 @@ from utils import (
     download_video_from_pexels,
     Config
 )
-from moviepy.editor import VideoFileClip, AudioFileClip, CompositeVideoClip
 
 # 초기 설정
 load_dotenv()
@@ -24,14 +23,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 def create_video(script: str, bg_video_path: str, audio_path: str) -> str:
-    """영상 생성 (실패 시 기본 영상)"""
     try:
+        from moviepy.editor import VideoFileClip, AudioFileClip, TextClip, CompositeVideoClip
+        
         video_clip = VideoFileClip(bg_video_path).subclip(0, 60)
         audio_clip = AudioFileClip(audio_path)
         
-        # 간단한 텍스트 추가 (ImageMagick 필요 없음)
         txt_clip = TextClip(
-            script[:100],  # 처음 100자만 표시
+            script[:100],
             fontsize=50,
             color='white',
             size=(900, 1600),
@@ -47,13 +46,13 @@ def create_video(script: str, bg_video_path: str, audio_path: str) -> str:
         return output_path
     except Exception as e:
         logger.error(f"영상 생성 실패: {e}")
-        return bg_video_path  # 원본 영상 반환
+        return bg_video_path
 
 def main():
     logger.info("🚀 시스템 시작")
     
     # 1. 콘텐츠 생성
-    topic = "재테크"  # 실제 사용시에는 동적 주제 선정
+    topic = "재테크"
     content = generate_viral_content(topic)
     logger.info(f"제목: {content['title']}")
     
