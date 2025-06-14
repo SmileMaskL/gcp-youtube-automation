@@ -168,7 +168,27 @@ def generate_viral_content(topic: str) -> dict:
         prompt = f"""Generate viral YouTube Shorts content in Korean about {topic}."""
         
         response = model.generate_content(prompt)
-        content = json.loads(response.text.strip())
+
+        # JSON 응답 강제 추출
+        response_text = response.text
+        json_str = re.search(r'\{.*\}', response_text, re.DOTALL).group()
+        content = json.loads(json_str)
+
+        # 필수 필드 검증
+        if not all(key in content for key in ['title', 'script', 'hashtags']):
+            raise ValueError("필수 필드 누락")
+            
+        return content
+
+    except Exception as e:
+        logger.warning(f"콘텐츠 생성 실패: {str(e)}. 기본 템플릿 사용")
+        return {
+            "title": f"{topic}의 놀라운 비법",
+            "script": f"이 동영상을 보시면 {topic}으로 돈 버는 방법이 완전히 바뀝니다! 지금 바로 따라해보세요!",
+            "hashtags": [f"#{topic}", "#수익", "#부업"]
+        }
+
+        # content = json.loads(response.text.strip())
         
         logger.info(f"Content generated: {content.get('title')}")
         return content
