@@ -116,8 +116,7 @@ def download_video_from_pexels(query: str) -> str:
         
         # 고화질 비디오 파일 선택
         video_file = next(
-            (f for f in video['video_files'] 
-            if f['quality'] == 'sd' and f['width'] == 640
+            (f for f in video['video_files'] if f['quality'] == 'sd' and f['width'] == 640)
         )
         
         Config.ensure_temp_dir()
