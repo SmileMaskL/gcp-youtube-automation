@@ -59,7 +59,7 @@ class FileManager:
     def get_file_size(filepath: str) -> int:
         """파일 크기 반환 (bytes)"""
         try:
-            return os.path.getsize(filepath)
+                return os.path.getsize(filepath)
         except Exception:
             return 0
 
