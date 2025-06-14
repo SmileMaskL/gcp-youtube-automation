@@ -59,13 +59,13 @@ class ConfigManager:
     """설정 관리 유틸리티"""
 
     def text_to_speech(text):
-    client = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
+        client = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
 
-    audio = client.generate(
-        text=text,
-        voice="Rachel",  # 원하는 목소리 이름으로 바꿔도 됨
-        model="eleven_multilingual_v2"
-    )
+        audio = client.generate(
+            text=text,
+            voice="Rachel",  # 원하는 목소리 이름으로 바꿔도 됨
+            model="eleven_multilingual_v2"
+        )
 
     temp_path = os.path.join(tempfile.gettempdir(), f"{uuid.uuid4()}.mp3")
     with open(temp_path, "wb") as f:
