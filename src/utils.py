@@ -58,6 +58,7 @@ class FileManager:
 class ConfigManager:
     """설정 관리 유틸리티"""
 
+    @staticmethod
     def text_to_speech(text):
         client = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
 
@@ -67,11 +68,11 @@ class ConfigManager:
             model="eleven_multilingual_v2"
         )
         
-    temp_path = os.path.join(tempfile.gettempdir(), f"{uuid.uuid4()}.mp3")
-    with open(temp_path, "wb") as f:
-        f.write(audio)
+        temp_path = os.path.join(tempfile.gettempdir(), f"{uuid.uuid4()}.mp3")
+        with open(temp_path, "wb") as f:
+            f.write(audio)
 
-    return temp_path
+        return temp_path
     
     def __init__(self, config_file: str = "config.json"):
         self.config_file = config_file
