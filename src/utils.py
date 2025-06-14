@@ -96,30 +96,34 @@ def text_to_speech(text: str, output_path: str, fallback: bool = True) -> str:
         raise
 
 def download_video_from_pexels(query: str) -> str:
-    """Pexels에서 비디오 다운로드"""
     try:
         api_key = os.getenv("PEXELS_API_KEY")
         if not api_key:
             raise ValueError("PEXELS_API_KEY missing")
             
         headers = {"Authorization": api_key}
-        url = f"https://api.pexels.com/videos/search?query={query}&per_page=15&orientation=portrait"
+        url = f"https://api.pexels.com/videos/search?query={query}&per_page=20&orientation=portrait&size=small"
 
-        response = requests.get(url, headers=headers, timeout=20)
+        response = requests.get(url, headers=headers, timeout=30)
         response.raise_for_status()
-        videos = response.json().get("videos", [])
+        data = response.json()
+        
+        if not data.get('videos'):
+            raise ValueError("No videos found for the query")
 
-        if not videos:
-            raise ValueError("No videos found")
-
-        video = random.choice(videos)
-        video_file = random.choice([f for f in video['video_files'] if f['quality'] == 'sd'])
-        video_url = video_file['link']
-
+        # 가장 인기있는 동영상 선택 (조회수 기준)
+        video = max(data['videos'], key=lambda x: x.get('duration', 0))
+        
+        # 고화질 비디오 파일 선택
+        video_file = next(
+            (f for f in video['video_files'] 
+            if f['quality'] == 'sd' and f['width'] == 640
+        )
+        
         Config.ensure_temp_dir()
         video_path = Config.TEMP_DIR / f"{uuid.uuid4()}.mp4"
 
-        with requests.get(video_url, stream=True, timeout=60) as r:
+        with requests.get(video_file['link'], stream=True, timeout=60) as r:
             r.raise_for_status()
             with open(video_path, "wb") as f:
                 for chunk in r.iter_content(chunk_size=8192):
@@ -129,32 +133,8 @@ def download_video_from_pexels(query: str) -> str:
         return str(video_path)
 
     except Exception as e:
-        logger.error(f"Video download failed: {str(e)}")
+        logger.error(f"Video download failed, using fallback: {str(e)}")
         return create_simple_video()
-
-def create_simple_video(duration: int = 60) -> str:
-    """기본 배경 영상 생성"""
-    try:
-        Config.ensure_temp_dir()
-        colors = ["#1e3c72", "#2a5298", "#434343", "#000000"]
-        chosen_color = random.choice(colors)
-        
-        if isinstance(chosen_color, str):
-            chosen_color = hex_to_rgb(chosen_color)
-
-        video_path = Config.TEMP_DIR / f"{uuid.uuid4()}.mp4"
-        clip = ColorClip(
-            size=(Config.SHORTS_WIDTH, Config.SHORTS_HEIGHT),
-            color=chosen_color,
-            duration=duration
-        )
-        clip.write_videofile(str(video_path), fps=24, logger=None)
-        logger.info(f"Simple video created: {video_path}")
-        return str(video_path)
-
-    except Exception as e:
-        logger.error(f"Simple video creation failed: {str(e)}")
-        raise
 
 def generate_viral_content(topic: str) -> dict:
     """바이럴 콘텐츠 생성"""
