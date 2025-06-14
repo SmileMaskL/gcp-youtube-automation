@@ -66,7 +66,7 @@ class ConfigManager:
             voice="Rachel",  # 원하는 목소리 이름으로 바꿔도 됨
             model="eleven_multilingual_v2"
         )
-
+        
     temp_path = os.path.join(tempfile.gettempdir(), f"{uuid.uuid4()}.mp3")
     with open(temp_path, "wb") as f:
         f.write(audio)
