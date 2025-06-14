@@ -2,6 +2,9 @@
 유튜브 자동화 봇 메인 컨트롤러 (2025년 최적화 버전)
 """
 import os
+from googleapiclient.discovery import build 
+from googleapiclient.http import MediaFileUpload
+from google_auth_oauthlib.flow import InstalledAppFlow 
 import logging
 import time
 import json
@@ -128,3 +131,51 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+def upload_to_youtube(video_path: str, title: str, description: str):
+    try:
+        # 환경변수에서 인증 정보 가져오기
+        client_secrets = {
+            "web": {
+                "client_id": os.getenv("YT_CLIENT_ID"),
+                "client_secret": os.getenv("YT_CLIENT_SECRET"),
+                "redirect_uris": [os.getenv("YT_REDIRECT_URI")],
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://accounts.google.com/o/oauth2/token"
+            }
+        }
+        
+        # YouTube API 인증
+        flow = InstalledAppFlow.from_client_config(
+            client_secrets,
+            scopes=["https://www.googleapis.com/auth/youtube.upload"]
+        )
+        
+        credentials = flow.run_local_server(port=8080)
+        youtube = build('youtube', 'v3', credentials=credentials)
+        
+        # 영상 업로드
+        request = youtube.videos().insert(
+            part="snippet,status",
+            body={
+                "snippet": {
+                    "title": title,
+                    "description": description,
+                    "tags": ["shorts", "자동생성"],
+                    "categoryId": "22"  # Entertainment
+                },
+                "status": {
+                    "privacyStatus": "public",
+                    "selfDeclaredMadeForKids": False
+                }
+            },
+            media_body=MediaFileUpload(video_path)
+        )
+        
+        response = request.execute()
+        logger.info(f"✅ 업로드 성공: https://youtu.be/{response['id']}")
+        return response
+        
+    except Exception as e:
+        logger.error(f"❌ 업로드 실패: {str(e)}")
+        raise
