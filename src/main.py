@@ -156,3 +156,29 @@ def cleanup_temp_files():
             file.unlink()
         except:
             pass
+def main():
+    topic = "부자 되는 법"  # 예시 주제
+    logger.info("📢 콘텐츠 자동 생성 시작")
+
+    # 1. 콘텐츠 생성
+    content = generate_viral_content_gemini(topic)
+    logger.info(f"🎯 생성된 콘텐츠: {content}")
+
+    # 2. 음성 생성
+    audio_path = generate_tts_with_elevenlabs(content["script"])
+    logger.info(f"🔊 음성 생성 완료: {audio_path}")
+
+    # 3. 배경 영상 다운로드
+    bg_video_path = download_video_from_pexels(topic, duration=60)
+    logger.info(f"🎥 배경 영상 확보: {bg_video_path}")
+
+    # 4. 최종 영상 제작
+    final_video_path = create_shorts_video(bg_video_path, audio_path, content["title"])
+    logger.info(f"🏁 최종 영상 생성 완료: {final_video_path}")
+
+    # 5. 임시 파일 정리
+    cleanup_temp_files()
+    logger.info("🧹 임시 파일 정리 완료")
+
+if __name__ == "__main__":
+    main()
