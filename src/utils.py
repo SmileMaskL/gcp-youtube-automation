@@ -1,5 +1,5 @@
 """
-유틸리티 함수들
+유틸리티 함수들 (수정 완료 버전)
 """
 import os
 from elevenlabs.client import ElevenLabs
@@ -32,7 +32,7 @@ class FileManager:
         invalid_chars = '<>:"/\\|?*'
         for char in invalid_chars:
             filename = filename.replace(char, '_')
-        return filename[:255]  # 파일명 길이 제한
+        return filename[:255]
     
     @staticmethod
     def get_file_hash(filepath: str) -> str:
@@ -55,24 +55,27 @@ class FileManager:
         except Exception:
             return 0
 
-class ConfigManager:
-    """설정 관리 유틸리티"""
-
-    @staticmethod
-    def text_to_speech(text):
+def text_to_speech(text: str) -> str:
+    """텍스트를 음성으로 변환 (수정된 버전)"""
+    try:
         client = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
-
         audio = client.generate(
             text=text,
-            voice="Rachel",  # 원하는 목소리 이름으로 바꿔도 됨
+            voice="Rachel",
             model="eleven_multilingual_v2"
         )
         
         temp_path = os.path.join(tempfile.gettempdir(), f"{uuid.uuid4()}.mp3")
         with open(temp_path, "wb") as f:
             f.write(audio)
-
+        
         return temp_path
+    except Exception as e:
+        logger.error(f"음성 생성 실패: {e}")
+        raise
+
+class ConfigManager:
+    """설정 관리 유틸리티"""
     
     def __init__(self, config_file: str = "config.json"):
         self.config_file = config_file
@@ -84,8 +87,7 @@ class ConfigManager:
             if os.path.exists(self.config_file):
                 with open(self.config_file, 'r', encoding='utf-8') as f:
                     return json.load(f)
-            else:
-                return self.get_default_config()
+            return self.get_default_config()
         except Exception as e:
             logger.error(f"설정 파일 로드 실패: {e}")
             return self.get_default_config()
