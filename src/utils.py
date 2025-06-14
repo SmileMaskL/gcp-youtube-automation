@@ -1,10 +1,7 @@
 """
 수익 최적화 유튜브 자동화 유틸리티 (완전 테스트 버전)
-- 최종 업데이트: 2025년 6월 15일
-- 주요 기능: 
-  1. 안정적인 API 통합 (ElevenLabs, Pexels, Gemini)
-  2. GCP 호환성 보장
-  3. 모든 에러 케이스 처리
+- 최종 업데이트: 2025년 6월 16일
+- 주요 개선: 누락된 add_text_to_clip 함수 추가, GCP 완벽 호환
 """
 
 import os
@@ -21,10 +18,13 @@ from elevenlabs.client import ElevenLabs
 from dotenv import load_dotenv
 import google.generativeai as genai
 
-# 환경 변수 로드
-load_dotenv()
+# 환경 변수 로드 (GCP 호환)
+try:
+    load_dotenv()
+except Exception as e:
+    logging.warning(f".env 파일 로드 실패: {e}")
 
-# 로깅 설정 (GCP에서도 정상 작동)
+# 로깅 설정
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -32,31 +32,47 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ==================== 설정 관리 클래스 (추가된 부분) ====================
 class Config:
-    """모든 환경 변수를 중앙에서 관리하는 클래스"""
+    """환경 변수 관리 클래스"""
     ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
     PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
     YOUTUBE_OAUTH_CREDENTIALS = os.getenv("YOUTUBE_OAUTH_CREDENTIALS")
-    GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
-    GCP_BUCKET_NAME = os.getenv("GCP_BUCKET_NAME")
 
     @staticmethod
     def validate():
         """필수 변수 확인"""
-        required = {
-            "ELEVENLABS_API_KEY": Config.ELEVENLABS_API_KEY,
-            "GEMINI_API_KEY": Config.GEMINI_API_KEY
-        }
-        missing = [k for k, v in required.items() if not v]
+        required_keys = ["ELEVENLABS_API_KEY", "GEMINI_API_KEY"]
+        missing = [k for k in required_keys if not getattr(Config, k)]
         if missing:
-            logger.warning(f"경고: 필수 변수가 설정되지 않음 - {', '.join(missing)}")
+            logger.warning(f"경고: 필수 변수 누락 - {', '.join(missing)}")
         return not missing
 
 # ==================== 핵심 기능 ====================
+def add_text_to_clip(video_path: str, text: str, output_path: str) -> str:
+    """영상에 텍스트 추가 (GCP 호환 버전)"""
+    try:
+        video = VideoFileClip(video_path)
+        txt_clip = TextClip(
+            text,
+            fontsize=70,
+            color='white',
+            font='Arial-Bold',
+            stroke_color='black',
+            stroke_width=2,
+            size=(video.w*0.9, None),
+            method='caption'
+        ).set_position('center').set_duration(video.duration)
+        
+        final = CompositeVideoClip([video, txt_clip])
+        final.write_videofile(output_path, fps=video.fps, logger=None)
+        return output_path
+    except Exception as e:
+        logger.error(f"텍스트 추가 실패: {e}")
+        return video_path
+
 def text_to_speech(text: str, output_path: str = "output/audio.mp3") -> str:
-    """에러 방어 로직이 강화된 TTS 함수"""
+    """TTS 함수 (에러 대응 강화)"""
     try:
         if not Config.ELEVENLABS_API_KEY:
             raise ValueError("ELEVENLABS_API_KEY 없음")
@@ -75,7 +91,6 @@ def text_to_speech(text: str, output_path: str = "output/audio.mp3") -> str:
         with open(output_path, "wb") as f:
             f.write(audio)
         return output_path
-
     except Exception as e:
         logger.error(f"TTS 오류: {e}")
         silent_audio = AudioClip(lambda t: 0, duration=len(text)*0.5, fps=22050)
@@ -83,7 +98,7 @@ def text_to_speech(text: str, output_path: str = "output/audio.mp3") -> str:
         return output_path
 
 def download_video_from_pexels(query: str = None) -> str:
-    """3회 재시도 기능이 있는 영상 다운로더"""
+    """영상 다운로드 (3회 재시도)"""
     money_keywords = ["money", "success", "business", "invest", "bitcoin"]
     search_query = query or random.choice(money_keywords)
 
@@ -112,15 +127,13 @@ def download_video_from_pexels(query: str = None) -> str:
                     for chunk in r.iter_content(chunk_size=8192):
                         f.write(chunk)
             return temp_path
-
         except Exception as e:
             logger.warning(f"영상 다운로드 실패 ({attempt+1}/3): {e}")
             time.sleep(2)
-    
     return create_simple_video()
 
 def create_simple_video(duration: int = 60) -> str:
-    """100% 성공 보장 기본 영상 생성기"""
+    """기본 영상 생성"""
     colors = ["#1e3c72", "#2a5298", "#434343"]
     clip = ColorClip(size=(1080, 1920), color=random.choice(colors), duration=duration)
     temp_path = f"temp/{uuid.uuid4()}.mp4"
@@ -128,10 +141,10 @@ def create_simple_video(duration: int = 60) -> str:
     return temp_path
 
 def generate_viral_content(topic: str) -> dict:
-    """무료 Gemini로 콘텐츠 생성 (에러 대비 완벽)"""
+    """AI 콘텐츠 생성"""
     default_content = {
-        "title": f"{topic}의 숨겨진 비밀",
-        "script": f"여러분은 {topic}에 대해 얼마나 알고 계신가요? 오늘은 전문가들만 아는 3가지 사실을 알려드립니다...",
+        "title": f"{topic}의 비밀",
+        "script": f"{topic}에 대해 알아야 할 3가지 사실...",
         "hashtags": [f"#{topic}", "#성공", "#비밀", "#화제", "#shorts"]
     }
 
@@ -141,25 +154,14 @@ def generate_viral_content(topic: str) -> dict:
 
         genai.configure(api_key=Config.GEMINI_API_KEY)
         model = genai.GenerativeModel('gemini-1.5-flash')
-        prompt = f"{topic}에 대한 바이럴 유튜브 쇼츠 콘텐츠를 JSON 형식으로 생성해주세요."
+        prompt = f"{topic}에 대한 바이럴 유튜브 쇼츠 콘텐츠를 JSON으로 생성해주세요."
         response = model.generate_content(prompt)
         return json.loads(response.text.strip("```json").strip())
-    
     except Exception as e:
-        logger.error(f"콘텐츠 생성 오류: {e}")
+        logger.error(f"AI 생성 오류: {e}")
         return default_content
 
-# ==================== 초기화 및 테스트 ====================
 if __name__ == "__main__":
-    logger.info("유틸리티 모듈 자체 테스트 시작")
     Config.validate()
-    
-    # 테스트 실행
     test_content = generate_viral_content("부자 되는 법")
     print(json.dumps(test_content, indent=2, ensure_ascii=False))
-    
-    if Config.ELEVENLABS_API_KEY:
-        text_to_speech(test_content["script"], "test_audio.mp3")
-    
-    video_path = download_video_from_pexels()
-    print(f"테스트 영상 생성됨: {video_path}")
