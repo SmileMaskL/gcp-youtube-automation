@@ -1,5 +1,13 @@
 import os
 from dotenv import load_dotenv
+from pathlib import Path
+
+class Config:
+    TEMP_DIR = Path("./temp")
+    TEMP_DIR.mkdir(parents=True, exist_ok=True)
+
+    SHORTS_WIDTH = 1080
+    SHORTS_HEIGHT = 1920
 
 load_dotenv()
 
