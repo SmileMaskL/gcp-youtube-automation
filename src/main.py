@@ -60,28 +60,31 @@ class YouTubeAutomation:
         logger.info("💰 유튜브 수익형 자동화 시스템 시작 💰")
         logger.info("="*50)
 
-        # 1. 새로운 주제 선정
-        topic = self.get_fresh_topic()
-        logger.info(f"🔥 오늘의 주제: {topic}")
-
         try:
+
+            # 1. 새로운 주제 선정
+            topic = self.get_fresh_topic()
+            logger.info(f"🔥 오늘의 주제: {topic}")
+            
             # 2. AI로 콘텐츠 생성
             content = generate_viral_content(topic)
             if not content or len(content.get("script", "")) < 50:
                 raise ValueError("생성된 대본이 너무 짧습니다.")
-            
-            title = content["title"]
-            script = content["script"]
-            hashtags = content["hashtags"]
+
+            # 기본 제목 설정
+            title = f"{topic}의 비밀"
+            hashtags = [f"#{topic.replace(' ', '')}", "#꿀팁", "#자기계발"]
             
             logger.info(f"📝 생성된 제목: {title}")
             logger.info(f"📜 생성된 대본 길이: {len(script)}자")
             
             # 3. 썸네일 생성
+            from thumbnail_generator import generate_thumbnail
             thumbnail_path = generate_thumbnail(topic)
             logger.info(f"🖼️ 썸네일 생성 완료: {thumbnail_path}")
             
             # 4. 최종 영상 제작
+            from video_creator import create_final_video
             final_video_path = create_final_video(topic, title, script)
             if not final_video_path:
                 raise ValueError("영상 생성 실패")
@@ -89,6 +92,7 @@ class YouTubeAutomation:
             logger.info(f"🎥 영상 생성 완료: {final_video_path}")
             
             # 5. 유튜브 업로드
+            from youtube_uploader import upload_video
             upload_result = upload_video(
                 video_path=final_video_path,
                 title=f"{title} #shorts",
