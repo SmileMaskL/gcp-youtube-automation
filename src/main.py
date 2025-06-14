@@ -1,7 +1,6 @@
 """
 유튜브 자동화 봇 메인 컨트롤러 (2025년 최적화 버전)
 """
-import re
 import os
 import logging
 import time
