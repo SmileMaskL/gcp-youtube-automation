@@ -9,7 +9,7 @@ import logging
 from pathlib import Path
 from moviepy.editor import VideoFileClip, AudioFileClip, TextClip, CompositeVideoClip, ColorClip
 from moviepy.config import change_settings
-from utils import text_to_speech, download_video_from_pexels, create_default_audio
+from utils import text_to_speech, download_video_from_pexels, create_default_audio, create_simple_video
 
 # ImageMagick 경로 설정 (필수)
 change_settings({"IMAGEMAGICK_BINARY": "/usr/bin/convert"})
