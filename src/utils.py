@@ -8,7 +8,7 @@ from pathlib import Path
 from moviepy.editor import VideoFileClip, ColorClip, concatenate_videoclips, CompositeVideoClip
 from moviepy.video.fx import resize
 import google.generativeai as genai
-from elevenlabs import ElevenLabs
+from elevenlabs import generate, set_api_key, Voice, VoiceSettings
 from config import Config
 
 # 로깅 설정
