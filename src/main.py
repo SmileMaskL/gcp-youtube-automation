@@ -1,114 +1,159 @@
-# src/main.py
-# 이 파일은 utils.py에 있는 도구들을 순서대로 조립해서 최종 결과물을 만드는 공장장 역할을 합니다.
-
 import os
+import sys
 import logging
-import uuid
 from pathlib import Path
-from utils import (
-    generate_viral_content,
-    text_to_speech,
+
+# 프로젝트 루트 디렉토리를 Python 경로에 추가
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
+from src.config import Config
+from src.utils import (
+    generate_viral_content_gemini,
+    generate_viral_content_gpt4o,
+    generate_tts_with_elevenlabs,
     download_video_from_pexels,
-    Config,
-    logger
+    create_shorts_video,
+    estimate_audio_duration,
+    cleanup_temp_files
 )
-from moviepy.editor import VideoFileClip, AudioFileClip, TextClip, CompositeVideoClip
+from src.youtube_uploader import YouTubeUploader
 
-# 배경 영상, 음성, 자막을 합쳐 최종 쇼츠 영상을 완성하는 함수입니다.
-def create_final_video(script_text: str, bg_video_path: str, audio_path: str) -> str:
-    try:
-        logger.info("최종 영상 제작을 시작합니다.")
-        
-        audio_clip = AudioFileClip(audio_path)
-        video_clip = VideoFileClip(bg_video_path)
-        video_duration = audio_clip.duration
-        
-        # 배경 영상을 쇼츠 비율(9:16)에 맞게 자릅니다.
-        w, h = video_clip.size
-        target_ratio = 9 / 16
-        if w / h > target_ratio:
-            new_w = h * target_ratio
-            video_clip = video_clip.crop(x_center=w/2, width=new_w)
-        else:
-            new_h = w / target_ratio
-            video_clip = video_clip.crop(y_center=h/2, height=new_h)
-            
-        video_clip = video_clip.resize(height=Config.SHORTS_HEIGHT).set_duration(video_duration)
-        
-        # 보기 좋은 자막을 생성합니다.
-        # 혹시 한글 폰트가 없어서 오류가 날 경우를 대비해, 기본 폰트를 사용하도록 예외처리를 추가했습니다.
-        try:
-            font_path = 'NanumGothic-Bold'
-            TextClip("test", font=font_path) # 폰트가 있는지 테스트
-        except Exception:
-            logger.warning("NanumGothic-Bold 폰트를 찾을 수 없습니다. 기본 폰트를 사용합니다.")
-            font_path = 'Malgun Gothic' # Windows 기본 폰트
-        
-        txt_clip = TextClip(
-            script_text,
-            fontsize=70,
-            color='white',
-            font=font_path,
-            stroke_color='black',
-            stroke_width=2,
-            size=(Config.SHORTS_WIDTH * 0.8, None),
-            method='caption'
-        ).set_position('center').set_duration(video_duration)
-        
-        # 모든 재료(영상, 소리, 자막)를 하나로 합칩니다.
-        final_clip = CompositeVideoClip([video_clip, txt_clip]).set_audio(audio_clip)
-        
-        # 완성된 영상을 파일로 저장합니다.
-        safe_title = "".join(c for c in script_text[:20] if c.isalnum()).rstrip()
-        output_filename = f"{safe_title}_{uuid.uuid4()}.mp4"
-        output_path = str(Config.OUTPUT_DIR / output_filename)
-        
-        final_clip.write_videofile(
-            output_path, 
-            fps=30, 
-            codec='libx264',
-            audio_codec='aac',
-            threads=os.cpu_count() or 1,
-            logger=None
-        )
-        logger.info(f"최종 영상 제작 성공: {output_path}")
-        return output_path
-    except Exception as e:
-        logger.error(f"최종 영상 제작 중 심각한 오류 발생: {e}", exc_info=True)
-        return ""
+# 로깅 설정
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
-# 전체 자동화 시스템을 순서대로 실행하는 메인 함수입니다.
-def main():
-    logger.info("=" * 50)
-    logger.info("💰💰 유튜브 수익형 자동화 시스템 V4 (완결판) 시작 💰💰")
-    logger.info("=" * 50)
-    
-    Config.ensure_directories()
-    
-    # 1단계: AI에게 영상 주제를 주고 대본 받아오기
-    topic = "부자가 되는 사소한 습관" # <-- 여기 주제만 자유롭게 바꾸세요!
-    logger.info(f"🔥 오늘의 주제: {topic}")
-    content = generate_viral_content(topic)
-    
-    # 2단계: AI가 써준 대본을 목소리로 바꾸기
-    audio_filename = str(Config.TEMP_DIR / f"{uuid.uuid4()}.mp3")
-    audio_path = text_to_speech(content['script'], audio_filename)
-    
-    # 3단계: 주제에 맞는 배경 영상 다운로드 받기
-    audio_clip = AudioFileClip(audio_path)
-    estimated_duration = audio_clip.duration + 1
-    audio_clip.close()
-    video_path = download_video_from_pexels(topic, duration=estimated_duration)
-    
-    # 4단계: 모든 재료(영상, 소리, 자막)를 합쳐서 최종 영상 만들기
-    final_video_path = create_final_video(content['script'], video_path, audio_path)
-    
-    logger.info("=" * 50)
-    if final_video_path:
-        logger.info(f"✅ 모든 작업 완료! 최종 영상 경로: {final_video_path}")
+def load_environment():
+    """환경변수를 로드합니다."""
+    env_file = project_root / '.env'
+    if env_file.exists():
+        logger.info(f".env 파일을 로드합니다: {env_file}")
+        with open(env_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    os.environ[key.strip()] = value.strip()
     else:
-        logger.error("❌ 최종 영상 생성에 실패했습니다.")
-    logger.info("=" * 50)
+        logger.warning(".env 파일을 찾을 수 없습니다.")
+
+def check_required_apis():
+    """필수 API 키들이 설정되어 있는지 확인합니다."""
+    required_apis = {
+        'GEMINI_API_KEY': '구글 Gemini API',
+        'ELEVENLABS_API_KEY': 'ElevenLabs API',
+        'PEXELS_API_KEY': 'Pexels API (선택사항)'
+    }
+    
+    missing_apis = []
+    for key, name in required_apis.items():
+        if not os.getenv(key):
+            if key != 'PEXELS_API_KEY':  # Pexels는 선택사항
+                missing_apis.append(f"{name} ({key})")
+    
+    if missing_apis:
+        logger.error(f"다음 API 키들이 설정되지 않았습니다: {', '.join(missing_apis)}")
+        logger.error("프로젝트 루트의 .env 파일에 API 키를 설정해주세요.")
+        return False
+    
+    logger.info("모든 필수 API 키가 설정되었습니다.")
+    return True
+
+def main():
+    """메인 실행 함수"""
+    try:
+        # 환경 설정
+        load_environment()
+        
+        logger.info("=" * 50)
+        logger.info("💰💰 유튜브 수익형 자동화 시스템 V4 (완결판) 시작 💰💰")
+        logger.info("=" * 50)
+        
+        # 디렉토리 생성
+        Config.TEMP_DIR.mkdir(exist_ok=True)
+        Config.OUTPUT_DIR.mkdir(exist_ok=True)
+        
+        # API 키 확인
+        if not check_required_apis():
+            return
+        
+        # 오늘의 주제 설정
+        topics = [
+            "부자가 되는 사소한 습관",
+            "성공하는 사람들의 아침 루틴",
+            "돈 버는 부업 아이디어",
+            "투자 초보자를 위한 꿀팁",
+            "시간 관리의 비밀",
+            "자기계발 필수 습관",
+            "효율적인 공부법",
+            "건강한 라이프스타일",
+            "인간관계 개선 방법",
+            "스트레스 해소법"
+        ]
+        
+        import random
+        topic = random.choice(topics)
+        logger.info(f"🔥 오늘의 주제: {topic}")
+        
+        # 1단계: AI 콘텐츠 생성
+        logger.info("1단계: AI 콘텐츠 생성 중...")
+        try:
+            content = generate_viral_content_gemini(topic)
+        except Exception as e:
+            logger.warning(f"Gemini 실패, GPT-4o로 시도: {e}")
+            content = generate_viral_content_gpt4o(topic)
+        
+        logger.info(f"제목: {content['title']}")
+        logger.info(f"스크립트 길이: {len(content['script'])}자")
+        
+        # 2단계: 음성 생성
+        logger.info("2단계: 음성 생성 중...")
+        audio_path = generate_tts_with_elevenlabs(content['script'])
+        
+        # 3단계: 배경 영상 준비
+        logger.info("3단계: 배경 영상 준비 중...")
+        estimated_duration = estimate_audio_duration(content['script'])
+        video_path = download_video_from_pexels(topic, duration=estimated_duration)
+        
+        # 4단계: 최종 영상 생성
+        logger.info("4단계: 최종 영상 생성 중...")
+        final_video_path = create_shorts_video(video_path, audio_path, content['title'])
+        
+        # 5단계: 유튜브 업로드 (선택사항)
+        logger.info("5단계: 유튜브 업로드 확인 중...")
+        youtube_credentials = os.getenv("YOUTUBE_CREDENTIALS_PATH")
+        if youtube_credentials and Path(youtube_credentials).exists():
+            try:
+                uploader = YouTubeUploader()
+                video_url = uploader.upload_video(
+                    video_path=final_video_path,
+                    title=content['title'],
+                    description=f"{content['script']}\n\n{' '.join(content['hashtags'])}",
+                    tags=content['hashtags']
+                )
+                logger.info(f"✅ 유튜브 업로드 완료: {video_url}")
+            except Exception as e:
+                logger.warning(f"유튜브 업로드 실패: {e}")
+        else:
+            logger.info("유튜브 인증 정보가 없어 업로드를 건너뜁니다.")
+        
+        # 완료 메시지
+        logger.info("=" * 50)
+        logger.info("🎉 영상 생성이 완료되었습니다!")
+        logger.info(f"📁 최종 영상: {final_video_path}")
+        logger.info(f"📝 제목: {content['title']}")
+        logger.info(f"🏷️ 해시태그: {' '.join(content['hashtags'])}")
+        logger.info("=" * 50)
+        
+    except KeyboardInterrupt:
+        logger.info("사용자에 의해 중단되었습니다.")
+    except Exception as e:
+        logger.error(f"실행 중 오류 발생: {e}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        # 임시 파일 정리
+        cleanup_temp_files()
 
 if __name__ == "__main__":
     main()
