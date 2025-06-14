@@ -2,6 +2,7 @@
 수익 최적화 유틸리티 (2025년 최신 버전)
 """
 import os
+import re
 import requests
 import json
 import logging
