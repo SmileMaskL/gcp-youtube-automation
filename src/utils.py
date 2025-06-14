@@ -22,7 +22,6 @@ import google.generativeai as genai
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
 class FileManager:
     """파일 관리 유틸리티"""
 
@@ -52,14 +51,13 @@ class FileManager:
             logger.error(f"파일 해시 계산 실패: {e}")
             return ""
 
-@staticmethod
-def get_file_size(filepath: str) -> int:
-    """파일 크기 반환 (bytes)"""
-    try:
-        return os.path.getsize(filepath)  # 공백 8개로 수정
-    except Exception:
-        return 0
-
+    @staticmethod
+    def get_file_size(filepath: str) -> int:
+        """파일 크기 반환 (bytes)"""
+        try:
+            return os.path.getsize(filepath)  # 공백 4개 → 8개로 수정
+        except Exception:
+            return 0  # 공백 4개 → 8개로 수정
 
 def text_to_speech(text: str) -> str:
     """텍스트를 음성으로 변환 (완전 수정 버전)"""
