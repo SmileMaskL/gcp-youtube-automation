@@ -1,5 +1,5 @@
 """
-유틸리티 함수들 (수정 완료 버전)
+유틸리티 함수들 (완전 수정 버전 - 수익 최적화)
 """
 import os
 from elevenlabs.client import ElevenLabs
@@ -13,6 +13,10 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
 import requests
 from pathlib import Path
+import random
+from moviepy.editor import *
+import openai
+import google.generativeai as genai
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -56,7 +60,7 @@ class FileManager:
             return 0
 
 def text_to_speech(text: str) -> str:
-    """텍스트를 음성으로 변환 (수정된 버전)"""
+    """텍스트를 음성으로 변환 (수정된 버전) - 들여쓰기 완전 수정"""
     try:
         client = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
         audio = client.generate(
@@ -72,7 +76,199 @@ def text_to_speech(text: str) -> str:
         return temp_path
     except Exception as e:
         logger.error(f"음성 생성 실패: {e}")
+        # 백업: 무음 파일 생성
+        temp_path = os.path.join(tempfile.gettempdir(), f"{uuid.uuid4()}.mp3")
+        silent_audio = AudioClip(lambda t: 0, duration=len(text) * 0.1)
+        silent_audio.write_audiofile(temp_path, logger=None)
+        return temp_path
+
+def generate_trending_content() -> Dict[str, Any]:
+    """수익 최적화를 위한 트렌딩 콘텐츠 생성"""
+    trending_topics = [
+        "AI 기술 혁신", "암호화폐 투자", "부동산 투자", "주식 투자",
+        "온라인 비즈니스", "디지털 마케팅", "유튜브 수익화", "블로그 수익화",
+        "스타트업 창업", "사이드 프로젝트", "재테크", "경제 뉴스",
+        "기술 트렌드", "미래 전망", "성공 스토리"
+    ]
+    
+    topic = random.choice(trending_topics)
+    
+    # GPT-4o 또는 Gemini를 사용한 콘텐츠 생성
+    try:
+        content = generate_ai_content(topic)
+        return {
+            "topic": topic,
+            "title": content["title"],
+            "script": content["script"],
+            "keywords": content["keywords"],
+            "hashtags": content["hashtags"]
+        }
+    except Exception as e:
+        logger.error(f"AI 콘텐츠 생성 실패: {e}")
+        return get_fallback_content(topic)
+
+def generate_ai_content(topic: str) -> Dict[str, Any]:
+    """AI를 사용한 콘텐츠 생성 (GPT-4o 또는 Gemini)"""
+    try:
+        # 먼저 Gemini 시도 (무료)
+        genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+        model = genai.GenerativeModel('gemini-pro')
+        
+        prompt = f"""
+        다음 주제로 유튜브 쇼츠용 콘텐츠를 만들어주세요: {topic}
+        
+        요구사항:
+        1. 제목: 클릭률이 높은 제목 (30자 이내)
+        2. 대본: 60초 분량의 스크립트 (500자 이내)
+        3. 키워드: SEO용 키워드 5개
+        4. 해시태그: 트렌드 해시태그 10개
+        
+        JSON 형식으로 답변해주세요.
+        """
+        
+        response = model.generate_content(prompt)
+        content = json.loads(response.text)
+        return content
+        
+    except Exception as e:
+        logger.warning(f"Gemini 실패, GPT-4o 시도: {e}")
+        try:
+            # GPT-4o 시도
+            openai.api_key = os.getenv("OPENAI_API_KEY")
+            
+            response = openai.ChatCompletion.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": "유튜브 쇼츠 콘텐츠 전문가입니다."},
+                    {"role": "user", "content": f"'{topic}' 주제로 유튜브 쇼츠 콘텐츠를 JSON 형식으로 만들어주세요."}
+                ],
+                max_tokens=500
+            )
+            
+            content = json.loads(response.choices[0].message.content)
+            return content
+            
+        except Exception as e2:
+            logger.error(f"GPT-4o도 실패: {e2}")
+            raise
+
+def get_fallback_content(topic: str) -> Dict[str, Any]:
+    """AI 실패시 사용할 백업 콘텐츠"""
+    return {
+        "topic": topic,
+        "title": f"{topic}에 대한 놀라운 사실!",
+        "script": f"오늘은 {topic}에 대해 알아보겠습니다. 이 분야는 현재 매우 주목받고 있으며, 많은 기회가 있습니다. 여러분도 이 기회를 놓치지 마세요!",
+        "keywords": [topic, "투자", "수익", "기회", "성공"],
+        "hashtags": ["#투자", "#수익", "#성공", "#기회", "#돈", "#재테크", "#부업", "#사업", "#창업", "#미래"]
+    }
+
+def download_video_from_pexels(query: str = None) -> str:
+    """Pexels에서 무료 비디오 다운로드"""
+    try:
+        api_key = os.getenv("PEXELS_API_KEY")
+        if not api_key:
+            return create_simple_video()
+        
+        # 수익성 높은 키워드 사용
+        trending_queries = ["success", "money", "business", "technology", "future", "growth", "investment", "digital"]
+        search_query = query or random.choice(trending_queries)
+        
+        headers = {"Authorization": api_key}
+        url = f"https://api.pexels.com/videos/search?query={search_query}&per_page=10&orientation=portrait"
+        
+        response = requests.get(url, headers=headers)
+        data = response.json()
+        
+        if data.get("videos"):
+            video = random.choice(data["videos"])
+            video_url = video["video_files"][0]["link"]
+            
+            # 비디오 다운로드
+            video_response = requests.get(video_url)
+            temp_path = os.path.join(tempfile.gettempdir(), f"{uuid.uuid4()}.mp4")
+            
+            with open(temp_path, "wb") as f:
+                f.write(video_response.content)
+            
+            return temp_path
+        else:
+            return create_simple_video()
+            
+    except Exception as e:
+        logger.error(f"Pexels 비디오 다운로드 실패: {e}")
+        return create_simple_video()
+
+def create_simple_video() -> str:
+    """간단한 비디오 생성 (백업용)"""
+    try:
+        # 컬러풀한 배경 비디오 생성
+        colors = ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#DDA0DD"]
+        color = random.choice(colors)
+        
+        clip = ColorClip(size=(1080, 1920), color=color, duration=60)
+        temp_path = os.path.join(tempfile.gettempdir(), f"{uuid.uuid4()}.mp4")
+        clip.write_videofile(temp_path, fps=30, logger=None)
+        
+        return temp_path
+    except Exception as e:
+        logger.error(f"간단한 비디오 생성 실패: {e}")
         raise
+
+def add_text_to_clip(video_path: str, text: str, output_path: str) -> str:
+    """비디오에 텍스트 추가 (완전 수정)"""
+    try:
+        video = VideoFileClip(video_path)
+        
+        # 텍스트 스타일 (수익 최적화)
+        txt_clip = TextClip(
+            text,
+            fontsize=60,
+            color='white',
+            font='Arial-Bold',
+            stroke_color='black',
+            stroke_width=3,
+            method='caption',
+            size=(video.w * 0.8, None)
+        ).set_position('center').set_duration(video.duration)
+        
+        # 텍스트를 비디오에 합성
+        final_video = CompositeVideoClip([video, txt_clip])
+        final_video.write_videofile(output_path, fps=30, logger=None)
+        
+        # 메모리 정리
+        video.close()
+        txt_clip.close()
+        final_video.close()
+        
+        return output_path
+        
+    except Exception as e:
+        logger.error(f"텍스트 추가 실패: {e}")
+        # 원본 비디오 반환
+        return video_path
+
+def optimize_for_revenue() -> Dict[str, Any]:
+    """수익 최적화 설정"""
+    return {
+        "upload_schedule": "daily",  # 매일 업로드
+        "best_times": ["09:00", "12:00", "18:00", "21:00"],  # 최적 업로드 시간
+        "content_types": [
+            "투자 팁", "부업 아이디어", "성공 스토리", "기술 트렌드",
+            "경제 뉴스", "재테크", "창업 아이디어", "온라인 비즈니스"
+        ],
+        "monetization": {
+            "enable_ads": True,
+            "enable_memberships": True,
+            "enable_super_chat": True,
+            "enable_super_thanks": True
+        },
+        "seo_optimization": {
+            "trending_keywords": [
+                "돈 버는 방법", "투자", "부업", "재테크", "성공",
+                "AI", "기술", "미래", "창업", "비즈니스"
+            ]
+        }
+    }
 
 class ConfigManager:
     """설정 관리 유틸리티"""
@@ -101,13 +297,14 @@ class ConfigManager:
             logger.error(f"설정 파일 저장 실패: {e}")
     
     def get_default_config(self) -> Dict[str, Any]:
-        """기본 설정 반환"""
+        """기본 설정 반환 (수익 최적화)"""
         return {
             "video": {
-                "resolution": "1920x1080",
+                "resolution": "1080x1920",  # 쇼츠 최적화
                 "fps": 30,
                 "bitrate": "5000k",
-                "format": "mp4"
+                "format": "mp4",
+                "duration": 60  # 쇼츠 최적 길이
             },
             "audio": {
                 "bitrate": "128k",
@@ -115,9 +312,12 @@ class ConfigManager:
             },
             "upload": {
                 "auto_upload": True,
-                "privacy": "unlisted",
-                "category": "22"  # People & Blogs
+                "privacy": "public",  # 수익을 위해 공개
+                "category": "22",  # People & Blogs
+                "schedule": "daily",
+                "times": ["09:00", "18:00"]
             },
+            "revenue": optimize_for_revenue(),
             "cleanup": {
                 "auto_cleanup": True,
                 "max_age_days": 7,
