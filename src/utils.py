@@ -73,11 +73,11 @@ def text_to_speech(text: str) -> str:
             voice="Rachel",
             model="eleven_multilingual_v2"
         )
-
+        
         temp_path = os.path.join(tempfile.gettempdir(), f"{uuid.uuid4()}.mp3")
         with open(temp_path, "wb") as f:
             f.write(audio)
-
+        
         return temp_path
     except Exception as e:
         logger.error(f"음성 생성 실패: {e}")
