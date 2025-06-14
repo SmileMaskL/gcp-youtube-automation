@@ -63,7 +63,6 @@ class FileManager:
 
 
 def text_to_speech(text: str) -> str:
-    """텍스트를 음성으로 변환 (완전 수정 버전)"""
     try:
         client = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
         audio = client.generate(
