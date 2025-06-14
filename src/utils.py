@@ -96,6 +96,8 @@ def create_simple_video(duration=15) -> str:
     logger.info("기본 색상 배경 영상을 생성합니다.")
     colors = ["#1a1a1a", "#2a0d0d", "#0d1a14", "#0e0d2a"]
     video_path = Config.TEMP_DIR / f"default_bg_{uuid.uuid4()}.mp4"
+    
+    # 크기와 색상을 모두 명시적으로 지정
     clip = ColorClip(
         size=(Config.SHORTS_WIDTH, Config.SHORTS_HEIGHT),
         color=random.choice(colors),
