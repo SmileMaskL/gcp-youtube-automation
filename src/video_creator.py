@@ -8,6 +8,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 def create_video(script, topic):
     logger.info("📽️ 영상 생성 시작...")
 
@@ -33,9 +34,13 @@ def create_video(script, topic):
             logger.warning("⚠️ 음성 생성 실패, 스킵")
             continue
 
-        video = VideoFileClip(background_video).subclip(0, AudioFileClip(audio_path).duration)
+        video = VideoFileClip(background_video).subclip(
+            0, AudioFileClip(audio_path).duration)
         video = video.set_audio(AudioFileClip(audio_path))
-        video = add_text_to_clip(video.filename, sentence, "temp_text.mp4")  # 수정된 부분
+        video = add_text_to_clip(
+            video.filename,
+            sentence,
+            "temp_text.mp4")  # 수정된 부분
         clips.append(video)
 
     if not clips:
