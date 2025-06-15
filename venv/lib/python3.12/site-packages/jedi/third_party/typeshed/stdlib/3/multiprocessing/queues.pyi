@@ -1,11 +1,8 @@
-import queue
-import sys
 from typing import Any, Generic, Optional, TypeVar
 
-if sys.version_info >= (3, 9):
-    from types import GenericAlias
+import queue
 
-_T = TypeVar("_T")
+_T = TypeVar('_T')
 
 class Queue(queue.Queue[_T]):
     # FIXME: `ctx` is a circular dependency and it's not actually optional.
@@ -31,5 +28,3 @@ class SimpleQueue(Generic[_T]):
     def empty(self) -> bool: ...
     def get(self) -> _T: ...
     def put(self, item: _T) -> None: ...
-    if sys.version_info >= (3, 9):
-        def __class_getitem__(cls, item: Any) -> GenericAlias: ...

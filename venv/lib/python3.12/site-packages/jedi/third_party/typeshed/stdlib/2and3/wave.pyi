@@ -1,7 +1,11 @@
-import sys
-from typing import IO, Any, BinaryIO, NamedTuple, NoReturn, Optional, Text, Tuple, Union
+# Stubs for wave (Python 2 and 3)
 
-_File = Union[Text, IO[bytes]]
+import sys
+from typing import (
+    Any, NamedTuple, NoReturn, Optional, Text, BinaryIO, Union, Tuple
+)
+
+_File = Union[Text, BinaryIO]
 
 class Error(Exception): ...
 
@@ -68,6 +72,4 @@ class Wave_write:
 
 # Returns a Wave_read if mode is rb and Wave_write if mode is wb
 def open(f: _File, mode: Optional[str] = ...) -> Any: ...
-
-if sys.version_info < (3, 9):
-    openfp = open
+openfp = open

@@ -1,8 +1,17 @@
-from typing import Any, Container, Mapping, Optional, Text, Tuple, Union
+# Stubs for requests.adapters (Python 3)
 
-from . import cookies, exceptions, models, structures, utils
-from .packages.urllib3 import exceptions as urllib3_exceptions, poolmanager, response
+from typing import Any, Container, Union, Text, Tuple, Optional, Mapping
+from . import models
+from .packages.urllib3 import poolmanager
+from .packages.urllib3 import response
 from .packages.urllib3.util import retry
+from . import compat
+from . import utils
+from . import structures
+from .packages.urllib3 import exceptions as urllib3_exceptions
+from . import cookies
+from . import exceptions
+from . import auth
 
 PreparedRequest = models.PreparedRequest
 Response = models.Response
@@ -35,15 +44,13 @@ DEFAULT_RETRIES: Any
 
 class BaseAdapter:
     def __init__(self) -> None: ...
-    def send(
-        self,
-        request: PreparedRequest,
-        stream: bool = ...,
-        timeout: Union[None, float, Tuple[float, float], Tuple[float, None]] = ...,
-        verify: Union[bool, str] = ...,
-        cert: Union[None, Union[bytes, Text], Container[Union[bytes, Text]]] = ...,
-        proxies: Optional[Mapping[str, str]] = ...,
-    ) -> Response: ...
+    def send(self,
+             request: PreparedRequest,
+             stream: bool = ...,
+             timeout: Union[None, float, Tuple[float, float]] = ...,
+             verify: Union[bool, str] = ...,
+             cert: Union[None, Union[bytes, Text], Container[Union[bytes, Text]]] = ...,
+             proxies: Optional[Mapping[str, str]] = ...) -> Response: ...
     def close(self) -> None: ...
 
 class HTTPAdapter(BaseAdapter):
@@ -51,7 +58,8 @@ class HTTPAdapter(BaseAdapter):
     max_retries: Any
     config: Any
     proxy_manager: Any
-    def __init__(self, pool_connections=..., pool_maxsize=..., max_retries=..., pool_block=...) -> None: ...
+    def __init__(self, pool_connections=..., pool_maxsize=..., max_retries=...,
+                 pool_block=...) -> None: ...
     poolmanager: Any
     def init_poolmanager(self, connections, maxsize, block=..., **pool_kwargs): ...
     def proxy_manager_for(self, proxy, **proxy_kwargs): ...
@@ -62,12 +70,10 @@ class HTTPAdapter(BaseAdapter):
     def request_url(self, request, proxies): ...
     def add_headers(self, request, **kwargs): ...
     def proxy_headers(self, proxy): ...
-    def send(
-        self,
-        request: PreparedRequest,
-        stream: bool = ...,
-        timeout: Union[None, float, Tuple[float, float], Tuple[float, None]] = ...,
-        verify: Union[bool, str] = ...,
-        cert: Union[None, Union[bytes, Text], Container[Union[bytes, Text]]] = ...,
-        proxies: Optional[Mapping[str, str]] = ...,
-    ) -> Response: ...
+    def send(self,
+             request: PreparedRequest,
+             stream: bool = ...,
+             timeout: Union[None, float, Tuple[float, float]] = ...,
+             verify: Union[bool, str] = ...,
+             cert: Union[None, Union[bytes, Text], Container[Union[bytes, Text]]] = ...,
+             proxies: Optional[Mapping[str, str]] = ...) -> Response: ...

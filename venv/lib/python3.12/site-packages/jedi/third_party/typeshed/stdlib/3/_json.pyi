@@ -1,4 +1,6 @@
-from typing import Any, Callable, Dict, Optional, Tuple
+"""Stub file for the '_json' module."""
+
+from typing import Any, Tuple
 
 class make_encoder:
     sort_keys: Any
@@ -9,19 +11,9 @@ class make_encoder:
     default: Any
     encoder: Any
     item_separator: Any
-    def __init__(
-        self,
-        markers: Optional[Dict[int, Any]],
-        default: Callable[[Any], Any],
-        encoder: Callable[[str], str],
-        indent: Optional[int],
-        key_separator: str,
-        item_separator: str,
-        sort_keys: bool,
-        skipkeys: bool,
-        allow_nan: bool,
-    ) -> None: ...
-    def __call__(self, obj: object, _current_indent_level: int) -> Any: ...
+    def __init__(self, markers, default, encoder, indent, key_separator,
+                 item_separator, sort_keys, skipkeys, allow_nan) -> None: ...
+    def __call__(self, *args, **kwargs) -> Any: ...
 
 class make_scanner:
     object_hook: Any

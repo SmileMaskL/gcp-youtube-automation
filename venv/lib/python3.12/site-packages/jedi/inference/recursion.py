@@ -12,7 +12,7 @@ count the function calls.
 Settings
 ~~~~~~~~~~
 
-Recursion settings are important if you don't want extremely
+Recursion settings are important if you don't want extremly
 recursive python code to go absolutely crazy.
 
 The default values are based on experiments while completing the |jedi| library
@@ -50,7 +50,7 @@ A function may not be executed more than this number of times recursively.
 """
 
 
-class RecursionDetector:
+class RecursionDetector(object):
     def __init__(self):
         self.pushed_nodes = []
 
@@ -92,7 +92,7 @@ def execution_recursion_decorator(default=NO_VALUES):
     return decorator
 
 
-class ExecutionRecursionDetector:
+class ExecutionRecursionDetector(object):
     """
     Catches recursions of executions.
     """

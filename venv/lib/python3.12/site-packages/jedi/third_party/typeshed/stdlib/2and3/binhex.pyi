@@ -1,4 +1,10 @@
-from typing import IO, Any, Tuple, Union
+from typing import (
+    Any,
+    IO,
+    Tuple,
+    Union,
+)
+
 
 class Error(Exception): ...
 

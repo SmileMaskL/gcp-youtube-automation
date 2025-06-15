@@ -1,3 +1,5 @@
+# Stubs for quopri (Python 2 and 3)
+
 from typing import BinaryIO
 
 def encode(input: BinaryIO, output: BinaryIO, quotetabs: int, header: int = ...) -> None: ...

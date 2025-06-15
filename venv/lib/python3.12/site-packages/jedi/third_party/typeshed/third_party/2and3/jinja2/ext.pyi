@@ -15,15 +15,7 @@ class Extension:
     def filter_stream(self, stream): ...
     def parse(self, parser): ...
     def attr(self, name, lineno: Optional[Any] = ...): ...
-    def call_method(
-        self,
-        name,
-        args: Optional[Any] = ...,
-        kwargs: Optional[Any] = ...,
-        dyn_args: Optional[Any] = ...,
-        dyn_kwargs: Optional[Any] = ...,
-        lineno: Optional[Any] = ...,
-    ): ...
+    def call_method(self, name, args: Optional[Any] = ..., kwargs: Optional[Any] = ..., dyn_args: Optional[Any] = ..., dyn_kwargs: Optional[Any] = ..., lineno: Optional[Any] = ...): ...
 
 class InternationalizationExtension(Extension):
     tags: Any

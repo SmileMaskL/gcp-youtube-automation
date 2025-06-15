@@ -1,3 +1,5 @@
+# Source: https://github.com/python/cpython/blob/master/Lib/sre_constants.py
+
 from typing import Any, Dict, List, Optional, Union
 
 MAGIC: int
@@ -12,7 +14,7 @@ class error(Exception):
 
 class _NamedIntConstant(int):
     name: Any
-    def __new__(cls, value: int, name: str) -> _NamedIntConstant: ...
+    def __new__(cls, value: int, name: str): ...
 
 MAXREPEAT: _NamedIntConstant
 OPCODES: List[_NamedIntConstant]
@@ -36,6 +38,7 @@ SRE_FLAG_ASCII: int
 SRE_INFO_PREFIX: int
 SRE_INFO_LITERAL: int
 SRE_INFO_CHARSET: int
+
 
 # Stubgen above; manually defined constants below (dynamic at runtime)
 

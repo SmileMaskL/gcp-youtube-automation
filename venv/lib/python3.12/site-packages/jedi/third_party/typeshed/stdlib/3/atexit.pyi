@@ -1,3 +1,5 @@
+"""Stub file for the 'atexit' module."""
+
 from typing import Any, Callable
 
 def _clear() -> None: ...

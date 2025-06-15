@@ -4,9 +4,7 @@ from _csv import (
     QUOTE_MINIMAL as QUOTE_MINIMAL,
     QUOTE_NONE as QUOTE_NONE,
     QUOTE_NONNUMERIC as QUOTE_NONNUMERIC,
-    Dialect as Dialect,
     Error as Error,
-    _DialectLike,
     _reader,
     _writer,
     field_size_limit as field_size_limit,
@@ -18,9 +16,20 @@ from _csv import (
     writer as writer,
 )
 from collections import OrderedDict
-from typing import Any, Dict, Iterable, Iterator, List, Mapping, Optional, Sequence, Text, Type
+from typing import Any, Dict, Iterable, Iterator, List, Mapping, Optional, Sequence, Text, Type, Union
 
+_Dialect = Union[str, Dialect, Type[Dialect]]
 _DictRow = Mapping[str, Any]
+
+class Dialect(object):
+    delimiter: str
+    quotechar: Optional[str]
+    escapechar: Optional[str]
+    doublequote: bool
+    skipinitialspace: bool
+    lineterminator: str
+    quoting: int
+    def __init__(self) -> None: ...
 
 class excel(Dialect):
     delimiter: str
@@ -42,9 +51,7 @@ if sys.version_info >= (3,):
         lineterminator: str
         quoting: int
 
-if sys.version_info >= (3, 8):
-    _DRMapping = Dict[str, str]
-elif sys.version_info >= (3, 6):
+if sys.version_info >= (3, 6):
     _DRMapping = OrderedDict[str, str]
 else:
     _DRMapping = Dict[str, str]
@@ -53,16 +60,16 @@ class DictReader(Iterator[_DRMapping]):
     restkey: Optional[str]
     restval: Optional[str]
     reader: _reader
-    dialect: _DialectLike
+    dialect: _Dialect
     line_num: int
-    fieldnames: Optional[Sequence[str]]
+    fieldnames: Sequence[str]
     def __init__(
         self,
         f: Iterable[Text],
         fieldnames: Optional[Sequence[str]] = ...,
         restkey: Optional[str] = ...,
         restval: Optional[str] = ...,
-        dialect: _DialectLike = ...,
+        dialect: _Dialect = ...,
         *args: Any,
         **kwds: Any,
     ) -> None: ...
@@ -83,15 +90,12 @@ class DictWriter(object):
         fieldnames: Iterable[str],
         restval: Optional[Any] = ...,
         extrasaction: str = ...,
-        dialect: _DialectLike = ...,
+        dialect: _Dialect = ...,
         *args: Any,
         **kwds: Any,
     ) -> None: ...
-    if sys.version_info >= (3, 8):
-        def writeheader(self) -> Any: ...
-    else:
-        def writeheader(self) -> None: ...
-    def writerow(self, rowdict: _DictRow) -> Any: ...
+    def writeheader(self) -> None: ...
+    def writerow(self, rowdict: _DictRow) -> None: ...
     def writerows(self, rowdicts: Iterable[_DictRow]) -> None: ...
 
 class Sniffer(object):

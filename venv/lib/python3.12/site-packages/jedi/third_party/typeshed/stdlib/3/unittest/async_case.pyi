@@ -1,6 +1,5 @@
 import sys
 from typing import Any, Awaitable, Callable
-
 from .case import TestCase
 
 if sys.version_info >= (3, 8):

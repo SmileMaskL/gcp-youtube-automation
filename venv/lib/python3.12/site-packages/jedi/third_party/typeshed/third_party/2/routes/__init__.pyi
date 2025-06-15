@@ -1,4 +1,5 @@
-from . import mapper, util
+from . import mapper
+from . import util
 
 class _RequestConfig:
     def __getattr__(self, name): ...

@@ -1,4 +1,7 @@
-from . import client, connection, exceptions, utils
+from . import client
+from . import connection
+from . import utils
+from . import exceptions
 
 Redis = client.Redis
 StrictRedis = client.StrictRedis

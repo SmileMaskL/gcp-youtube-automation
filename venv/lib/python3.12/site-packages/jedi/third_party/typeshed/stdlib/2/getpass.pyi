@@ -1,4 +1,6 @@
-from typing import IO, Any
+# Stubs for getpass (Python 2)
+
+from typing import Any, IO
 
 class GetPassWarning(UserWarning): ...
 

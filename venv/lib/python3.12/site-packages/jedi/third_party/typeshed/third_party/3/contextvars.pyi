@@ -1,10 +1,6 @@
-import sys
 from typing import Any, Callable, ClassVar, Generic, Iterator, Mapping, TypeVar
 
-if sys.version_info >= (3, 9):
-    from types import GenericAlias
-
-_T = TypeVar("_T")
+_T = TypeVar('_T')
 
 class ContextVar(Generic[_T]):
     def __init__(self, name: str, *, default: _T = ...) -> None: ...
@@ -13,8 +9,6 @@ class ContextVar(Generic[_T]):
     def get(self, default: _T = ...) -> _T: ...
     def set(self, value: _T) -> Token[_T]: ...
     def reset(self, token: Token[_T]) -> None: ...
-    if sys.version_info >= (3, 9):
-        def __class_getitem__(cls, item: Any) -> GenericAlias: ...
 
 class Token(Generic[_T]):
     @property
@@ -22,8 +16,6 @@ class Token(Generic[_T]):
     @property
     def old_value(self) -> Any: ...  # returns either _T or MISSING, but that's hard to express
     MISSING: ClassVar[object]
-    if sys.version_info >= (3, 9):
-        def __class_getitem__(cls, item: Any) -> GenericAlias: ...
 
 def copy_context() -> Context: ...
 

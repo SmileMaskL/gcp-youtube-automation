@@ -1,5 +1,4 @@
 from typing import Any, Optional
-
 from boto.auth_handler import AuthHandler
 
 SIGV4_DETECT: Any

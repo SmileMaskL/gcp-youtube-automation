@@ -1,9 +1,8 @@
-from typing import NamedTuple, Tuple
+from typing import Tuple, NamedTuple
 
 class error(Exception): ...
 
 RLIM_INFINITY: int
-
 def getrlimit(resource: int) -> Tuple[int, int]: ...
 def setrlimit(resource: int, limits: Tuple[int, int]) -> None: ...
 

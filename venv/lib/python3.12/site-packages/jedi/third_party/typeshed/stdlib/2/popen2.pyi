@@ -1,6 +1,7 @@
-from typing import Any, Iterable, List, Optional, TextIO, Tuple, TypeVar, Union
+from typing import Any, Iterable, List, Optional, Union, TextIO, Tuple, TypeVar
 
-_T = TypeVar("_T")
+_T = TypeVar('_T')
+
 
 class Popen3:
     sts: int

@@ -1,4 +1,5 @@
-from typing import Any, Callable
+"""Stubs for the "thread" module."""
+from typing import Callable, Any
 
 def _count() -> int: ...
 

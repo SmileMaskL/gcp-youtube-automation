@@ -1,3 +1,5 @@
+"""Stub file for the 'strop' module."""
+
 from typing import List, Sequence
 
 lowercase: str

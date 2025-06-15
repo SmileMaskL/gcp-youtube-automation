@@ -1,5 +1,4 @@
 from typing import Any
-
 from boto.plugin import Plugin
 
 class NotReadyToAuthenticate(Exception): ...

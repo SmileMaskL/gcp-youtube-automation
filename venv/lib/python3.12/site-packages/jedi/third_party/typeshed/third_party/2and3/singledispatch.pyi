@@ -1,6 +1,8 @@
-from typing import Any, Callable, Generic, Mapping, TypeVar, overload
+from typing import Any, Callable, Generic, Mapping, Optional, TypeVar, overload
+
 
 _T = TypeVar("_T")
+
 
 class _SingleDispatchCallable(Generic[_T]):
     registry: Mapping[Any, Callable[..., _T]]

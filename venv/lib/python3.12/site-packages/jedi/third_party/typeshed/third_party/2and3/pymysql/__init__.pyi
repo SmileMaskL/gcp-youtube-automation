@@ -1,28 +1,28 @@
 import sys
-from typing import Callable, FrozenSet, Tuple
+from typing import Union, Tuple, Callable, FrozenSet
 
 from .connections import Connection as _Connection
 from .constants import FIELD_TYPE as FIELD_TYPE
 from .converters import escape_dict as escape_dict, escape_sequence as escape_sequence, escape_string as escape_string
 from .err import (
-    DatabaseError as DatabaseError,
-    DataError as DataError,
-    Error as Error,
-    IntegrityError as IntegrityError,
-    InterfaceError as InterfaceError,
-    InternalError as InternalError,
-    MySQLError as MySQLError,
-    NotSupportedError as NotSupportedError,
-    OperationalError as OperationalError,
-    ProgrammingError as ProgrammingError,
     Warning as Warning,
+    Error as Error,
+    InterfaceError as InterfaceError,
+    DataError as DataError,
+    DatabaseError as DatabaseError,
+    OperationalError as OperationalError,
+    IntegrityError as IntegrityError,
+    InternalError as InternalError,
+    NotSupportedError as NotSupportedError,
+    ProgrammingError as ProgrammingError,
+    MySQLError as MySQLError,
 )
 from .times import (
     Date as Date,
-    DateFromTicks as DateFromTicks,
     Time as Time,
-    TimeFromTicks as TimeFromTicks,
     Timestamp as Timestamp,
+    DateFromTicks as DateFromTicks,
+    TimeFromTicks as TimeFromTicks,
     TimestampFromTicks as TimestampFromTicks,
 )
 
@@ -46,10 +46,8 @@ ROWID: DBAPISet
 
 if sys.version_info >= (3, 0):
     def Binary(x) -> bytes: ...
-
 else:
     def Binary(x) -> bytearray: ...
-
 def Connect(*args, **kwargs) -> _Connection: ...
 def get_client_info() -> str: ...
 

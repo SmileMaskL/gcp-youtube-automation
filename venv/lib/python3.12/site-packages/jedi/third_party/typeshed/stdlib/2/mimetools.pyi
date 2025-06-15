@@ -1,5 +1,5 @@
-import rfc822
 from typing import Any
+import rfc822
 
 class Message(rfc822.Message):
     encodingheader: Any

@@ -1,12 +1,9 @@
 import sys
+
 from typing import Any
+from base64 import encodestring as encodebytes
 
-if sys.version_info >= (3,):
-    from base64 import encodebytes as encodebytes
-else:
-    from base64 import encodestring
-
-    encodebytes = encodestring
+from six.moves import http_client
 
 expanduser: Any
 

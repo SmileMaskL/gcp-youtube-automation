@@ -1,8 +1,8 @@
-import io
 from typing import Any
-
-from . import _collections, exceptions
-from .connection import BaseSSLError as BaseSSLError, HTTPException as HTTPException
+import io
+from . import _collections
+from . import exceptions
+from .connection import HTTPException as HTTPException, BaseSSLError as BaseSSLError
 from .util import response
 
 HTTPHeaderDict = _collections.HTTPHeaderDict
@@ -32,20 +32,7 @@ class HTTPResponse(io.IOBase):
     reason: Any
     strict: Any
     decode_content: Any
-    def __init__(
-        self,
-        body=...,
-        headers=...,
-        status=...,
-        version=...,
-        reason=...,
-        strict=...,
-        preload_content=...,
-        decode_content=...,
-        original_response=...,
-        pool=...,
-        connection=...,
-    ) -> None: ...
+    def __init__(self, body=..., headers=..., status=..., version=..., reason=..., strict=..., preload_content=..., decode_content=..., original_response=..., pool=..., connection=...) -> None: ...
     def get_redirect_location(self): ...
     def release_conn(self): ...
     @property

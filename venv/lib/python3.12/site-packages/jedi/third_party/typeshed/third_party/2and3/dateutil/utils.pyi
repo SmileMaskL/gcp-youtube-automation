@@ -1,5 +1,6 @@
-from datetime import datetime, timedelta, tzinfo
 from typing import Optional
+from datetime import datetime, tzinfo, timedelta
+
 
 def default_tzinfo(dt: datetime, tzinfo: tzinfo) -> datetime: ...
 def today(tzinfo: Optional[tzinfo] = ...) -> datetime: ...

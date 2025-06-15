@@ -1,5 +1,5 @@
-from collections import MutableMapping
 from typing import Any, NoReturn, TypeVar
+from collections import MutableMapping
 
 _KT = TypeVar("_KT")
 _VT = TypeVar("_VT")
