@@ -32,7 +32,6 @@ load_dotenv()
 
 # ✅ 설정
 class Config:
-class Config:
     TEMP_DIR = Path("temp")
     OUTPUT_DIR = Path("output")
     SHORTS_WIDTH = 1080
