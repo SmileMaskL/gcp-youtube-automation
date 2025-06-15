@@ -1,68 +1,17 @@
-# Core dependencies
-annotated-types==0.7.0
-anyio==4.9.0
-asttokens==3.0.0
-beautifulsoup4==4.12.2
-cachetools==5.5.2
-certifi==2025.4.26
-charset-normalizer==3.4.2
-click==8.1.8
-colorama==0.4.6
-decorator==4.4.2
-distro==1.9.0
-elevenlabs==1.2.1
-executing==2.2.0
-google-api-core==2.17.1
-google-api-python-client==2.172.0
-google-auth==2.40.3
-google-auth-httplib2==0.2.0
-google-auth-oauthlib==1.2.0
-google-generativeai==0.8.5
-googleapis-common-protos==1.62.0
-grpcio==1.73.0
-grpcio-status==1.62.3
-gTTS==2.5.1
-h11==0.16.0
-httpcore==1.0.9
-httplib2==0.22.0
-httpx==0.28.1
-idna==3.10
-imageio==2.34.1
-imageio-ffmpeg>=0.4.9
-ipython==8.12.0
-jedi==0.19.1
-lxml==4.9.3
-matplotlib-inline==0.1.7
-moviepy==1.0.3
-numpy==1.26.4
-oauthlib==3.2.2
-openai==1.30.1
-parso==0.8.4
-pexpect==4.9.0
-Pillow==10.3.0
-proglog==0.1.12
-prompt-toolkit==3.0.51
-proto-plus==1.26.1
-protobuf==4.25.8
-ptyprocess==0.7.0
-pure-eval==0.2.3
-pyasn1==0.6.1
-pyasn1-modules==0.4.2
-pydantic==2.11.6
-pydub==0.25.1
-Pygments==2.19.1
+# AI & Core
+google-generativeai==0.5.4 # 1.5-pro 모델과 안정적인 버전
 python-dotenv==1.0.1
-requests==2.31.0
-requests-oauthlib==2.0.0
-rsa==4.9.1
-setuptools==80.0.0
-sniffio==1.3.1
-soupsieve==2.7
-stack-data==0.6.3
-tqdm==4.66.1
-traitlets==5.14.3
-typing-extensions==4.14.0
-uritemplate==4.2.0
-urllib3==2.4.0
-wcwidth==0.2.13
-websockets==15.0.1
+requests==2.32.3
+
+# Video & Image
+moviepy==1.0.3
+Pillow==10.3.0 # Pillow는 moviepy와 함께 자주 쓰임
+numpy==1.26.4
+pexels-api==1.0.1 # Pexels API 라이브러리 추가
+
+# Text-to-Speech (TTS)
+gtts==2.5.1
+elevenlabs==1.2.1
+
+# 💥 문제의 ipython 버전을 직접 지정하여 충돌을 원천 방지합니다.
+ipython==8.26.0
