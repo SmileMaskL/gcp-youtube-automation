@@ -1,59 +1,37 @@
 import os
 import uuid
-import json
-import random
-import logging
 import requests
-from dotenv import load_dotenv
-from moviepy.editor import (
-    ColorClip, TextClip, CompositeVideoClip, AudioFileClip, VideoFileClip
-)
-from src.config import Config
-import google.generativeai as genai
-from elevenlabs import ElevenLabs, Voice
-
-# 초기 설정
-load_dotenv()
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
-logger = logging.getLogger(__name__)
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-model = genai.GenerativeModel("gemini-1.5-flash")
-
-
-def generate_viral_content_gemini(topic: str) -> dict:
-    prompt = f"""
-다음 JSON 형식으로 응답:
-{{
-  "title": "25자 이내 제목",
-  "script": "300자 내외 대본",
-  "hashtags": ["#태그1", "#태그2", "#태그3"]
-}}
-주제: {topic}에 대한 YouTube Shorts 콘텐츠 생성"""
-    try:
-        response = model.generate_content(prompt)
-        content = json.loads(response.text)
-        return content
-    except Exception as e:
-        logger.error(f"[Gemini 오류] {e}")
-        return {
-            "title": f"{topic}의 비밀",
-            "script": f"{topic}으로 돈 버는 꿀팁을 공개합니다!",
-            "hashtags": [f"#{topic}", "#꿀팁", "#부자"]
-        }
-
+from pathlib import Path
+from core.config import Config
 
 def generate_tts_with_elevenlabs(script: str) -> str:
-    client = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
     voice_id = os.getenv("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM")
-    audio_bytes = client.text_to_speech.convert(
-        voice=voice_id,
-        model_id="eleven_multilingual_v2",
-        text=script
-    )
+    api_key = os.getenv("ELEVENLABS_API_KEY")
+
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
+    headers = {
+        "xi-api-key": api_key,
+        "Content-Type": "application/json"
+    }
+    json_data = {
+        "text": script,
+        "model_id": "eleven_multilingual_v2",
+        "voice_settings": {
+            "stability": 0.5,
+            "similarity_boost": 0.75
+        }
+    }
+
+    response = requests.post(url, headers=headers, json=json_data)
+    if response.status_code != 200:
+        raise Exception(f"TTS 실패: {response.status_code} - {response.text}")
+
     audio_path = Config.TEMP_DIR / f"audio_{uuid.uuid4()}.mp3"
     with open(audio_path, "wb") as f:
-        f.write(audio_bytes)
+        f.write(response.content)
+
     return str(audio_path)
+
     except Exception as e:
         logger.error(f"[TTS 실패] {e}")
         raise
