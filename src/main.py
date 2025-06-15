@@ -11,6 +11,7 @@ from moviepy.editor import (
 from elevenlabs import generate, save
 from src.config import Config
 import google.generativeai as genai
+from elevenlabs import ElevenLabs, Voice
 
 # 초기 설정
 load_dotenv()
@@ -44,18 +45,24 @@ def generate_viral_content_gemini(topic: str) -> dict:
 
 def generate_tts_with_elevenlabs(script: str) -> str:
     try:
-        audio = generate(
-            text=script,
-            voice=os.getenv("ELEVENLABS_VOICE_ID"),
-            model="eleven_multilingual_v2"
+        client = ElevenLabs(
+            api_key=os.getenv("ELEVENLABS_API_KEY")
         )
+
+        voice_id = os.getenv("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM")
+        audio = client.text_to_speech.convert(
+            voice=voice_id,
+            model_id="eleven_multilingual_v2",
+            text=script
+        )
+
         audio_path = Config.TEMP_DIR / f"audio_{uuid.uuid4()}.mp3"
-        save(audio, str(audio_path))
+        with open(audio_path, "wb") as f:
+            f.write(audio)
         return str(audio_path)
     except Exception as e:
         logger.error(f"[TTS 실패] {e}")
         raise
-
 
 def download_video_from_pexels(query: str, duration: int) -> str:
     try:
