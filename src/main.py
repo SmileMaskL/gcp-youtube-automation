@@ -32,11 +32,20 @@ load_dotenv()
 
 # ✅ 설정
 class Config:
+class Config:
     TEMP_DIR = Path("temp")
     OUTPUT_DIR = Path("output")
     SHORTS_WIDTH = 1080
     SHORTS_HEIGHT = 1920
-    FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"  # Codespace 기본 폰트
+    FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+    
+    @classmethod
+    def ensure_dirs(cls):
+        cls.TEMP_DIR.mkdir(parents=True, exist_ok=True)
+        cls.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        # 권한 설정 추가 (이 부분이 핵심!)
+        os.chmod(cls.TEMP_DIR, 0o777)
+        os.chmod(cls.OUTPUT_DIR, 0o777)
     
     TEMP_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -310,6 +319,7 @@ def cleanup_temp_files():
 # ✅ 메인 함수
 def main():
     try:
+        Config.ensure_dirs() 
         topic = "부자 되는 법"
         logger.info("🚀 유튜브 쇼츠 자동 생성 시작")
         
@@ -333,7 +343,7 @@ def main():
         
         return final_path
     except Exception as e:
-        logger.error(f"💥 심각한 오류 발생: {e}")
+        logger.error(f"💥 심각한 오류 발생: {e}", exc_info=True)
         raise
 
 if __name__ == "__main__":
