@@ -1,6 +1,9 @@
 name: YouTube Automation (수익 창출 봇)
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
   # schedule:
     # - cron: '0 3,7,12,18,22 * * *'  # 하루 5번 실행 (오전3시,7시,12시,18시,22시)
