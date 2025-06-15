@@ -30,7 +30,7 @@ idna==3.10
 imageio==2.34.1
 imageio-ffmpeg>=0.4.9
 ipython
-jedi==0.18.0
+jedi==0.19.1
 lxml==4.9.3
 matplotlib-inline==0.1.7
 moviepy==1.0.3
