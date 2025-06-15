@@ -9,14 +9,14 @@ click==8.1.8
 colorama==0.4.6
 decorator==4.4.2
 distro==1.9.0
-elevenlabs==1.2.1
+elevenlabs==1.1.5
 executing==2.2.0
 google-api-core==2.17.1
 google-api-python-client==2.172.0
 google-auth==2.40.3
 google-auth-httplib2==0.2.0
 google-auth-oauthlib==1.2.0
-google-generativeai==0.8.5
+google-generativeai=0.5.2
 googleapis-common-protos==1.62.0
 grpcio==1.73.0
 grpcio-status==1.62.3
