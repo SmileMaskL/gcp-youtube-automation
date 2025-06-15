@@ -2,8 +2,8 @@ name: YouTube Automation (수익 창출 봇)
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 3,7,12,18,22 * * *'  # 한국 시간 기준 12시, 16시, 21시, 4시, 8시
+  # schedule:
+    # - cron: '0 3,7,12,18,22 * * *'  # 한국 시간 기준 12시, 16시, 21시, 4시, 8시
 
 jobs:
   build-and-upload:
