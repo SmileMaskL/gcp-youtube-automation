@@ -11,6 +11,10 @@ on:
 jobs:
   build-and-run:
     runs-on: ubuntu-latest
+    timeout-minutes: 30  # 타임아웃 설정 추가
+    permissions:
+      contents: read
+      id-token: write
 
     steps:
       - name: 1. 코드 체크아웃
@@ -54,3 +58,16 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }} # Voice ID도 Secret으로 관리하는 것이 좋습니다.
         run: python src/main.py # 사용자님의 경로가 src/main.py 이므로 그대로 유지
+
+      - name: 5. 메모리 사용 제한 설정
+        run: |
+          ulimit -Sv 6000000  # 6GB 메모리 제한 설정
+          python src/main.py
+
+      - name: Upload video
+        if: success()
+        uses: actions/upload-artifact@v3
+        with:
+          name: youtube-shorts
+          path: output/
+        
