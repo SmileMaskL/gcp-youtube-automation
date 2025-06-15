@@ -1,17 +1,19 @@
 # AI & Core
-google-generativeai==0.5.4 # 1.5-pro 모델과 안정적인 버전
-python-dotenv==1.0.1
-requests==2.32.3
+google-generativeai>=0.3.0 # 1.5-pro 모델과 안정적인 버전
+python-dotenv==1.0.0
+requests==2.31.0
 
 # Video & Image
 moviepy==1.0.3
-Pillow==10.0.0 # Pillow는 moviepy와 함께 자주 쓰임
-numpy==1.26.4
-pexels-api==1.0.1 # Pexels API 라이브러리 추가
+Pillow==10.1.0 # Pillow는 moviepy와 함께 자주 쓰임
+numpy==1.26.0
+pexels-api==1.0.2 # Pexels API 라이브러리 추가
 
 # Text-to-Speech (TTS)
-gtts==2.5.1
+gtts==2.3.2
 elevenlabs==1.2.1
 
 # 💥 문제의 ipython 버전을 직접 지정하여 충돌을 원천 방지합니다.
 ipython>=8.0,<9.0
+
+psutil==5.9.8
