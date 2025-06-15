@@ -14,4 +14,4 @@ gtts==2.5.1
 elevenlabs==1.2.1
 
 # 💥 문제의 ipython 버전을 직접 지정하여 충돌을 원천 방지합니다.
-ipython==8.26.0
+ipython
