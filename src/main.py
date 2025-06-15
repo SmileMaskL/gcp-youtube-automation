@@ -45,7 +45,7 @@ def create_simple_video(duration=60):
 def generate_viral_content_gemini(topic: str) -> dict:
     """Gemini를 사용하여 바이럴 콘텐츠 생성"""
     try:
-        genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+        genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
         model = genai.GenerativeModel('gemini-pro')
         
         prompt = f"""반드시 다음 JSON 형식으로 응답:
