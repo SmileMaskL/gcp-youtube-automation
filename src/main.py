@@ -8,6 +8,7 @@ import uuid
 import random
 import logging
 import requests
+import elevenlabs
 from pathlib import Path
 from moviepy.editor import ColorClip, TextClip, CompositeVideoClip, AudioFileClip
 from elevenlabs import Voice, VoiceSettings
