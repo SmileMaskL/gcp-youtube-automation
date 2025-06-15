@@ -169,7 +169,7 @@ def get_background_video(query: str, duration: int) -> Path:
             raise
 
 def create_final_video(content: dict, audio_path: Path, bg_video_path: Path) -> Path:
-    """최종 영상 생성"""
+    """최종 영상 생성 (메모리 최적화 버전)"""
     logger.info("🎬 최종 비디오 제작을 시작합니다...")
     
     # 리소스 관리를 위해 별도 함수로 분리
@@ -197,65 +197,49 @@ def create_final_video(content: dict, audio_path: Path, bg_video_path: Path) -> 
         text_path = Config.TEMP_DIR / f"text_{uuid.uuid4()}.png"
         text_img.save(str(text_path))
         return ImageClip(str(text_path)).set_duration(duration)
-    
+
     try:
-        # 오디오 클립 준비
-        audio_clip = AudioFileClip(str(audio_path))
-        duration = audio_clip.duration
-        
-        # 배경 영상 클립 준비
-        bg_clip = VideoFileClip(str(bg_video_path))
-        bg_clip = bg_clip.subclip(0, duration).resize(height=Config.SHORTS_HEIGHT)
-        
-        # 텍스트 클립 생성 (최신 Pillow 호환 방식)
-        text_img = Image.new('RGBA', (Config.SHORTS_WIDTH, Config.SHORTS_HEIGHT), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(text_img)
-        try:
-            font = ImageFont.truetype(Config.FONT_PATH, 60)
-        except:
-            font = ImageFont.load_default()
-        
-        lines = textwrap.wrap(content["script"], width=20)
-        y_text = (Config.SHORTS_HEIGHT - len(lines)*60) // 2
-        
-        for line in lines:
-            w, h = draw.textsize(line, font=font)
-            draw.text(
-                ((Config.SHORTS_WIDTH-w)/2, y_text),
-                line, font=font, fill="white",
-                stroke_width=2, stroke_fill="black"
-            )
-            y_text += 60
-        
-        text_path = Config.TEMP_DIR / f"text_{uuid.uuid4()}.png"
-        text_img.save(str(text_path))
-        
-        text_clip = ImageClip(str(text_path)).set_duration(duration)
-        
-        # 최종 영상 합성
-        final_clip = CompositeVideoClip([bg_clip, text_clip])
-        final_clip = final_clip.set_audio(audio_clip)
-        
-        output_path = Config.OUTPUT_DIR / f"shorts_{uuid.uuid4()}.mp4"
-        final_clip.write_videofile(
-            str(output_path),
-            fps=24,
-            codec='libx264',
-            audio_codec='aac',
-            threads=2,
-            preset='ultrafast',
-            ffmpeg_params=['-crf', '28']
-        )
-        
-        logger.info(f"✅ 최종 영상 생성 완료: {output_path}")
-        return output_path
+        # 오디오 클립 준비 (가능한 빨리 닫기 위해 with 문 사용)
+        with AudioFileClip(str(audio_path)) as audio_clip:
+            duration = audio_clip.duration
+            
+            # 배경 영상 클립 준비
+            with VideoFileClip(str(bg_video_path)) as bg_clip:
+                bg_clip = bg_clip.subclip(0, duration).resize(height=Config.SHORTS_HEIGHT)
+                
+                # 텍스트 클립 생성
+                text_clip = generate_text_clip(content["script"], duration)
+                
+                # 최종 영상 합성 (메모리 절약을 위해 더 낮은 해상도 고려)
+                final_clip = CompositeVideoClip([bg_clip, text_clip])
+                final_clip = final_clip.set_audio(audio_clip)
+                
+                output_path = Config.OUTPUT_DIR / f"shorts_{uuid.uuid4()}.mp4"
+                
+                # 메모리 최적화를 위한 FFmpeg 설정
+                final_clip.write_videofile(
+                    str(output_path),
+                    fps=24,
+                    codec='libx264',
+                    audio_codec='aac',
+                    threads=1,  # 멀티스레드 대신 단일 스레드 사용
+                    preset='ultrafast',
+                    ffmpeg_params=[
+                        '-crf', '28',
+                        '-threads', '1',  # FFmpeg도 단일 스레드 사용
+                        '-vf', 'scale=720:1280'  # 해상도 낮춤 (필요시)
+                    ]
+                )
+                
+                logger.info(f"✅ 최종 영상 생성 완료: {output_path}")
+                return output_path
     except Exception as e:
         logger.error(f"❌ 비디오 제작 실패: {e}")
         raise
     finally:
-        if 'audio_clip' in locals(): audio_clip.close()
-        if 'bg_clip' in locals(): bg_clip.close()
-        if 'text_clip' in locals(): text_clip.close()
+        # 명시적으로 리소스 정리
+        if 'text_clip' in locals():
+            text_clip.close()
 
 def cleanup():
     """임시 파일 정리"""
