@@ -12,7 +12,7 @@ import elevenlabs
 from datetime import datetime
 from pathlib import Path
 from gtts import gTTS
-from moviepy.editor import ColorClip, TextClip, CompositeVideoClip, AudioFileClip
+from moviepy.editor import ColorClip, TextClip, CompositeVideoClip, AudioFileClip, VideoFileClip
 from elevenlabs import Voice, VoiceSettings
 from elevenlabs.client import ElevenLabs
 from dotenv import load_dotenv
