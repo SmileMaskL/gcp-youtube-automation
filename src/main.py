@@ -16,6 +16,9 @@ from dotenv import load_dotenv
 import google.generativeai as genai
 from src.config import Config
 
+# .env 파일 로드
+load_dotenv()
+
 # 로깅 설정
 logging.basicConfig(
     level=logging.INFO,
@@ -46,6 +49,7 @@ def generate_viral_content_gemini(topic: str) -> dict:
     """Gemini를 사용하여 바이럴 콘텐츠 생성"""
     try:
         genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+        elevenlabs.set_api_key(os.getenv("ELEVENLABS_API_KEY"))
         model = genai.GenerativeModel('gemini-pro')
         
         prompt = f"""반드시 다음 JSON 형식으로 응답:
