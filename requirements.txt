@@ -5,7 +5,7 @@ requests==2.32.3
 
 # Video & Image
 moviepy==1.0.3
-Pillow==10.3.0 # Pillow는 moviepy와 함께 자주 쓰임
+Pillow==10.0.0 # Pillow는 moviepy와 함께 자주 쓰임
 numpy==1.26.4
 pexels-api==1.0.1 # Pexels API 라이브러리 추가
 
