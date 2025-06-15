@@ -144,8 +144,8 @@ def create_final_video(content: dict, audio_path: str, bg_video_path: str) -> Pa
             font=Config.FONT_PATH,
             stroke_color='black',
             stroke_width=2,
-            method='caption',
-            size=(Config.SHORTS_WIDTH*0.8, None) # 가로 80% 영역
+            method='pillow',
+            size=(Config.SHORTS_WIDTH*0.8, None)
         ).set_position(('center', 'center')).set_duration(video_duration)
 
         final_clip = CompositeVideoClip([bg_clip, subtitle_clip]).set_audio(audio_clip)
