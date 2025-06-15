@@ -66,4 +66,3 @@ uritemplate==4.2.0
 urllib3==2.4.0
 wcwidth==0.2.13
 websockets==15.0.1
-python-language-server>=1.0.0

@@ -28,6 +28,7 @@ jobs:
 
       - name: Install dependencies
         run: |
+          
           # GCP 환경과 GitHub 환경 분리 설치
           if [ "$CLOUD_SHELL" = "true" ]; then
           pip install -r requirements-gcp.txt
