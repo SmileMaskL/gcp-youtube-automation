@@ -41,9 +41,8 @@ jobs:
 
           # 파이썬 라이브러리 설치 (단 한번만 실행!)
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-          
+          pip install -r requirements.txt         
+          pip install pillow==10.0.0
 
       - name: 4. 수익 창출 봇 실행
         env:
