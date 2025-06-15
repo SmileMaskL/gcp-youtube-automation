@@ -27,6 +27,9 @@ jobs:
           # 시스템 필수 프로그램 설치
           sudo apt-get update -y
           sudo apt-get install -y ffmpeg imagemagick fonts-noto-cjk
+          sudo mkdir -p /usr/share/fonts/truetype/noto
+          sudo wget -q -O /usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc \
+          https://github.com/googlefonts/noto-cjk/raw/main/Sans/OTF/Japanese/NotoSansCJK-Bold.tt
           sudo apt-get install -y imagemagick
           sudo sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/g' /etc/ImageMagick-6/policy.xml
           sudo sed -i 's/rights="none" pattern="LABEL"/rights="read|write" pattern="LABEL"/g' /etc/ImageMagick-6/policy.xml
