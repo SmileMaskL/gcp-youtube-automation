@@ -11,6 +11,7 @@ import google.generativeai as genai
 from pexels_api import API
 import textwrap
 from PIL import Image, ImageDraw, ImageFont
+resized_img = img.resize((width, height), Image.LANCZOS)
 
 # --- 로거 설정 ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
