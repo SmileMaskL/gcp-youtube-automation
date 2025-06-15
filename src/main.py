@@ -73,6 +73,9 @@ def generate_viral_content_gemini(topic: str) -> dict:
         return content
     except Exception as e:
         logger.error(f"Gemini 실패: {e}")
+        # fallback 기본 영상 경로 설정
+        video_path = "temp/default_background.mp4"
+        
         return {
             "title": f"{topic}의 비밀",
             "script": f"{topic}으로 수익 창출하는 방법을 알려드립니다!",
