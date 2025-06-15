@@ -8,7 +8,6 @@ from dotenv import load_dotenv
 from moviepy.editor import (
     ColorClip, TextClip, CompositeVideoClip, AudioFileClip, VideoFileClip
 )
-from elevenlabs import generate, save
 from src.config import Config
 import google.generativeai as genai
 from elevenlabs import ElevenLabs, Voice
@@ -44,22 +43,17 @@ def generate_viral_content_gemini(topic: str) -> dict:
 
 
 def generate_tts_with_elevenlabs(script: str) -> str:
-    try:
-        client = ElevenLabs(
-            api_key=os.getenv("ELEVENLABS_API_KEY")
-        )
-
-        voice_id = os.getenv("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM")
-        audio = client.text_to_speech.convert(
-            voice=voice_id,
-            model_id="eleven_multilingual_v2",
-            text=script
-        )
-
-        audio_path = Config.TEMP_DIR / f"audio_{uuid.uuid4()}.mp3"
-        with open(audio_path, "wb") as f:
-            f.write(audio)
-        return str(audio_path)
+    client = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
+    voice_id = os.getenv("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM")
+    audio_bytes = client.text_to_speech.convert(
+        voice=voice_id,
+        model_id="eleven_multilingual_v2",
+        text=script
+    )
+    audio_path = Config.TEMP_DIR / f"audio_{uuid.uuid4()}.mp3"
+    with open(audio_path, "wb") as f:
+        f.write(audio_bytes)
+    return str(audio_path)
     except Exception as e:
         logger.error(f"[TTS 실패] {e}")
         raise
