@@ -9,7 +9,9 @@ import random
 import logging
 import requests
 import elevenlabs
+from datetime import datetime
 from pathlib import Path
+from gtts import gTTS
 from moviepy.editor import ColorClip, TextClip, CompositeVideoClip, AudioFileClip
 from elevenlabs import Voice, VoiceSettings
 from elevenlabs.client import ElevenLabs
