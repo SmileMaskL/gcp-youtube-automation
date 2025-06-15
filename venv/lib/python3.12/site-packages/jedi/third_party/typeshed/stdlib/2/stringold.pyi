@@ -1,3 +1,4 @@
+# Source: https://hg.python.org/cpython/file/2.7/Lib/stringold.py
 from typing import AnyStr, Iterable, List, Optional, Type
 
 whitespace: str
@@ -13,6 +14,7 @@ index_error = ValueError
 atoi_error = ValueError
 atof_error = ValueError
 atol_error = ValueError
+
 
 def lower(s: AnyStr) -> AnyStr: ...
 def upper(s: AnyStr) -> AnyStr: ...

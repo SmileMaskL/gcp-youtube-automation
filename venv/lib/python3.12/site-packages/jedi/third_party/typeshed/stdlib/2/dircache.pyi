@@ -1,3 +1,5 @@
+# Source: https://hg.python.org/cpython/file/2.7/Lib/dircache.py
+
 from typing import List, MutableSequence, Text, Union
 
 def reset() -> None: ...

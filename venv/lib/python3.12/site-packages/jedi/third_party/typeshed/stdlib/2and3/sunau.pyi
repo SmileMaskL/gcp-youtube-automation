@@ -1,5 +1,7 @@
+# Stubs for sunau (Python 2 and 3)
+
 import sys
-from typing import IO, Any, NamedTuple, NoReturn, Optional, Text, Tuple, Union
+from typing import Any, NamedTuple, NoReturn, Optional, Text, IO, Union, Tuple
 
 _File = Union[Text, IO[bytes]]
 
@@ -81,6 +83,4 @@ class Au_write:
 
 # Returns a Au_read if mode is rb and Au_write if mode is wb
 def open(f: _File, mode: Optional[str] = ...) -> Any: ...
-
-if sys.version_info < (3, 9):
-    openfp = open
+openfp = open

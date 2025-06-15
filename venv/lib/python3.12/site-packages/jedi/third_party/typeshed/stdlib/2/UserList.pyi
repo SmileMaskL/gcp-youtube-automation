@@ -1,4 +1,4 @@
-from typing import Iterable, List, MutableSequence, TypeVar, Union, overload
+from typing import Iterable, MutableSequence, TypeVar, Union, overload, List
 
 _T = TypeVar("_T")
 _S = TypeVar("_S")

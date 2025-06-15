@@ -10,7 +10,7 @@ class StubModuleValue(ModuleValue):
     _module_name_class = StubModuleName
 
     def __init__(self, non_stub_value_set, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        super(StubModuleValue, self).__init__(*args, **kwargs)
         self.non_stub_value_set = non_stub_value_set
 
     def is_stub(self):
@@ -30,7 +30,7 @@ class StubModuleValue(ModuleValue):
                 pass
             else:
                 names.update(method())
-        names.update(super().sub_modules_dict())
+        names.update(super(StubModuleValue, self).sub_modules_dict())
         return names
 
     def _get_stub_filters(self, origin_scope):
@@ -40,11 +40,14 @@ class StubModuleValue(ModuleValue):
         )] + list(self.iter_star_filters())
 
     def get_filters(self, origin_scope=None):
-        filters = super().get_filters(origin_scope)
+        filters = super(StubModuleValue, self).get_filters(origin_scope)
         next(filters, None)  # Ignore the first filter and replace it with our own
         stub_filters = self._get_stub_filters(origin_scope=origin_scope)
-        yield from stub_filters
-        yield from filters
+        for f in stub_filters:
+            yield f
+
+        for f in filters:
+            yield f
 
     def _as_context(self):
         return StubModuleContext(self)
@@ -54,16 +57,17 @@ class StubModuleContext(ModuleContext):
     def get_filters(self, until_position=None, origin_scope=None):
         # Make sure to ignore the position, because positions are not relevant
         # for stubs.
-        return super().get_filters(origin_scope=origin_scope)
+        return super(StubModuleContext, self).get_filters(origin_scope=origin_scope)
 
 
 class TypingModuleWrapper(StubModuleValue):
     def get_filters(self, *args, **kwargs):
-        filters = super().get_filters(*args, **kwargs)
+        filters = super(TypingModuleWrapper, self).get_filters(*args, **kwargs)
         f = next(filters, None)
         assert f is not None
         yield TypingModuleFilterWrapper(f)
-        yield from filters
+        for f in filters:
+            yield f
 
     def _as_context(self):
         return TypingModuleContext(self)
@@ -71,23 +75,22 @@ class TypingModuleWrapper(StubModuleValue):
 
 class TypingModuleContext(ModuleContext):
     def get_filters(self, *args, **kwargs):
-        filters = super().get_filters(*args, **kwargs)
+        filters = super(TypingModuleContext, self).get_filters(*args, **kwargs)
         yield TypingModuleFilterWrapper(next(filters, None))
-        yield from filters
+        for f in filters:
+            yield f
 
 
 class StubFilter(ParserTreeFilter):
     name_class = StubName
 
     def _is_name_reachable(self, name):
-        if not super()._is_name_reachable(name):
+        if not super(StubFilter, self)._is_name_reachable(name):
             return False
 
         # Imports in stub files are only public if they have an "as"
         # export.
         definition = name.get_definition()
-        if definition is None:
-            return False
         if definition.type in ('import_from', 'import_name'):
             if name.parent.type not in ('import_as_name', 'dotted_as_name'):
                 return False

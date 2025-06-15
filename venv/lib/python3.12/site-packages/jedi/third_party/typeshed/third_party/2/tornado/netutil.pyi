@@ -1,5 +1,4 @@
 from typing import Any
-
 from tornado.util import Configurable
 
 ssl: Any

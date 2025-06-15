@@ -1,6 +1,6 @@
-from typing import List, TypeVar, Union
+from typing import List, Union, overload, TypeVar
 
-_Ch = TypeVar("_Ch", str, int)
+_Ch = TypeVar('_Ch', str, int)
 
 NUL: int
 SOH: int

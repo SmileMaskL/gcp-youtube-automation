@@ -1,5 +1,5 @@
 import sys
-from typing import List, Optional, Pattern, Tuple, overload
+from typing import overload, Pattern, Optional, List, Tuple
 
 _HeaderList = List[Tuple[str, str]]
 

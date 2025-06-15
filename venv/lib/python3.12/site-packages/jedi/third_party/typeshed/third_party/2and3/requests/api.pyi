@@ -1,21 +1,25 @@
-from _typeshed import SupportsItems
-from typing import Iterable, Optional, Text, Tuple, Union
+# Stubs for requests.api (Python 3)
+
+import sys
+from typing import Optional, Union, Any, Iterable, Mapping, MutableMapping, Tuple, IO, Text
 
 from .models import Response
 from .sessions import _Data
 
-_ParamsMappingKeyType = Union[Text, bytes, int, float]
-_ParamsMappingValueType = Union[Text, bytes, int, float, Iterable[Union[Text, bytes, int, float]], None]
+_ParamsMappingValueType = Union[Text, bytes, int, float, Iterable[Union[Text, bytes, int, float]]]
 
 def request(method: str, url: str, **kwargs) -> Response: ...
 def get(
     url: Union[Text, bytes],
     params: Optional[
         Union[
-            SupportsItems[_ParamsMappingKeyType, _ParamsMappingValueType],
-            Tuple[_ParamsMappingKeyType, _ParamsMappingValueType],
-            Iterable[Tuple[_ParamsMappingKeyType, _ParamsMappingValueType]],
+            Mapping[Union[Text, bytes, int, float], _ParamsMappingValueType],
             Union[Text, bytes],
+            Tuple[Union[Text, bytes, int, float], _ParamsMappingValueType],
+            Mapping[Text, _ParamsMappingValueType],
+            Mapping[bytes, _ParamsMappingValueType],
+            Mapping[int, _ParamsMappingValueType],
+            Mapping[float, _ParamsMappingValueType],
         ]
     ] = ...,
     **kwargs,

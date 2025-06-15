@@ -12,7 +12,6 @@ if sys.version_info >= (3, 8):
     class EntryPointBase(NamedTuple):
         name: str
         value: str
-        group: str
     class EntryPoint(EntryPointBase):
         def load(self) -> Any: ...  # Callable[[], Any] or an importable module
         @property

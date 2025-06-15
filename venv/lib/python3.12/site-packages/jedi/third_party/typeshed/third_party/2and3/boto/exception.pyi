@@ -1,5 +1,4 @@
 from typing import Any, Optional
-
 from boto.compat import StandardError
 
 class BotoClientError(StandardError):

@@ -1,3 +1,5 @@
+# Stubs for tty (Python 3.6)
+
 from typing import IO, Union
 
 _FD = Union[int, IO[str]]

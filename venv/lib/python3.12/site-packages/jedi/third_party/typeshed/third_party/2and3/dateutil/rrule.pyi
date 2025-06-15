@@ -1,7 +1,6 @@
-import datetime
-from typing import Any, Iterable, Optional, Union
-
 from ._common import weekday as weekdaybase
+from typing import Any, Iterable, Optional, Union
+import datetime
 
 YEARLY: int
 MONTHLY: int
@@ -11,7 +10,8 @@ HOURLY: int
 MINUTELY: int
 SECONDLY: int
 
-class weekday(weekdaybase): ...
+class weekday(weekdaybase):
+    ...
 
 MO: weekday
 TU: weekday
@@ -33,26 +33,24 @@ class rrulebase:
     def between(self, after, before, inc: bool = ..., count: int = ...): ...
 
 class rrule(rrulebase):
-    def __init__(
-        self,
-        freq,
-        dtstart: Optional[datetime.date] = ...,
-        interval: int = ...,
-        wkst: Optional[Union[weekday, int]] = ...,
-        count: Optional[int] = ...,
-        until: Optional[Union[datetime.date, int]] = ...,
-        bysetpos: Optional[Union[int, Iterable[int]]] = ...,
-        bymonth: Optional[Union[int, Iterable[int]]] = ...,
-        bymonthday: Optional[Union[int, Iterable[int]]] = ...,
-        byyearday: Optional[Union[int, Iterable[int]]] = ...,
-        byeaster: Optional[Union[int, Iterable[int]]] = ...,
-        byweekno: Optional[Union[int, Iterable[int]]] = ...,
-        byweekday: Optional[Union[int, weekday, Iterable[int], Iterable[weekday]]] = ...,
-        byhour: Optional[Union[int, Iterable[int]]] = ...,
-        byminute: Optional[Union[int, Iterable[int]]] = ...,
-        bysecond: Optional[Union[int, Iterable[int]]] = ...,
-        cache: bool = ...,
-    ) -> None: ...
+    def __init__(self,
+                 freq,
+                 dtstart: Optional[datetime.date] = ...,
+                 interval: int = ...,
+                 wkst: Optional[Union[weekday, int]] = ...,
+                 count: Optional[int] = ...,
+                 until: Optional[Union[datetime.date, int]] = ...,
+                 bysetpos: Optional[Union[int, Iterable[int]]] = ...,
+                 bymonth: Optional[Union[int, Iterable[int]]] = ...,
+                 bymonthday: Optional[Union[int, Iterable[int]]] = ...,
+                 byyearday: Optional[Union[int, Iterable[int]]] = ...,
+                 byeaster: Optional[Union[int, Iterable[int]]] = ...,
+                 byweekno: Optional[Union[int, Iterable[int]]] = ...,
+                 byweekday: Optional[Union[int, weekday, Iterable[int], Iterable[weekday]]] = ...,
+                 byhour: Optional[Union[int, Iterable[int]]] = ...,
+                 byminute: Optional[Union[int, Iterable[int]]] = ...,
+                 bysecond: Optional[Union[int, Iterable[int]]] = ...,
+                 cache: bool = ...) -> None: ...
     def replace(self, **kwargs): ...
 
 class _iterinfo:

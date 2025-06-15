@@ -1,5 +1,4 @@
 from typing import Any
-
 from .request import RequestMethods
 
 class PoolManager(RequestMethods):

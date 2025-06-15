@@ -16,7 +16,7 @@ settings will stop this process.
 
 It is important to note that:
 
-1. Array modifications work only in the current module.
+1. Array modfications work only in the current module.
 2. Jedi only checks Array additions; ``list.pop``, etc are ignored.
 """
 from jedi import debug
@@ -155,12 +155,14 @@ class _DynamicArrayAdditions(HelperValueMixin):
         except StopIteration:
             pass
         else:
-            yield from lazy_value.infer().iterate()
+            for lazy in lazy_value.infer().iterate():
+                yield lazy
 
         from jedi.inference.arguments import TreeArguments
         if isinstance(arguments, TreeArguments):
             additions = _internal_check_array_additions(arguments.context, self._instance)
-            yield from additions
+            for addition in additions:
+                yield addition
 
     def iterate(self, contextualized_node=None, is_async=False):
         return self.py__iter__(contextualized_node)
@@ -168,7 +170,7 @@ class _DynamicArrayAdditions(HelperValueMixin):
 
 class _Modification(ValueWrapper):
     def __init__(self, wrapped_value, assigned_values, contextualized_key):
-        super().__init__(wrapped_value)
+        super(_Modification, self).__init__(wrapped_value)
         self._assigned_values = assigned_values
         self._contextualized_key = contextualized_key
 
@@ -187,7 +189,8 @@ class _Modification(ValueWrapper):
 
 class DictModification(_Modification):
     def py__iter__(self, contextualized_node=None):
-        yield from self._wrapped_value.py__iter__(contextualized_node)
+        for lazy_context in self._wrapped_value.py__iter__(contextualized_node):
+            yield lazy_context
         yield self._contextualized_key
 
     def get_key_values(self):
@@ -196,5 +199,6 @@ class DictModification(_Modification):
 
 class ListModification(_Modification):
     def py__iter__(self, contextualized_node=None):
-        yield from self._wrapped_value.py__iter__(contextualized_node)
+        for lazy_context in self._wrapped_value.py__iter__(contextualized_node):
+            yield lazy_context
         yield LazyKnownValues(self._assigned_values)

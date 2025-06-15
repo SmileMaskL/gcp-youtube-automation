@@ -1,6 +1,5 @@
-from keyword import iskeyword as is_python_keyword
 from typing import Any, Optional
-
+from keyword import iskeyword as is_python_keyword
 from jinja2.visitor import NodeVisitor
 
 operators: Any

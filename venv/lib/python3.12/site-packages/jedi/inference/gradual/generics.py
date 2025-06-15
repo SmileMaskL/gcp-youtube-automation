@@ -23,7 +23,7 @@ def _resolve_forward_references(context, value_set):
             yield value
 
 
-class _AbstractGenericManager:
+class _AbstractGenericManager(object):
     def get_index_and_execute(self, index):
         try:
             return self[index].execute_annotation()

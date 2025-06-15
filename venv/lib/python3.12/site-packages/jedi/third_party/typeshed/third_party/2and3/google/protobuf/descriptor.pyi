@@ -1,5 +1,6 @@
 from typing import Any
 
+from .message import Message
 from .descriptor_pb2 import (
     EnumOptions,
     EnumValueOptions,
@@ -10,7 +11,6 @@ from .descriptor_pb2 import (
     OneofOptions,
     ServiceOptions,
 )
-from .message import Message
 
 class Error(Exception): ...
 class TypeTransformationError(Error): ...
@@ -20,7 +20,7 @@ class DescriptorMetaclass(type):
 
 class DescriptorBase(metaclass=DescriptorMetaclass):
     has_options: Any
-    def __init__(self, options, serialized_options, options_class_name) -> None: ...
+    def __init__(self, options, options_class_name) -> None: ...
     def GetOptions(self): ...
 
 class _NestedDescriptorBase(DescriptorBase):
@@ -29,16 +29,7 @@ class _NestedDescriptorBase(DescriptorBase):
     file: Any
     containing_type: Any
     def __init__(
-        self,
-        options,
-        options_class_name,
-        name,
-        full_name,
-        file,
-        containing_type,
-        serialized_start=...,
-        serialized_end=...,
-        serialized_options=...,
+        self, options, options_class_name, name, full_name, file, containing_type, serialized_start=..., serialized_end=...
     ) -> None: ...
     def GetTopLevelContainingType(self): ...
     def CopyToProto(self, proto): ...
@@ -55,7 +46,6 @@ class Descriptor(_NestedDescriptorBase):
         enum_types,
         extensions,
         options=...,
-        serialized_options=...,
         is_extendable=...,
         extension_ranges=...,
         oneofs=...,
@@ -90,7 +80,6 @@ class Descriptor(_NestedDescriptorBase):
         enum_types,
         extensions,
         options=...,
-        serialized_options=...,
         is_extendable=...,
         extension_ranges=...,
         oneofs=...,
@@ -157,7 +146,6 @@ class FieldDescriptor(DescriptorBase):
         is_extension,
         extension_scope,
         options=...,
-        serialized_options=...,
         file=...,
         has_default_value=...,
         containing_oneof=...,
@@ -193,7 +181,6 @@ class FieldDescriptor(DescriptorBase):
         is_extension,
         extension_scope,
         options=...,
-        serialized_options=...,
         file=...,
         has_default_value=...,
         containing_oneof=...,
@@ -211,7 +198,6 @@ class EnumDescriptor(_NestedDescriptorBase):
         values,
         containing_type=...,
         options=...,
-        serialized_options=...,
         file=...,
         serialized_start=...,
         serialized_end=...,
@@ -227,7 +213,6 @@ class EnumDescriptor(_NestedDescriptorBase):
         values,
         containing_type=...,
         options=...,
-        serialized_options=...,
         file=...,
         serialized_start=...,
         serialized_end=...,
@@ -236,12 +221,12 @@ class EnumDescriptor(_NestedDescriptorBase):
     def GetOptions(self) -> EnumOptions: ...
 
 class EnumValueDescriptor(DescriptorBase):
-    def __new__(cls, name, index, number, type=..., options=..., serialized_options=...): ...
+    def __new__(cls, name, index, number, type=..., options=...): ...
     name: Any
     index: Any
     number: Any
     type: Any
-    def __init__(self, name, index, number, type=..., options=..., serialized_options=...) -> None: ...
+    def __init__(self, name, index, number, type=..., options=...) -> None: ...
     def GetOptions(self) -> EnumValueOptions: ...
 
 class OneofDescriptor:
@@ -259,16 +244,7 @@ class ServiceDescriptor(_NestedDescriptorBase):
     methods: Any
     methods_by_name: Any
     def __init__(
-        self,
-        name,
-        full_name,
-        index,
-        methods,
-        options=...,
-        serialized_options=...,
-        file=...,
-        serialized_start=...,
-        serialized_end=...,
+        self, name, full_name, index, methods, options=..., file=..., serialized_start=..., serialized_end=...
     ) -> None: ...
     def FindMethodByName(self, name): ...
     def CopyToProto(self, proto): ...
@@ -281,23 +257,12 @@ class MethodDescriptor(DescriptorBase):
     containing_service: Any
     input_type: Any
     output_type: Any
-    def __init__(
-        self, name, full_name, index, containing_service, input_type, output_type, options=..., serialized_options=...
-    ) -> None: ...
+    def __init__(self, name, full_name, index, containing_service, input_type, output_type, options=...) -> None: ...
     def GetOptions(self) -> MethodOptions: ...
 
 class FileDescriptor(DescriptorBase):
     def __new__(
-        cls,
-        name,
-        package,
-        options=...,
-        serialized_options=...,
-        serialized_pb=...,
-        dependencies=...,
-        public_dependencies=...,
-        syntax=...,
-        pool=...,
+        cls, name, package, options=..., serialized_pb=..., dependencies=..., public_dependencies=..., syntax=..., pool=...
     ): ...
     _options: Any
     pool: Any
@@ -312,16 +277,7 @@ class FileDescriptor(DescriptorBase):
     dependencies: Any
     public_dependencies: Any
     def __init__(
-        self,
-        name,
-        package,
-        options=...,
-        serialized_options=...,
-        serialized_pb=...,
-        dependencies=...,
-        public_dependencies=...,
-        syntax=...,
-        pool=...,
+        self, name, package, options=..., serialized_pb=..., dependencies=..., public_dependencies=..., syntax=..., pool=...
     ) -> None: ...
     def CopyToProto(self, proto): ...
     def GetOptions(self) -> FileOptions: ...

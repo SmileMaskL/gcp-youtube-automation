@@ -1,7 +1,6 @@
-import datetime
-from _typeshed.wsgi import StartResponse, WSGIEnvironment
-from typing import Any, Dict, Iterable, List, NoReturn, Optional, Protocol, Text, Tuple, Type, Union
+from typing import Any, Dict, Tuple, List, Text, NoReturn, Optional, Protocol, Type, Union, Iterable
 
+from wsgiref.types import WSGIEnvironment, StartResponse
 from werkzeug.wrappers import Response
 
 class _EnvironContainer(Protocol):
@@ -125,16 +124,7 @@ class PreconditionRequired(HTTPException):
     code: int
     description: Text
 
-class _RetryAfter(HTTPException):
-    retry_after: Union[None, int, datetime.datetime]
-    def __init__(
-        self,
-        description: Optional[Text] = ...,
-        response: Optional[Response] = ...,
-        retry_after: Union[None, int, datetime.datetime] = ...,
-    ) -> None: ...
-
-class TooManyRequests(_RetryAfter):
+class TooManyRequests(HTTPException):
     code: int
     description: Text
 
@@ -147,9 +137,6 @@ class UnavailableForLegalReasons(HTTPException):
     description: Text
 
 class InternalServerError(HTTPException):
-    def __init__(
-        self, description: Optional[Text] = ..., response: Optional[Response] = ..., original_exception: Optional[Exception] = ...
-    ) -> None: ...
     code: int
     description: Text
 
@@ -161,7 +148,7 @@ class BadGateway(HTTPException):
     code: int
     description: Text
 
-class ServiceUnavailable(_RetryAfter):
+class ServiceUnavailable(HTTPException):
     code: int
     description: Text
 

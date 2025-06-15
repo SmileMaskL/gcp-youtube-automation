@@ -1,5 +1,4 @@
 from typing import Any
-
 from .. import exceptions
 
 TimeoutStateError = exceptions.TimeoutStateError

@@ -1,5 +1,4 @@
 from typing import Any
-
 from jinja2.compiler import CodeGenerator
 
 class TrackingCodeGenerator(CodeGenerator):

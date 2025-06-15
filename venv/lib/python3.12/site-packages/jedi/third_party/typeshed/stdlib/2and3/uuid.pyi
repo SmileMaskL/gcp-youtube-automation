@@ -1,43 +1,20 @@
+# Stubs for uuid
+
 import sys
-from typing import Any, Optional, Text, Tuple
+from typing import Tuple, Optional, Any, Text
 
 # Because UUID has properties called int and bytes we need to rename these temporarily.
 _Int = int
 _Bytes = bytes
 _FieldsType = Tuple[int, int, int, int, int, int]
 
-if sys.version_info >= (3, 7):
-    from enum import Enum
-    class SafeUUID(Enum):
-        safe: int
-        unsafe: int
-        unknown: None
-
 class UUID:
-    if sys.version_info >= (3, 7):
-        def __init__(
-            self,
-            hex: Optional[Text] = ...,
-            bytes: Optional[_Bytes] = ...,
-            bytes_le: Optional[_Bytes] = ...,
-            fields: Optional[_FieldsType] = ...,
-            int: Optional[_Int] = ...,
-            version: Optional[_Int] = ...,
-            *,
-            is_safe: SafeUUID = ...,
-        ) -> None: ...
-        @property
-        def is_safe(self) -> SafeUUID: ...
-    else:
-        def __init__(
-            self,
-            hex: Optional[Text] = ...,
-            bytes: Optional[_Bytes] = ...,
-            bytes_le: Optional[_Bytes] = ...,
-            fields: Optional[_FieldsType] = ...,
-            int: Optional[_Int] = ...,
-            version: Optional[_Int] = ...,
-        ) -> None: ...
+    def __init__(self, hex: Optional[Text] = ...,
+                 bytes: Optional[_Bytes] = ...,
+                 bytes_le: Optional[_Bytes] = ...,
+                 fields: Optional[_FieldsType] = ...,
+                 int: Optional[_Int] = ...,
+                 version: Optional[_Int] = ...) -> None: ...
     @property
     def bytes(self) -> _Bytes: ...
     @property
@@ -70,7 +47,9 @@ class UUID:
     def variant(self) -> str: ...
     @property
     def version(self) -> Optional[_Int]: ...
+
     def __int__(self) -> _Int: ...
+
     if sys.version_info >= (3,):
         def __eq__(self, other: Any) -> bool: ...
         def __lt__(self, other: Any) -> bool: ...

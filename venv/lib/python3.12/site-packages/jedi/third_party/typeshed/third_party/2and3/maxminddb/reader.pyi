@@ -1,4 +1,5 @@
 from ipaddress import IPv4Address, IPv6Address
+
 from types import TracebackType
 from typing import Any, Mapping, Optional, Sequence, Text, Tuple, Type, Union
 
@@ -10,12 +11,7 @@ class Reader:
     def get_with_prefix_len(self, ip_address: Union[Text, IPv4Address, IPv6Address]) -> Tuple[Optional[Any], int]: ...
     def close(self) -> None: ...
     def __enter__(self) -> Reader: ...
-    def __exit__(
-        self,
-        exc_type: Optional[Type[BaseException]] = ...,
-        exc_val: Optional[BaseException] = ...,
-        exc_tb: Optional[TracebackType] = ...,
-    ) -> None: ...
+    def __exit__(self, exc_type: Optional[Type[BaseException]] = ..., exc_val: Optional[BaseException] = ..., exc_tb: Optional[TracebackType] = ...) -> None: ...
 
 class Metadata:
     node_count: int = ...

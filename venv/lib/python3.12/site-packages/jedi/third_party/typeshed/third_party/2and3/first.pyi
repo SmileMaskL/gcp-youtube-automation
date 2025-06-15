@@ -1,7 +1,8 @@
-from typing import Any, Callable, Iterable, Optional, TypeVar, Union, overload
+from typing import Any, Callable, Iterable, Optional, overload, TypeVar, Union
 
-_T = TypeVar("_T")
-_S = TypeVar("_S")
+_T = TypeVar('_T')
+_S = TypeVar('_S')
+
 @overload
 def first(iterable: Iterable[_T]) -> Optional[_T]: ...
 @overload
