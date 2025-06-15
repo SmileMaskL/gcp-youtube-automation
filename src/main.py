@@ -8,7 +8,8 @@ from moviepy.editor import (
     CompositeVideoClip,
     VideoFileClip,
     AudioFileClip,
-    TextClip
+    TextClip,
+    ImageClip
 )
 import logging
 from dotenv import load_dotenv
@@ -22,7 +23,8 @@ import textwrap
 
 # ✅ 필수 시스템 설정
 change_settings({
-    "FFMPEG_BINARY": "/usr/bin/ffmpeg"
+    "FFMPEG_BINARY": "/usr/bin/ffmpeg",
+    "IMAGEMAGICK_BINARY": "/usr/bin/convert"
 })
 
 # ✅ 환경 변수 로드
@@ -165,7 +167,11 @@ def create_text_image(text: str, fontsize: int, color: str, max_width=None):
     dummy_draw = ImageDraw.Draw(dummy_img)
     
     # getbbox() 사용 (최신 Pillow 호환)
-    bbox = dummy_draw.textbbox((0, 0), text, font=font)
+    if '\n' in text:
+        bbox = dummy_draw.multiline_textbbox((0, 0), text, font=font)
+    else:
+        bbox = dummy_draw.textbbox((0, 0), text, font=font)
+    
     text_width = bbox[2] - bbox[0]
     text_height = bbox[3] - bbox[1]
     
@@ -177,8 +183,8 @@ def create_text_image(text: str, fontsize: int, color: str, max_width=None):
         text_height = bbox[3] - bbox[1]
         text = wrapped_text
     
-    # 이미지 생성
-    img = Image.new('RGBA', (text_width + 40, text_height + 40), (0, 0, 0, 0))
+    # 이미지 생성 (RGB 모드로 변경)
+    img = Image.new('RGB', (text_width + 40, text_height + 40), (0, 0, 0))
     draw = ImageDraw.Draw(img)
     
     # 텍스트 그리기
@@ -205,13 +211,17 @@ def create_shorts_video(video_path: str, audio_path: str, title: str) -> str:
 
         # 제목 텍스트 이미지 생성 (최대 너비 지정)
         title_img_path = create_text_image(title, 70, "white", Config.SHORTS_WIDTH - 100)
-        title_clip = VideoFileClip(title_img_path).set_duration(audio.duration)
+        
+        # ImageClip 사용 (지속 시간 명시적 설정)
+        title_clip = ImageClip(title_img_path, duration=audio.duration)
         title_clip = title_clip.set_position(('center', 0.2), relative=True)
 
         # 해시태그 텍스트 이미지 생성
         hashtags = "#쇼츠 #유튜브 #자동생성"
         hashtag_img_path = create_text_image(hashtags, 40, "white")
-        hashtag_clip = VideoFileClip(hashtag_img_path).set_duration(audio.duration)
+        
+        # ImageClip 사용 (지속 시간 명시적 설정)
+        hashtag_clip = ImageClip(hashtag_img_path, duration=audio.duration)
         hashtag_clip = hashtag_clip.set_position(('center', 0.8), relative=True)
 
         # 영상 합성
@@ -245,7 +255,9 @@ def generate_content_with_gemini(topic: str) -> dict:
             raise Exception("API 키 없음")
 
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-pro')  # 최신 버전에서는 'gemini-pro' 사용
+        
+        # 최신 API 버전 사용
+        model = genai.GenerativeModel('gemini-1.5-pro-latest')  # 최신 모델 사용
         
         prompt = f"""
         한국어로 유튜브 쇼츠용 콘텐츠를 생성해주세요. 다음 형식으로 응답하세요:
