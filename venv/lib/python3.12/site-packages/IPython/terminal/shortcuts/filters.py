@@ -13,7 +13,8 @@ from typing import Callable, Dict, Union
 
 from prompt_toolkit.application.current import get_app
 from prompt_toolkit.enums import DEFAULT_BUFFER, SEARCH_BUFFER
-from prompt_toolkit.filters import Condition, emacs_insert_mode, has_completions
+from prompt_toolkit.key_binding import KeyPressEvent
+from prompt_toolkit.filters import Condition, Filter, emacs_insert_mode, has_completions
 from prompt_toolkit.filters import has_focus as has_focus_impl
 from prompt_toolkit.filters import (
     Always,
@@ -50,6 +51,13 @@ def has_focus(value: FocusableElement):
 def has_line_below() -> bool:
     document = get_app().current_buffer.document
     return document.cursor_position_row < len(document.lines) - 1
+
+
+@undoc
+@Condition
+def is_cursor_at_the_end_of_line() -> bool:
+    document = get_app().current_buffer.document
+    return document.is_cursor_at_the_end_of_line
 
 
 @undoc
@@ -168,6 +176,36 @@ def is_windows_os():
     return sys.platform == "win32"
 
 
+class PassThrough(Filter):
+    """A filter allowing to implement pass-through behaviour of keybindings.
+
+    Prompt toolkit key processor dispatches only one event per binding match,
+    which means that adding a new shortcut will suppress the old shortcut
+    if the keybindings are the same (unless one is filtered out).
+
+    To stop a shortcut binding from suppressing other shortcuts:
+    - add the `pass_through` filter to list of filter, and
+    - call `pass_through.reply(event)` in the shortcut handler.
+    """
+
+    def __init__(self):
+        self._is_replying = False
+
+    def reply(self, event: KeyPressEvent):
+        self._is_replying = True
+        try:
+            event.key_processor.reset()
+            event.key_processor.feed_multiple(event.key_sequence)
+            event.key_processor.process_keys()
+        finally:
+            self._is_replying = False
+
+    def __call__(self):
+        return not self._is_replying
+
+
+pass_through = PassThrough()
+
 # these one is callable and re-used multiple times hence needs to be
 # only defined once beforhand so that transforming back to human-readable
 # names works well in the documentation.
@@ -179,6 +217,7 @@ KEYBINDING_FILTERS = {
     "never": Never(),
     "has_line_below": has_line_below,
     "has_line_above": has_line_above,
+    "is_cursor_at_the_end_of_line": is_cursor_at_the_end_of_line,
     "has_selection": has_selection,
     "has_suggestion": has_suggestion,
     "vi_mode": vi_mode,
@@ -240,6 +279,7 @@ KEYBINDING_FILTERS = {
     "followed_by_single_quote": following_text("^'"),
     "navigable_suggestions": navigable_suggestions,
     "cursor_in_leading_ws": cursor_in_leading_ws,
+    "pass_through": pass_through,
 }
 
 
