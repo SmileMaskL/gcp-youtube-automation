@@ -18,10 +18,10 @@ from moviepy.config import change_settings
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import subprocess
+import textwrap
 
 # ✅ 필수 시스템 설정
 change_settings({
-    "IMAGEMAGICK_BINARY": "/usr/bin/convert",
     "FFMPEG_BINARY": "/usr/bin/ffmpeg"
 })
 
@@ -34,7 +34,7 @@ class Config:
     OUTPUT_DIR = Path("output")
     SHORTS_WIDTH = 1080
     SHORTS_HEIGHT = 1920
-    FONT = "Arial-Unicode-MS"  # 더 보편적인 폰트
+    FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"  # Codespace 기본 폰트
     
     TEMP_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -45,29 +45,6 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-
-# ✅ ImageMagick 보안 정책 수정 함수
-def fix_imagemagick_policy():
-    try:
-        policy_file = "/etc/ImageMagick-6/policy.xml"
-        if os.path.exists(policy_file):
-            with open(policy_file, "r") as f:
-                content = f.read()
-            
-            # 보안 정책 완화
-            content = content.replace(
-                '<policy domain="coder" rights="none" pattern="PDF" />',
-                '<policy domain="coder" rights="read|write" pattern="PDF" />')
-            content = content.replace(
-                '<policy domain="coder" rights="none" pattern="LABEL" />',
-                '<policy domain="coder" rights="read|write" pattern="LABEL" />')
-            
-            with open(policy_file, "w") as f:
-                f.write(content)
-            
-            logger.info("✅ ImageMagick 보안 정책 수정 완료")
-    except Exception as e:
-        logger.warning(f"⚠️ ImageMagick 정책 수정 실패: {e}")
 
 # ✅ TTS 생성 (ElevenLabs + gTTS 대체)
 def generate_tts(script: str) -> str:
@@ -151,7 +128,7 @@ def get_background_video(query: str, duration: int) -> str:
         logger.warning(f"[Pexels 실패] {e}, 기본 배경 생성")
         return create_simple_video(duration)
 
-# ✅ 개선된 단색 배경 영상 생성 (ImageMagick 없이)
+# ✅ 개선된 단색 배경 영상 생성
 def create_simple_video(duration=60) -> str:
     colors = [
         (30, 144, 255),  # 도더블루
@@ -163,7 +140,7 @@ def create_simple_video(duration=60) -> str:
     path = Config.TEMP_DIR / f"bg_{uuid.uuid4()}.mp4"
     color = random.choice(colors)
     
-    # FFmpeg로 직접 생성 (ImageMagick 사용 안함)
+    # FFmpeg로 직접 생성
     cmd = [
         'ffmpeg',
         '-f', 'lavfi',
@@ -175,27 +152,46 @@ def create_simple_video(duration=60) -> str:
     
     return str(path)
 
-# ✅ 텍스트 이미지 생성 (ImageMagick 대체)
-def create_text_image(text: str, fontsize: int, color: str, bg_color=None):
-    font = ImageFont.load_default()  # 기본 폰트 사용
-    if bg_color is None:
-        bg_color = (0, 0, 0, 0)  # 투명 배경
+# ✅ 텍스트 이미지 생성 (최신 Pillow 호환 버전)
+def create_text_image(text: str, fontsize: int, color: str, max_width=None):
+    try:
+        # 폰트 로드 (Codespace 기본 폰트 사용)
+        font = ImageFont.truetype(Config.FONT, fontsize)
+    except:
+        font = ImageFont.load_default()
     
-    # 텍스트 크기 계산
+    # 텍스트 크기 계산 (최신 Pillow 방식)
     dummy_img = Image.new('RGB', (1, 1))
     dummy_draw = ImageDraw.Draw(dummy_img)
-    text_width, text_height = dummy_draw.textsize(text, font=font)
+    
+    # getbbox() 사용 (최신 Pillow 호환)
+    bbox = dummy_draw.textbbox((0, 0), text, font=font)
+    text_width = bbox[2] - bbox[0]
+    text_height = bbox[3] - bbox[1]
+    
+    # 줄바꿈 처리
+    if max_width:
+        wrapped_text = "\n".join(textwrap.wrap(text, width=max_width//(fontsize//2)))
+        bbox = dummy_draw.multiline_textbbox((0, 0), wrapped_text, font=font)
+        text_width = bbox[2] - bbox[0]
+        text_height = bbox[3] - bbox[1]
+        text = wrapped_text
     
     # 이미지 생성
-    img = Image.new('RGBA', (text_width + 20, text_height + 20), bg_color)
+    img = Image.new('RGBA', (text_width + 40, text_height + 40), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
-    draw.text((10, 10), text, fill=color, font=font)
+    
+    # 텍스트 그리기
+    if '\n' in text:
+        draw.multiline_text((20, 20), text, fill=color, font=font, align='center')
+    else:
+        draw.text((20, 20), text, fill=color, font=font)
     
     img_path = Config.TEMP_DIR / f"text_{uuid.uuid4()}.png"
     img.save(str(img_path))
     return str(img_path)
 
-# ✅ 영상 합치기 (ImageMagick 없이)
+# ✅ 영상 합치기 (안정화 버전)
 def create_shorts_video(video_path: str, audio_path: str, title: str) -> str:
     try:
         video = VideoFileClip(video_path)
@@ -207,16 +203,16 @@ def create_shorts_video(video_path: str, audio_path: str, title: str) -> str:
         else:
             video = video.subclip(0, audio.duration)
 
-        # 제목 텍스트 이미지 생성
-        title_img_path = create_text_image(title, 70, "white")
+        # 제목 텍스트 이미지 생성 (최대 너비 지정)
+        title_img_path = create_text_image(title, 70, "white", Config.SHORTS_WIDTH - 100)
         title_clip = VideoFileClip(title_img_path).set_duration(audio.duration)
-        title_clip = title_clip.set_position(('center', 'top'))
+        title_clip = title_clip.set_position(('center', 0.2), relative=True)
 
         # 해시태그 텍스트 이미지 생성
         hashtags = "#쇼츠 #유튜브 #자동생성"
         hashtag_img_path = create_text_image(hashtags, 40, "white")
         hashtag_clip = VideoFileClip(hashtag_img_path).set_duration(audio.duration)
-        hashtag_clip = hashtag_clip.set_position(('center', 0.9), relative=True)
+        hashtag_clip = hashtag_clip.set_position(('center', 0.8), relative=True)
 
         # 영상 합성
         final = CompositeVideoClip([video, title_clip, hashtag_clip])
@@ -240,7 +236,7 @@ def create_shorts_video(video_path: str, audio_path: str, title: str) -> str:
         logger.error(f"[영상 생성 실패] {e}")
         raise
 
-# ✅ Gemini 콘텐츠 생성 (안정화 버전)
+# ✅ Gemini 콘텐츠 생성 (최신 API 버전)
 def generate_content_with_gemini(topic: str) -> dict:
     try:
         api_key = os.getenv("GEMINI_API_KEY")
@@ -248,8 +244,8 @@ def generate_content_with_gemini(topic: str) -> dict:
             logger.warning("Gemini API 키가 없어 기본 콘텐츠 사용")
             raise Exception("API 키 없음")
 
-        genai.configure(api_key=api_key, transport='rest')
-        model = genai.GenerativeModel('gemini-1.0-pro')  # 최신 모델 사용
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel('gemini-pro')  # 최신 버전에서는 'gemini-pro' 사용
         
         prompt = f"""
         한국어로 유튜브 쇼츠용 콘텐츠를 생성해주세요. 다음 형식으로 응답하세요:
@@ -257,34 +253,37 @@ def generate_content_with_gemini(topic: str) -> dict:
         제목: {topic}에 대한 놀라운 사실
         스크립트: 안녕하세요! {topic}에 대해 알려드립니다. 첫 번째로...
         해시태그: #{topic} #비밀 #쇼츠
+
+        30초 분량의 짧고 강렬한 메시지로 만들어주세요.
         """
         
         response = model.generate_content(prompt)
         
         # 기본 콘텐츠
         content = {
-            "title": f"{topic}의 비밀",
-            "script": f"{topic}에 대해 알려드리는 중요한 정보입니다!",
+            "title": f"{topic}의 비밀 3가지",
+            "script": f"안녕하세요! {topic}에 대해 알려드립니다. 첫째, 중요한 사실은...",
             "hashtags": [f"#{topic}", "#비밀", "#쇼츠"]
         }
         
         # 응답 처리
         if response.text:
-            lines = response.text.split('\n')
-            for line in lines:
+            lines = [line.strip() for line in response.text.split('\n') if line.strip()]
+            for i, line in enumerate(lines):
                 if line.startswith("제목:"):
                     content["title"] = line.split(":")[1].strip()
                 elif line.startswith("스크립트:"):
                     content["script"] = line.split(":")[1].strip()
                 elif line.startswith("해시태그:"):
-                    content["hashtags"] = [tag.strip() for tag in line.split(":")[1].strip().split()]
+                    tags = line.split(":")[1].strip()
+                    content["hashtags"] = [tag.strip() for tag in tags.split() if tag.startswith("#")]
         
         return content
     except Exception as e:
         logger.error(f"[Gemini 실패] {e}, 기본 콘텐츠 사용")
         return {
-            "title": f"{topic}의 비밀",
-            "script": f"{topic}에 대해 알려드리는 중요한 정보입니다!",
+            "title": f"{topic}의 비밀 3가지",
+            "script": f"안녕하세요! {topic}에 대해 알려드립니다. 첫째, 중요한 사실은...",
             "hashtags": [f"#{topic}", "#비밀", "#쇼츠"]
         }
 
@@ -299,9 +298,6 @@ def cleanup_temp_files():
 # ✅ 메인 함수
 def main():
     try:
-        # ImageMagick 보안 정책 수정
-        fix_imagemagick_policy()
-        
         topic = "부자 되는 법"
         logger.info("🚀 유튜브 쇼츠 자동 생성 시작")
         
