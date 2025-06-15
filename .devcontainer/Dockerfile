@@ -6,6 +6,8 @@ WORKDIR /app
 # 시스템 패키지 업데이트 및 필요한 패키지 설치
 RUN apt-get update && apt-get install -y \
     ffmpeg \
+    python3-pil \
+    python3-pil.imagetk \
     libsm6 \
     libxext6 \
     libxrender-dev \
