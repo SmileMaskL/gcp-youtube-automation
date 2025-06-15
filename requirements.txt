@@ -27,7 +27,7 @@ httplib2==0.22.0
 httpx==0.28.1
 idna==3.10
 imageio==2.34.1
-imageio-ffmpeg==0.4.9
+imageio-ffmpeg>=0.4.9
 ipython==8.18.1
 jedi==0.19.1
 lxml==4.9.3
