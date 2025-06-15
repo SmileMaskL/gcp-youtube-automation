@@ -27,6 +27,14 @@ jobs:
           # 시스템 필수 프로그램 설치
           sudo apt-get update -y
           sudo apt-get install -y ffmpeg imagemagick fonts-noto-cjk
+          sudo apt-get install -y imagemagick
+          sudo sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/g' /etc/ImageMagick-6/policy.xml
+          sudo sed -i 's/rights="none" pattern="LABEL"/rights="read|write" pattern="LABEL"/g' /etc/ImageMagick-6/policy.xml
+          sudo sed -i 's/rights="none" pattern="MVG"/rights="read|write" pattern="MVG"/g' /etc/ImageMagick-6/policy.xml
+          sudo sed -i 's/rights="none" pattern="PS"/rights="read|write" pattern="PS"/g' /etc/ImageMagick-6/policy.xml
+          sudo sed -i 's/rights="none" pattern="EPS"/rights="read|write" pattern="EPS"/g' /etc/ImageMagick-6/policy.xml
+          sudo sed -i 's/rights="none" pattern="XPS"/rights="read|write" pattern="XPS"/g' /etc/ImageMagick-6/policy.xml
+          sudo sed -i 's/rights="none" pattern="TEXT"/rights="read|write" pattern="TEXT"/g' /etc/ImageMagick-6/policy.xml
           
           # ImageMagick 정책 수정 (필요시)
           sudo sed -i 's/rights="none" pattern="PDF"/rights="read|write"/g' /etc/ImageMagick-6/policy.xml
@@ -34,6 +42,8 @@ jobs:
           # 파이썬 라이브러리 설치 (단 한번만 실행!)
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
+          
 
       - name: 4. 수익 창출 봇 실행
         env:
