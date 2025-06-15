@@ -9,13 +9,16 @@ import logging
 from dotenv import load_dotenv
 from gtts import gTTS
 import google.generativeai as genai
-from pexels_api import API
+from moviepy.config import change_settings
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
+import subprocess
 import textwrap
-from PIL import Image, ImageDraw, ImageFont
-resized_img = img.resize((width, height), Image.LANCZOS)
-import PIL
-if not hasattr(PIL.Image, 'ANTIALIAS'):
-    PIL.Image.ANTIALIAS = PIL.Image.Resampling.LANCZOS
+
+# ✅ 필수 시스템 설정
+change_settings({
+    "FFMPEG_BINARY": "/usr/bin/ffmpeg",
+    "IMAGEMAGICK_BINARY": "/usr/bin/convert"
+})
 
 print(moviepy.__version__)  # 1.0.3 이상 권장
 
