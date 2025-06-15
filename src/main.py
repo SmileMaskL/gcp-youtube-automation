@@ -12,6 +12,9 @@ from pexels_api import API
 import textwrap
 from PIL import Image, ImageDraw, ImageFont
 resized_img = img.resize((width, height), Image.LANCZOS)
+import PIL
+if not hasattr(PIL.Image, 'ANTIALIAS'):
+    PIL.Image.ANTIALIAS = PIL.Image.Resampling.LANCZOS
 
 # --- 로거 설정 ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
