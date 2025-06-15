@@ -30,7 +30,7 @@ httpx==0.28.1
 idna==3.10
 imageio==2.34.1
 imageio-ffmpeg==0.4.9
-ipython==9.3.0
+ipython==8.18.1
 ipython_pygments_lexers==1.1.1
 jedi==0.19.2
 logging==0.4.9.6
