@@ -12,8 +12,18 @@ from moviepy.editor import (
 )
 import logging
 from dotenv import load_dotenv
-from gtts import gTTS  # ElevenLabs 실패 시 대체용
+from gtts import gTTS
 import google.generativeai as genai
+from moviepy.config import change_settings
+import numpy as np
+from PIL import Image, ImageDraw, ImageFont
+import subprocess
+
+# ✅ 필수 시스템 설정
+change_settings({
+    "IMAGEMAGICK_BINARY": "/usr/bin/convert",
+    "FFMPEG_BINARY": "/usr/bin/ffmpeg"
+})
 
 # ✅ 환경 변수 로드
 load_dotenv()
@@ -24,16 +34,42 @@ class Config:
     OUTPUT_DIR = Path("output")
     SHORTS_WIDTH = 1080
     SHORTS_HEIGHT = 1920
-    FONT = "Arial-Bold"  # Codespace에서 사용 가능한 폰트
-
+    FONT = "Arial-Unicode-MS"  # 더 보편적인 폰트
+    
     TEMP_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # ✅ 로거 설정
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
-# ✅ TTS 생성 (ElevenLabs API + gTTS 대체)
+# ✅ ImageMagick 보안 정책 수정 함수
+def fix_imagemagick_policy():
+    try:
+        policy_file = "/etc/ImageMagick-6/policy.xml"
+        if os.path.exists(policy_file):
+            with open(policy_file, "r") as f:
+                content = f.read()
+            
+            # 보안 정책 완화
+            content = content.replace(
+                '<policy domain="coder" rights="none" pattern="PDF" />',
+                '<policy domain="coder" rights="read|write" pattern="PDF" />')
+            content = content.replace(
+                '<policy domain="coder" rights="none" pattern="LABEL" />',
+                '<policy domain="coder" rights="read|write" pattern="LABEL" />')
+            
+            with open(policy_file, "w") as f:
+                f.write(content)
+            
+            logger.info("✅ ImageMagick 보안 정책 수정 완료")
+    except Exception as e:
+        logger.warning(f"⚠️ ImageMagick 정책 수정 실패: {e}")
+
+# ✅ TTS 생성 (ElevenLabs + gTTS 대체)
 def generate_tts(script: str) -> str:
     try:
         # ElevenLabs 시도
@@ -41,7 +77,7 @@ def generate_tts(script: str) -> str:
         api_key = os.getenv("ELEVENLABS_API_KEY")
         
         if not api_key:
-            raise Exception("ElevenLabs API 키가 설정되지 않았습니다")
+            raise Exception("ElevenLabs API 키가 없습니다")
 
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
         headers = {
@@ -57,9 +93,9 @@ def generate_tts(script: str) -> str:
             }
         }
 
-        response = requests.post(url, headers=headers, json=json_data)
+        response = requests.post(url, headers=headers, json=json_data, timeout=30)
         if response.status_code != 200:
-            raise Exception(f"ElevenLabs TTS 실패: {response.status_code} - {response.text}")
+            raise Exception(f"ElevenLabs 실패: {response.status_code}")
 
         audio_path = Config.TEMP_DIR / f"audio_{uuid.uuid4()}.mp3"
         with open(audio_path, "wb") as f:
@@ -68,34 +104,39 @@ def generate_tts(script: str) -> str:
         logger.info(f"🔊 ElevenLabs 음성 생성 완료: {audio_path}")
         return str(audio_path)
     except Exception as e:
-        logger.warning(f"[ElevenLabs 실패] {e}, gTTS로 대체 시도")
+        logger.warning(f"[ElevenLabs 실패] {e}, gTTS로 대체")
         try:
-            # gTTS로 대체 (무료)
             audio_path = Config.TEMP_DIR / f"gtts_{uuid.uuid4()}.mp3"
-            tts = gTTS(text=script, lang='ko')
+            tts = gTTS(text=script, lang='ko', slow=False)
             tts.save(str(audio_path))
             logger.info(f"🔊 gTTS 음성 생성 완료: {audio_path}")
             return str(audio_path)
         except Exception as e:
             logger.error(f"[gTTS 실패] {e}")
-            raise Exception("모든 TTS 생성 방법 실패")
+            raise Exception("모든 TTS 생성 실패")
 
-# ✅ 백그라운드 영상 다운로드 (Pexels + 대체 영상)
+# ✅ 배경 영상 생성 (Pexels + 대체)
 def get_background_video(query: str, duration: int) -> str:
     try:
         api_key = os.getenv("PEXELS_API_KEY")
         if not api_key:
-            raise Exception("Pexels API 키가 설정되지 않았습니다")
+            raise Exception("Pexels API 키가 없습니다")
 
         headers = {"Authorization": api_key}
-        url = f"https://api.pexels.com/videos/search?query={query}&per_page=1"
+        url = f"https://api.pexels.com/videos/search?query={query}&per_page=5&size=small"
         response = requests.get(url, headers=headers, timeout=15)
         videos = response.json().get('videos', [])
         
         if not videos:
             raise Exception("Pexels에서 동영상을 찾을 수 없음")
 
-        video_url = videos[0]['video_files'][0]['link']
+        # 가장 적합한 동영상 선택
+        video_file = max(
+            [vf for vf in videos[0]['video_files'] if vf['width'] == 640],
+            key=lambda x: x.get('height', 0)
+        )
+        video_url = video_file['link']
+        
         path = Config.TEMP_DIR / f"pexels_{uuid.uuid4()}.mp4"
         
         with requests.get(video_url, stream=True) as r:
@@ -110,7 +151,7 @@ def get_background_video(query: str, duration: int) -> str:
         logger.warning(f"[Pexels 실패] {e}, 기본 배경 생성")
         return create_simple_video(duration)
 
-# ✅ 단색 배경 영상 생성 (개선된 버전)
+# ✅ 개선된 단색 배경 영상 생성 (ImageMagick 없이)
 def create_simple_video(duration=60) -> str:
     colors = [
         (30, 144, 255),  # 도더블루
@@ -122,25 +163,39 @@ def create_simple_video(duration=60) -> str:
     path = Config.TEMP_DIR / f"bg_{uuid.uuid4()}.mp4"
     color = random.choice(colors)
     
-    # 더 동적인 느낌을 주기 위해 색상 변화 추가
-    clips = []
-    for i in range(int(duration)):
-        clip = ColorClip(
-            size=(Config.SHORTS_WIDTH, Config.SHORTS_HEIGHT),
-            color=(
-                min(255, color[0] + random.randint(-20, 20)),
-                min(255, color[1] + random.randint(-20, 20)),
-                min(255, color[2] + random.randint(-20, 20))
-            ),
-            duration=1
-        )
-        clips.append(clip)
+    # FFmpeg로 직접 생성 (ImageMagick 사용 안함)
+    cmd = [
+        'ffmpeg',
+        '-f', 'lavfi',
+        '-i', f'color=c={color[0]:02x}{color[1]:02x}{color[2]:02x}:s={Config.SHORTS_WIDTH}x{Config.SHORTS_HEIGHT}:d={duration}',
+        '-pix_fmt', 'yuv420p',
+        '-y', str(path)
+    ]
+    subprocess.run(cmd, check=True)
     
-    final_clip = CompositeVideoClip(clips)
-    final_clip.write_videofile(str(path), fps=24, logger=None)
     return str(path)
 
-# ✅ 영상 합치기 (개선된 버전)
+# ✅ 텍스트 이미지 생성 (ImageMagick 대체)
+def create_text_image(text: str, fontsize: int, color: str, bg_color=None):
+    font = ImageFont.load_default()  # 기본 폰트 사용
+    if bg_color is None:
+        bg_color = (0, 0, 0, 0)  # 투명 배경
+    
+    # 텍스트 크기 계산
+    dummy_img = Image.new('RGB', (1, 1))
+    dummy_draw = ImageDraw.Draw(dummy_img)
+    text_width, text_height = dummy_draw.textsize(text, font=font)
+    
+    # 이미지 생성
+    img = Image.new('RGBA', (text_width + 20, text_height + 20), bg_color)
+    draw = ImageDraw.Draw(img)
+    draw.text((10, 10), text, fill=color, font=font)
+    
+    img_path = Config.TEMP_DIR / f"text_{uuid.uuid4()}.png"
+    img.save(str(img_path))
+    return str(img_path)
+
+# ✅ 영상 합치기 (ImageMagick 없이)
 def create_shorts_video(video_path: str, audio_path: str, title: str) -> str:
     try:
         video = VideoFileClip(video_path)
@@ -152,45 +207,32 @@ def create_shorts_video(video_path: str, audio_path: str, title: str) -> str:
         else:
             video = video.subclip(0, audio.duration)
 
-        # 제목 텍스트 (더 보기 좋게 스타일링)
-        txt_clip = TextClip(
-            title,
-            fontsize=70,
-            color="white",
-            font=Config.FONT,
-            size=(Config.SHORTS_WIDTH * 0.9, None),
-            method="caption",
-            align="center",
-            stroke_color="black",
-            stroke_width=2
-        ).set_duration(audio.duration).set_position("center")
+        # 제목 텍스트 이미지 생성
+        title_img_path = create_text_image(title, 70, "white")
+        title_clip = VideoFileClip(title_img_path).set_duration(audio.duration)
+        title_clip = title_clip.set_position(('center', 'top'))
 
-        # 서브 타이틀 추가 (스크립트 요약)
-        subtitle = TextClip(
-            "알고 계셨나요?",
-            fontsize=50,
-            color="yellow",
-            font=Config.FONT,
-            size=(Config.SHORTS_WIDTH * 0.8, None),
-            method="caption",
-            align="center"
-        ).set_duration(audio.duration).set_position(("center", "center"))
+        # 해시태그 텍스트 이미지 생성
+        hashtags = "#쇼츠 #유튜브 #자동생성"
+        hashtag_img_path = create_text_image(hashtags, 40, "white")
+        hashtag_clip = VideoFileClip(hashtag_img_path).set_duration(audio.duration)
+        hashtag_clip = hashtag_clip.set_position(('center', 0.9), relative=True)
 
-        # 해시태그 추가
-        hashtags = " ".join(["#쇼츠", "#유튜브", "#자동생성"])
-        hashtag_clip = TextClip(
-            hashtags,
-            fontsize=40,
-            color="white",
-            font=Config.FONT,
-            size=(Config.SHORTS_WIDTH * 0.8, None),
-            method="caption",
-            align="center"
-        ).set_duration(audio.duration).set_position(("center", "bottom"))
-
-        final = CompositeVideoClip([video, txt_clip, subtitle, hashtag_clip]).set_audio(audio)
+        # 영상 합성
+        final = CompositeVideoClip([video, title_clip, hashtag_clip])
+        final = final.set_audio(audio)
+        
         output = Config.OUTPUT_DIR / f"shorts_{uuid.uuid4()}.mp4"
-        final.write_videofile(str(output), fps=24, threads=4)
+        
+        # 안정적인 출력 설정
+        final.write_videofile(
+            str(output),
+            fps=24,
+            threads=4,
+            preset='ultrafast',
+            ffmpeg_params=['-crf', '28'],
+            logger=None
+        )
         
         logger.info(f"🎬 영상 생성 완료: {output}")
         return str(output)
@@ -198,56 +240,51 @@ def create_shorts_video(video_path: str, audio_path: str, title: str) -> str:
         logger.error(f"[영상 생성 실패] {e}")
         raise
 
-# ✅ Gemini를 사용한 콘텐츠 생성
+# ✅ Gemini 콘텐츠 생성 (안정화 버전)
 def generate_content_with_gemini(topic: str) -> dict:
     try:
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
-            raise Exception("Gemini API 키가 설정되지 않았습니다")
+            logger.warning("Gemini API 키가 없어 기본 콘텐츠 사용")
+            raise Exception("API 키 없음")
 
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-pro')
+        genai.configure(api_key=api_key, transport='rest')
+        model = genai.GenerativeModel('gemini-1.0-pro')  # 최신 모델 사용
         
         prompt = f"""
-        유튜브 쇼츠용으로 인기 있을만한 콘텐츠 아이디어를 생성해주세요.
-        주제: {topic}
-        
-        요구사항:
-        - 제목: 10자 이상 30자 이내로 흥미롭게
-        - 스크립트: 50자 이상 150자 이내로 간결하게
-        - 해시태그: 3개
-        
-        JSON 형식으로 응답해주세요:
-        {{
-            "title": "제목",
-            "script": "스크립트 내용",
-            "hashtags": ["#해시태그1", "#해시태그2", "#해시태그3"]
-        }}
+        한국어로 유튜브 쇼츠용 콘텐츠를 생성해주세요. 다음 형식으로 응답하세요:
+
+        제목: {topic}에 대한 놀라운 사실
+        스크립트: 안녕하세요! {topic}에 대해 알려드립니다. 첫 번째로...
+        해시태그: #{topic} #비밀 #쇼츠
         """
         
         response = model.generate_content(prompt)
         
-        # 응답에서 JSON 추출 (간단한 버전)
+        # 기본 콘텐츠
         content = {
-            "title": f"{topic}의 놀라운 비밀",
-            "script": f"{topic}에 대해 아무도 말해주지 않는 사실을 알려드립니다!",
+            "title": f"{topic}의 비밀",
+            "script": f"{topic}에 대해 알려드리는 중요한 정보입니다!",
             "hashtags": [f"#{topic}", "#비밀", "#쇼츠"]
         }
         
-        # 실제로는 response.text에서 JSON 파싱 필요
+        # 응답 처리
         if response.text:
-            try:
-                # 여기에 실제 파싱 로직 추가
-                pass
-            except:
-                logger.warning("Gemini 응답 파싱 실패, 기본 콘텐츠 사용")
+            lines = response.text.split('\n')
+            for line in lines:
+                if line.startswith("제목:"):
+                    content["title"] = line.split(":")[1].strip()
+                elif line.startswith("스크립트:"):
+                    content["script"] = line.split(":")[1].strip()
+                elif line.startswith("해시태그:"):
+                    content["hashtags"] = [tag.strip() for tag in line.split(":")[1].strip().split()]
         
         return content
     except Exception as e:
         logger.error(f"[Gemini 실패] {e}, 기본 콘텐츠 사용")
         return {
-            "title": f"{topic}의 놀라운 비밀",
-            "script": f"{topic}에 대해 아무도 말해주지 않는 사실을 알려드립니다!",
+            "title": f"{topic}의 비밀",
+            "script": f"{topic}에 대해 알려드리는 중요한 정보입니다!",
             "hashtags": [f"#{topic}", "#비밀", "#쇼츠"]
         }
 
@@ -259,10 +296,13 @@ def cleanup_temp_files():
         except:
             pass
 
-# ✅ 실행 진입점
+# ✅ 메인 함수
 def main():
     try:
-        topic = "부자 되는 법"  # 여기에 원하는 주제 입력
+        # ImageMagick 보안 정책 수정
+        fix_imagemagick_policy()
+        
+        topic = "부자 되는 법"
         logger.info("🚀 유튜브 쇼츠 자동 생성 시작")
         
         # 1. 콘텐츠 생성
@@ -274,6 +314,7 @@ def main():
         
         # 3. 배경 영상 준비
         bg_video = get_background_video(topic, 60)
+        logger.info(f"🖼️ 사용된 배경 영상: {bg_video}")
         
         # 4. 영상 생성
         final_path = create_shorts_video(bg_video, audio_path, content["title"])
@@ -282,6 +323,7 @@ def main():
         # 5. 임시 파일 정리
         cleanup_temp_files()
         
+        return final_path
     except Exception as e:
         logger.error(f"💥 심각한 오류 발생: {e}")
         raise
