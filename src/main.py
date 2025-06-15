@@ -104,7 +104,6 @@ def generate_tts_with_elevenlabs(text: str) -> str:
         raise
 
 def download_video_from_pexels(query: str, duration: int) -> str:
-    """Pexels에서 영상 다운로드"""
     try:
         headers = {"Authorization": os.getenv("PEXELS_API_KEY")}
         url = f"https://api.pexels.com/videos/search?query={query}&per_page=5"
@@ -113,8 +112,15 @@ def download_video_from_pexels(query: str, duration: int) -> str:
         
         videos = response.json().get('videos', [])
         if not videos:
-            raise ValueError("동영상 없음")
-            
+            logger.warning("Pexels 한글 키워드 실패, 영어 키워드 재시도")
+            # 영어 쿼리 fallback
+            url = f"https://api.pexels.com/videos/search?query=money&per_page=5"
+            response = requests.get(url, headers=headers, timeout=15)
+            response.raise_for_status()
+            videos = response.json().get('videos', [])
+            if not videos:
+                raise ValueError("동영상 없음 (Fallback 포함)")
+        
         video = max(videos, key=lambda x: x.get('duration', 0))
         video_file = video['video_files'][0]['link']
         
