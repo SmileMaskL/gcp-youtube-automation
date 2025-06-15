@@ -171,6 +171,33 @@ def get_background_video(query: str, duration: int) -> Path:
 def create_final_video(content: dict, audio_path: Path, bg_video_path: Path) -> Path:
     """최종 영상 생성"""
     logger.info("🎬 최종 비디오 제작을 시작합니다...")
+    
+    # 리소스 관리를 위해 별도 함수로 분리
+    def generate_text_clip(script: str, duration: float) -> ImageClip:
+        """메모리 효율적인 텍스트 클립 생성"""
+        text_img = Image.new('RGBA', (Config.SHORTS_WIDTH, Config.SHORTS_HEIGHT), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(text_img)
+        try:
+            font = ImageFont.truetype(Config.FONT_PATH, 60)
+        except:
+            font = ImageFont.load_default()
+        
+        lines = textwrap.wrap(script, width=20)
+        y_text = (Config.SHORTS_HEIGHT - len(lines)*60) // 2
+        
+        for line in lines:
+            w, h = draw.textsize(line, font=font)
+            draw.text(
+                ((Config.SHORTS_WIDTH-w)/2, y_text),
+                line, font=font, fill="white",
+                stroke_width=2, stroke_fill="black"
+            )
+            y_text += 60
+        
+        text_path = Config.TEMP_DIR / f"text_{uuid.uuid4()}.png"
+        text_img.save(str(text_path))
+        return ImageClip(str(text_path)).set_duration(duration)
+    
     try:
         # 오디오 클립 준비
         audio_clip = AudioFileClip(str(audio_path))
