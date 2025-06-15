@@ -23,6 +23,11 @@ jobs:
           python-version: '3.12'
           cache: 'pip'
 
+      - name: Install dependencies
+        run: |
+          pip install jedi==0.18.0
+          pip install --upgrade python-language-server
+
       - name: Install System Dependencies
         run: |
           sudo apt-get update -y
