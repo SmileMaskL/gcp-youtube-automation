@@ -29,7 +29,7 @@ httpx==0.28.1
 idna==3.10
 imageio==2.34.1
 imageio-ffmpeg>=0.4.9
-ipython==9.3.0
+ipython
 #ipython==8.18.1  # Python 3.10 호환 버전으로 변경
 jedi==0.19.1
 lxml==4.9.3
