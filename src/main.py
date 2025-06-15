@@ -3,6 +3,7 @@ import uuid
 import random
 import requests
 import moviepy
+import psutil
 from pathlib import Path
 from moviepy.editor import *
 import logging
@@ -14,6 +15,10 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter
 import subprocess
 import textwrap
 from pexels_api import API  # Pexels 공식 API 클라이언트
+
+def log_memory_usage():
+    mem = psutil.virtual_memory()
+    logger.info(f"메모리 사용량: {mem.used / (1024**2):.2f}MB / {mem.total / (1024**2):.2f}MB")
 
 # ✅ 필수 시스템 설정
 change_settings({
