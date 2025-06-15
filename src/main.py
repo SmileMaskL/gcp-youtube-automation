@@ -2,6 +2,7 @@ import os
 import uuid
 import random
 import requests
+import moviepy
 from pathlib import Path
 from moviepy.editor import *
 import logging
@@ -15,6 +16,8 @@ resized_img = img.resize((width, height), Image.LANCZOS)
 import PIL
 if not hasattr(PIL.Image, 'ANTIALIAS'):
     PIL.Image.ANTIALIAS = PIL.Image.Resampling.LANCZOS
+
+print(moviepy.__version__)  # 1.0.3 이상 권장
 
 # --- 로거 설정 ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
