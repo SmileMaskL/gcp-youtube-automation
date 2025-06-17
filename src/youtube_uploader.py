@@ -1,70 +1,70 @@
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
-from google.oauth2.credentials import Credentials
-import os
-import json
+import subprocess
+import uuid
 from pathlib import Path
+from PIL import Image, ImageDraw, ImageFont
+import textwrap
+from config import Config
 import logging
 
-# 로거 설정
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
 logger = logging.getLogger(__name__)
 
-def check_quota(youtube):
-    quota = youtube.quota().get().execute()
-    logger.info(f"현재 API 쿼터: {quota}")
-
-def upload_to_youtube(video_path, title):
-    """YouTube에 동영상 업로드"""
+def render_text_image(title, script, output_path):
+    """텍스트 이미지 렌더링"""
     try:
-        # 환경 변수에서 인증 정보 로드
-        creds_json = os.getenv("YOUTUBE_OAUTH_CREDENTIALS")
-        if not creds_json:
-            raise ValueError("YouTube OAuth credentials not found in environment variables")
+        img = Image.new("RGB", (Config.SHORTS_WIDTH, Config.SHORTS_HEIGHT), "black")
+        draw = ImageDraw.Draw(img)
         
-        # Credentials 객체 생성
-        creds = Credentials.from_authorized_user_info(
-            info=json.loads(creds_json),
-            scopes=["https://www.googleapis.com/auth/youtube.upload"]
-        )
+        # 폰트 로드 (시스템 폰트 대신 프로젝트 폰트 사용)
+        font = ImageFont.truetype(str(Config.FONT_PATH), 60)
         
-        # YouTube API 서비스 빌드
-        youtube = build("youtube", "v3", credentials=creds)
+        # 제목 렌더링
+        draw.text((50, 200), title, font=font, fill="white")
         
-        # 업로드 요청 본문
-        request_body = {
-            "snippet": {
-                "title": title,
-                "description": "자동 생성된 YouTube Shorts 영상",
-                "categoryId": "22"  # 엔터테인먼트 카테고리
-            },
-            "status": {
-                "privacyStatus": "public",
-                "selfDeclaredMadeForKids": False
-            }
-        }
-        
-        # 미디어 파일 업로드 객체 생성
-        media = MediaFileUpload(
-            str(video_path),
-            mimetype="video/mp4",
-            resumable=True
-        )
-        
-        # API 요청 실행
-        request = youtube.videos().insert(
-            part="snippet,status",
-            body=request_body,
-            media_body=media
-        )
-        
-        response = request.execute()
-        logger.info(f"영상 업로드 성공: {response['id']}")
-        return True
+        # 대본 렌더링 (자동 줄바꿈)
+        y_offset = 400
+        for line in textwrap.wrap(script, width=40):
+            draw.text((50, y_offset), line, font=font, fill="white")
+            y_offset += 70
+            
+        img.save(output_path)
+        return output_path
         
     except Exception as e:
-        logger.error(f"영상 업로드 실패: {str(e)}")
-        return False
+        logger.error(f"텍스트 이미지 생성 실패: {e}")
+        raise
+
+def create_video(content, audio_path, bg_path):
+    """최종 영상 생성"""
+    output_path = Config.OUTPUT_DIR / f"shorts_{uuid.uuid4()}.mp4"
+    text_image = Config.TEMP_DIR / f"text_{uuid.uuid4()}.png"
+    
+    try:
+        # 1. 텍스트 이미지 생성
+        render_text_image(content["title"], content["script"], text_image)
+        
+        # 2. FFmpeg로 영상 합성
+        subprocess.run([
+            "ffmpeg",
+            "-i", str(bg_path),  # 배경 영상
+            "-i", str(text_image),  # 텍스트 이미지
+            "-i", str(audio_path),  # 오디오 파일
+            "-filter_complex",
+            "[0:v]scale=1080:1920:force_original_aspect_ratio=decrease[bg];"
+            "[bg][1:v]overlay=0:0[vid]",  # 텍스트 오버레이
+            "-map", "[vid]",
+            "-map", "2:a",  # 오디오 매핑
+            "-c:v", "libx264",
+            "-c:a", "aac",
+            "-shortest",  # 가장 짧은 입력에 맞춤
+            "-y", str(output_path)  # 덮어쓰기 허용
+        ], check=True)
+        
+        logger.info(f"영상 생성 완료: {output_path}")
+        return output_path
+        
+    except subprocess.CalledProcessError as e:
+        logger.error(f"영상 생성 실패 (FFmpeg 오류): {e}")
+        raise
+    except Exception as e:
+        logger.error(f"영상 생성 실패: {e}")
+        raise
