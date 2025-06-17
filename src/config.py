@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+import logging
 
 class Config:
     TEMP_DIR = Path("temp")
@@ -17,11 +18,10 @@ class Config:
         
     @staticmethod
     def get_api_key(key_name):
-        return os.environ[key_name]
+        key = os.getenv(key_name)
+        if not key:
+            raise ValueError(f"{key_name} 환경 변수가 설정되지 않았습니다.")
+        return key
 
-    def get_rotated_key(base_name, num_keys=10):
-        for i in range(num_keys):
-            key = os.getenv(f"{base_name}_{i}")
-            if key:
-                return key
-        return os.getenv(base_name)
+# 전역 설정 초기화
+Config.initialize()
