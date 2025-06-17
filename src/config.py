@@ -1,30 +1,20 @@
-"""
-YouTube 자동화 시스템 설정 (무조건 실행되는 버전)
-"""
-from pathlib import Path
 import os
+from pathlib import Path
 
 class Config:
-    # 기본 디렉토리 설정
-    BASE_DIR = Path(__file__).parent.parent
-    TEMP_DIR = BASE_DIR / "temp"
-    OUTPUT_DIR = BASE_DIR / "output"
-    LOG_DIR = BASE_DIR / "logs"
-    
-    # 영상 설정
+    TEMP_DIR = Path("temp")
+    OUTPUT_DIR = Path("output")
     SHORTS_WIDTH = 1080
     SHORTS_HEIGHT = 1920
-    MAX_DURATION = 60  # 최대 영상 길이(초)
-    
-    # API 기본값
-    DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"  # ElevenLabs 기본 음성
+    FONT_PATH = "fonts/Catfont.ttf"
+    VIDEO_DURATION = 60
+    ELEVENLABS_VOICE_ID = "uyVNoMrnUku1dZyVEXwD"
     
     @classmethod
-    def ensure_directories(cls):
-        """필요한 디렉토리 생성"""
-        cls.TEMP_DIR.mkdir(exist_ok=True)
-        cls.OUTPUT_DIR.mkdir(exist_ok=True)
-        cls.LOG_DIR.mkdir(exist_ok=True)
-
-# 초기화 시 디렉토리 생성
-Config.ensure_directories()
+    def initialize(cls):
+        cls.TEMP_DIR.mkdir(parents=True, exist_ok=True)
+        cls.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        
+    @staticmethod
+    def get_api_key(key_name):
+        return os.environ[key_name]
