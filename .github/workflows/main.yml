@@ -3,30 +3,26 @@ name: YouTube Shorts Automation
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 22 * * *'  # 매일 한국 시간 오전 7시 실행 (UTC 22시)
+    - cron: '0 22 * * *'  # 한국 시간 오전 7시
 
 jobs:
   create-and-upload:
     runs-on: ubuntu-latest
-    timeout-minutes: 60  # 시간 제한을 60분으로
+    timeout-minutes: 30
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
       
-    - name: Set up Python
-      uses: actions/setup-python@v5
+    - name: Setup Python
+      uses: actions/setup-python@v4
       with:
-        python-version: '3.12'
+        python-version: '3.11'
         
-    - name: Install system dependencies
+    - name: Install dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y ffmpeg
-        
-    - name: Install Python dependencies
-      run: |
-        python -m pip install --upgrade pip
         pip install -r requirements.txt
         
     - name: Run automation
@@ -34,15 +30,10 @@ jobs:
         GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
         PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-        YOUTUBE_CREDENTIALS: ${{ secrets.YOUTUBE_CREDENTIALS }}  # 서비스 계정 키 JSON 문자열
-      run: |
-        python src/main.py
-        
+      run: python src/main.py
+      
     - name: Upload results
-      uses: actions/upload-artifact@v4
-      if: always()  # 항상 실행 (성공/실패 여부 관계없이)
+      uses: actions/upload-artifact@v3
       with:
         name: youtube-shorts
-        path: |
-          output/
-          youtube_shorts.log
+        path: output/
