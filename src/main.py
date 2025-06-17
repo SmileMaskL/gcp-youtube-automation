@@ -1,101 +1,92 @@
-import sys
-import time
-import random
+# src/main.py
+
 import logging
-from datetime import datetime
 from pathlib import Path
-sys.path.append(str(Path(__file__).resolve().parent))
+import sys
 
-# 절대 경로로 임포트 (상대 경로 대신)
-from src.config import Config
-from src.content_generator import get_trending_topics
-from src.tts_generator import generate_tts
-from src.video_creator import create_video
-from src.youtube_uploader import upload_to_youtube
+# 프로젝트 루트 디렉토리를 Python 경로에 추가
+project_root = Path(__file__).resolve().parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+from src.config import config
+from src.utils import setup_logging
+from src.content_generator import generate_content
+from src.tts_generator import text_to_speech
 from src.bg_downloader import download_background_video
-
-# 로거 설정
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(Config.LOGS_DIR / 'youtube_automation.log'),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
-
-def cleanup_old_files(days=7):
-    """오래된 파일 정리"""
-    from datetime import datetime, timedelta
-    cutoff = datetime.now() - timedelta(days=days)
-    deleted_files = 0
-
-    for dir_path in [Config.TEMP_DIR, Config.OUTPUT_DIR]:
-        for f in dir_path.glob('*'):
-            if f.is_file() and datetime.fromtimestamp(f.stat().st_mtime) < cutoff:
-                try:
-                    f.unlink()
-                    deleted_files += 1
-                except Exception as e:
-                    logger.warning(f"파일 삭제 실패: {f} - {e}")
-                    
-    logger.info(f"정리 완료: {deleted_files}개의 오래된 파일 삭제")
+from src.video_creator import create_video_with_subtitles
+from src.youtube_uploader import upload_to_youtube
+from src.thumbnail_generator import create_thumbnail
 
 def main():
-    """메인 실행 함수"""
+    """
+    YouTube 자동화 봇의 메인 실행 함수
+    """
+    setup_logging()
+    logging.info("🚀 YouTube 자동화 프로세스를 시작합니다.")
+
     try:
-        logger.info("="*50)
-        logger.info("YouTube 자동화 시스템 시작")
-        logger.info(f"실행 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        logger.info("="*50)
+        # 1. 콘텐츠 생성 (주제, 스크립트, 제목, 설명, 태그)
+        logging.info("1단계: 콘텐츠 생성 시작...")
+        # 생성할 콘텐츠의 주제를 자유롭게 변경해보세요.
+        content = generate_content("여름철 건강을 지키는 예상 밖의 방법")
         
-        # 1. 트렌딩 주제 가져오기
-        topics = get_trending_topics()
-        logger.info(f"생성된 주제 수: {len(topics)}")
+        # ★★★ 안정성 강화 ★★★
+        # 콘텐츠 생성에 실패하면 프로세스를 중단합니다.
+        if not content:
+            logging.error("콘텐츠 생성에 실패하여 프로세스를 중단합니다.")
+            sys.exit(1) # 오류 코드로 종료
         
-        # 2. 최대 5개 주제 처리
-        for i, topic in enumerate(topics[:5]):
-            try:
-                logger.info(f"\n[진행 중] {i+1}/{min(5, len(topics))} - {topic['title']}")
-                
-                # 3. 음성 생성
-                audio_path = generate_tts(topic["script"])
-                logger.info(f"음성 파일 생성: {audio_path}")
-                
-                # 4. 배경 영상 다운로드
-                bg_path = download_background_video(topic["pexel_query"])
-                logger.info(f"배경 영상 다운로드: {bg_path}")
-                
-                # 5. 영상 생성
-                video_path = create_video(topic, audio_path, bg_path)
-                logger.info(f"영상 생성 완료: {video_path}")
-                
-                # 6. YouTube 업로드
-                if upload_to_youtube(video_path, topic["title"]):
-                    logger.info(f"업로드 성공: {topic['title']}")
-                else:
-                    logger.warning(f"업로드 실패: {topic['title']}")
-                
-                # 7. 간격 유지 (30-60초)
-                if i < len(topics[:5]) - 1:
-                    wait_time = random.randint(30, 60)
-                    logger.info(f"다음 작업까지 {wait_time}초 대기...")
-                    time.sleep(wait_time)
-                    
-            except Exception as e:
-                logger.error(f"주제 처리 중 오류 발생: {e}", exc_info=True)
-                continue
-                
-        # 8. 오래된 파일 정리
-        cleanup_old_files()
-        
+        logging.info(f"✅ 콘텐츠 생성 완료! (제목: {content['title']})")
+
+        # 2. TTS 오디오 생성
+        logging.info("2단계: 음성(TTS) 생성 시작...")
+        text_to_speech(content['script'], config.AUDIO_FILE_PATH)
+        logging.info(f"✅ 음성 파일 저장 완료: {config.AUDIO_FILE_PATH}")
+
+        # 3. 배경 비디오 다운로드
+        logging.info("3단계: 배경 비디오 다운로드 시작...")
+        video_query = content.get("video_query", "nature relaxing") # 쿼리가 없으면 기본값 사용
+        download_background_video(video_query, config.OUTPUT_DIR)
+        logging.info("✅ 배경 비디오 다운로드 완료!")
+
+        # 4. 최종 비디오 생성 (자막 포함)
+        logging.info("4단계: 최종 비디오 생성 시작...")
+        background_video_path = next(config.OUTPUT_DIR.glob("background_*.mp4"))
+        create_video_with_subtitles(
+            background_video_path=background_video_path,
+            audio_path=config.AUDIO_FILE_PATH,
+            script_with_timing=content['script_with_timing'],
+            output_path=config.VIDEO_FILE_PATH
+        )
+        logging.info(f"✅ 최종 비디오 생성 완료: {config.VIDEO_FILE_PATH}")
+
+        # 5. 썸네일 생성
+        logging.info("5단계: 썸네일 생성 시작...")
+        thumbnail_text = content['title'].replace('\n', ' ')
+        create_thumbnail(
+            text=thumbnail_text,
+            background_path=background_video_path,
+            output_path=config.THUMBNAIL_FILE_PATH
+        )
+        logging.info(f"✅ 썸네일 생성 완료: {config.THUMBNAIL_FILE_PATH}")
+
+        # 6. YouTube에 업로드
+        logging.info("6단계: YouTube 업로드 시작...")
+        upload_to_youtube(
+            video_path=config.VIDEO_FILE_PATH,
+            title=content['title'],
+            description=content['description'],
+            tags=content['tags'],
+            thumbnail_path=config.THUMBNAIL_FILE_PATH
+        )
+        logging.info("✅ YouTube 업로드 성공!")
+
     except Exception as e:
-        logger.error(f"시스템 오류 발생: {e}", exc_info=True)
-    finally:
-        logger.info("="*50)
-        logger.info("YouTube 자동화 시스템 종료")
-        logger.info("="*50)
+        logging.error(f"❌ 프로세스 중 예측하지 못한 오류 발생: {e}", exc_info=True)
+        sys.exit(1)
+
+    logging.info("🎉 모든 프로세스가 성공적으로 완료되었습니다!")
 
 if __name__ == "__main__":
     main()
