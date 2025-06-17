@@ -8,4 +8,3 @@ logs/
 service-account.json
 **/__pycache__/
 **/*.py[cod]
-secret/
