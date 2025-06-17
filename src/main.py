@@ -1,22 +1,18 @@
 # src/main.py
 
 import logging
-from pathlib import Path
 import sys
 
-# 프로젝트 루트 디렉토리를 Python 경로에 추가
-project_root = Path(__file__).resolve().parent.parent
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
-
-from src.config import config
-from src.utils import setup_logging
-from src.content_generator import generate_content
-from src.tts_generator import text_to_speech
-from src.bg_downloader import download_background_video
-from src.video_creator import create_video_with_subtitles
-from src.youtube_uploader import upload_to_youtube
-from src.thumbnail_generator import create_thumbnail
+# ★★★ 핵심 수정 ★★★
+# 모든 'src' 모듈 임포트를 상대 경로 방식으로 변경
+from .config import config
+from .utils import setup_logging
+from .content_generator import generate_content
+from .tts_generator import text_to_speech
+from .bg_downloader import download_background_video
+from .video_creator import create_video_with_subtitles
+from .youtube_uploader import upload_to_youtube
+from .thumbnail_generator import create_thumbnail
 
 def main():
     """
@@ -26,17 +22,12 @@ def main():
     logging.info("🚀 YouTube 자동화 프로세스를 시작합니다.")
 
     try:
-        # 1. 콘텐츠 생성 (주제, 스크립트, 제목, 설명, 태그)
+        # 1. 콘텐츠 생성
         logging.info("1단계: 콘텐츠 생성 시작...")
-        # 생성할 콘텐츠의 주제를 자유롭게 변경해보세요.
         content = generate_content("여름철 건강을 지키는 예상 밖의 방법")
-        
-        # ★★★ 안정성 강화 ★★★
-        # 콘텐츠 생성에 실패하면 프로세스를 중단합니다.
         if not content:
             logging.error("콘텐츠 생성에 실패하여 프로세스를 중단합니다.")
-            sys.exit(1) # 오류 코드로 종료
-        
+            sys.exit(1)
         logging.info(f"✅ 콘텐츠 생성 완료! (제목: {content['title']})")
 
         # 2. TTS 오디오 생성
@@ -46,7 +37,7 @@ def main():
 
         # 3. 배경 비디오 다운로드
         logging.info("3단계: 배경 비디오 다운로드 시작...")
-        video_query = content.get("video_query", "nature relaxing") # 쿼리가 없으면 기본값 사용
+        video_query = content.get("video_query", "nature relaxing")
         download_background_video(video_query, config.OUTPUT_DIR)
         logging.info("✅ 배경 비디오 다운로드 완료!")
 
