@@ -1,5 +1,5 @@
 """
-YouTube 자동화 시스템 설정 (최종확인 버전)
+YouTube 자동화 시스템 설정 (최종 수정본)
 """
 import os
 from pathlib import Path
@@ -28,7 +28,7 @@ class Config:
     
     # API 설정
     ELEVENLABS_VOICE_ID = "uyVNoMrnUku1dZyVEXwD"  # 안나 킴 목소리
-    AI_MODEL = "gemini-pro"  # 사용할 AI 모델
+    AI_MODEL = "gemini-1.5-pro"  # 최신 모델 이름으로 변경
     
     @classmethod
     def initialize(cls):
