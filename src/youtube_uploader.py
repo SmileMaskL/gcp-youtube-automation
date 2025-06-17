@@ -3,7 +3,7 @@ import uuid
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 import textwrap
-from config import Config
+from .config import Config
 import logging
 
 logger = logging.getLogger(__name__)
