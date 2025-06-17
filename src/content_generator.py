@@ -11,7 +11,7 @@ def get_trending_topics():
     """오늘의 트렌딩 주제 5개 생성"""
     try:
         genai.configure(api_key=Config.get_api_key("GEMINI_API_KEY"))
-        model = genai.GenerativeModel('gemini-pro')
+        model = genai.GenerativeModel('Google Gemini 1.5 Flash')
         
         prompt = f"""2025년 6월 현재 한국에서 가장 인기 있는 주제 5개를 생성해주세요. 반드시 다음 JSON 형식으로 출력해야 합니다:
         [
