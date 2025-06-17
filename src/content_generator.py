@@ -9,7 +9,7 @@ from typing import Dict, List
 import google.generativeai as genai
 from datetime import datetime
 from .config import Config
-from .trend_api import fetch_daily_trends  # 트렌드 API 모듈 (가정)
+from src.trend_api import fetch_daily_trends  # 트렌드 API 모듈 (가정)
 
 logger = logging.getLogger(__name__)
 
@@ -28,8 +28,6 @@ class ShortsGenerator:
         )
         self.trending_topics = []
 
-
-text
 def get_daily_topics(self) -> List[str]:
     """오늘의 핫이슈 5개 주제 가져오기"""
     try:
