@@ -1,80 +1,52 @@
 import os
-import json
-import logging
-from google.oauth2.credentials import Credentials
+import google.auth
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
-from pathlib import Path
+from config import Config
+import logging
+from retrying import retry
 
 logger = logging.getLogger(__name__)
 
-SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
-
-def get_authenticated_service():
+@retry(stop_max_attempt_number=3, wait_fixed=2000)
+def upload_to_youtube(video_path, title):
+    """YouTube에 업로드"""
     try:
-        creds_json_str = os.getenv("YOUTUBE_OAUTH_CREDENTIALS")
-        if not creds_json_str:
-            raise ValueError("YOUTUBE_OAUTH_CREDENTIALS 환경변수가 없습니다.")
+        # 서비스 계정 자격 증명 (GCP 서비스 계정 키 파일 경로)
+        creds = None
+        # 환경 변수에서 서비스 계정 키를 JSON 문자열로 가져옵니다.
+        service_account_info = json.loads(os.environ['YOUTUBE_CREDENTIALS'])
+        creds = service_account.Credentials.from_service_account_info(service_account_info)
         
-        creds_info = json.loads(creds_json_str)
-        creds = Credentials.from_authorized_user_info(creds_info, SCOPES)
-
-        if not creds or not creds.valid:
-            if creds and creds.expired and creds.refresh_token:
-                creds.refresh(None)
-            else:
-                raise ValueError("유효한 인증 정보가 없습니다.")
-
-        return build('youtube', 'v3', credentials=creds)
-    except Exception as e:
-        logger.error(f"인증 서비스 생성 실패: {str(e)}")
-        return None
-
-def upload_video(video_path: str, title: str, description: str, tags: list,
-                 privacy_status: str = "private", category_id: str = "28",
-                 thumbnail_path: str = None) -> bool:
-    try:
-        youtube = get_authenticated_service()
-        if not youtube:
-            return False
-
-        # 영상 업로드
-        body = {
-            "snippet": {
-                "title": title,
-                "description": description,
-                "tags": tags,
-                "categoryId": category_id
+        youtube = build('youtube', 'v3', credentials=creds)
+        
+        request_body = {
+            'snippet': {
+                'title': title,
+                'description': '자동 생성된 YouTube Shorts입니다.',
+                'categoryId': '22'  # Entertainment
             },
-            "status": {
-                "privacyStatus": privacy_status,
-                "selfDeclaredMadeForKids": False
+            'status': {
+                'privacyStatus': 'public',
+                'selfDeclaredMadeForKids': False
             }
         }
-
+        
         media = MediaFileUpload(video_path, chunksize=-1, resumable=True)
         request = youtube.videos().insert(
-            part=",".join(body.keys()),
-            body=body,
+            part='snippet,status',
+            body=request_body,
             media_body=media
         )
-        response = request.execute()
-        video_id = response.get('id')
-
-        # 썸네일 업로드
-        if thumbnail_path and video_id:
-            try:
-                youtube.thumbnails().set(
-                    videoId=video_id,
-                    media_body=MediaFileUpload(thumbnail_path)
-                ).execute()
-                logger.info(f"썸네일 업로드 성공: {thumbnail_path}")
-            except Exception as e:
-                logger.warning(f"썸네일 업로드 실패: {str(e)}")
-
-        logger.info(f"업로드 완료! 비디오 ID: {video_id}")
+        
+        response = None
+        while response is None:
+            status, response = request.next_chunk()
+            if status:
+                logger.info(f"업로드 진행: {int(status.progress() * 100)}%")
+        
+        logger.info(f"업로드 완료: {response['id']}")
         return True
-
     except Exception as e:
-        logger.error(f"업로드 중 오류 발생: {str(e)}")
+        logger.error(f"업로드 실패: {e}")
         return False
