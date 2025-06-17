@@ -6,6 +6,9 @@ load_dotenv()
 
 load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env")
 
+with open(os.getenv("YOUTUBE_CREDENTIALS_PATH")) as f:
+    creds_json = json.load(f)
+
 class Config:
     # 기본 디렉토리 설정
     BASE_DIR = Path(__file__).parent.parent
