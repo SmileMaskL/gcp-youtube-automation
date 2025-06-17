@@ -1,3 +1,7 @@
+"""
+완전 자동화 유튜브 쇼츠 제작 시스템 (하루 5개 영상 생성)
+"""
+
 import json
 import logging
 import random
@@ -5,24 +9,25 @@ from typing import Dict, List
 import google.generativeai as genai
 from datetime import datetime
 from .config import Config
-from .trend_api import fetch_daily_trends # 트렌드 API 모듈 (가정)
+from .trend_api import fetch_daily_trends  # 트렌드 API 모듈 (가정)
 
-logger = logging.getLogger(name)
+logger = logging.getLogger(__name__)
 
 class ShortsGenerator:
-def init(self):
-# API 초기화
-genai.configure(api_key=Config.get_api_key("GEMINI_API_KEY"))
-self.model = genai.GenerativeModel(
-Config.AI_MODEL,
-generation_config={
-"temperature": 0.8, # 창의성 증가
-"top_p": 0.95,
-"top_k": 50,
-"max_output_tokens": 4096 # 더 긴 응답 처리
-}
-)
-self.trending_topics = []
+    def __init__(self):
+        # API 초기화
+        genai.configure(api_key=Config.get_api_key("GEMINI_API_KEY"))
+        self.model = genai.GenerativeModel(
+            Config.AI_MODEL,
+            generation_config={
+                "temperature": 0.8,  # 창의성 증가
+                "top_p": 0.95,
+                "top_k": 50,
+                "max_output_tokens": 4096  # 더 긴 응답 처리
+            }
+        )
+        self.trending_topics = []
+
 
 text
 def get_daily_topics(self) -> List[str]:
