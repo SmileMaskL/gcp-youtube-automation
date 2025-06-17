@@ -1,5 +1,5 @@
 """
-콘텐츠 생성 모듈 (최종확인 버전)
+콘텐츠 생성 모듈 (최종 수정본)
 """
 import json
 import logging
@@ -11,8 +11,10 @@ logger = logging.getLogger(__name__)
 def generate_content(base_topic: str) -> dict:
     """Gemini AI를 사용하여 유튜브 쇼츠 콘텐츠 생성"""
     try:
-        # API 설정
+        # API 설정 (최신 버전 방식)
         genai.configure(api_key=Config.get_api_key("GEMINI_API_KEY"))
+        
+        # 모델 초기화 (새로운 방식)
         model = genai.GenerativeModel(Config.AI_MODEL)
         
         # 프롬프트 작성
@@ -20,6 +22,7 @@ def generate_content(base_topic: str) -> dict:
         [지시사항]
         - '{base_topic}' 주제로 15-20초 분량의 유튜브 쇼츠 콘텐츠 생성
         - 반드시 아래 JSON 형식으로 응답
+        - 모든 내용은 한국어로 작성
         
         [출력 형식]
         {{
@@ -35,17 +38,26 @@ def generate_content(base_topic: str) -> dict:
         }}
         """
         
-        # 콘텐츠 생성
+        # 콘텐츠 생성 (새로운 API 방식)
         response = model.generate_content(prompt)
+        
+        # 응답 처리
+        if not response.text:
+            raise ValueError("AI 응답이 비어있습니다")
+            
         content = json.loads(response.text)
         
-        # 시간 정보 자동 계산 (스크립트 길이 기반)
-        total_duration = sum([item['end']-item['start'] for item in content['script_with_timing']])
-        if total_duration < 15 or total_duration > 60:
-            raise ValueError("영상 길이가 적절하지 않습니다")
-            
+        # 필수 필드 검증
+        required_fields = ['title', 'description', 'script', 'script_with_timing', 'tags', 'video_query']
+        for field in required_fields:
+            if field not in content:
+                raise ValueError(f"필수 필드 '{field}'가 없습니다")
+        
         return content
         
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON 파싱 오류: {e}")
+        raise
     except Exception as e:
         logger.error(f"콘텐츠 생성 실패: {e}")
         raise
