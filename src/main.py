@@ -8,12 +8,15 @@ project_root = current_dir.parent
 sys.path.append(str(project_root))
 
 # 절대 임포트로 통일
-from src.content_generator import generate_content
+from src.content_generator import ShortsGenerator
 from src.voice_generator import generate_voice
 from src.video_downloader import download_video
 from src.video_editor import create_video
 from src.thumbnail_generator import create_thumbnail
 from src.config import Config
+
+generator = ShortsGenerator()
+contents = generator.generate_daily_contents()
 
 # 로깅 설정
 logging.basicConfig(
