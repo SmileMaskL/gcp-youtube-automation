@@ -1,4 +1,5 @@
 import google.generativeai as genai
+from google.generativeai.types import GenerationConfig
 import json
 import logging
 from datetime import datetime
