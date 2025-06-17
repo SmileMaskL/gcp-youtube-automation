@@ -1,13 +1,19 @@
-"""
-메인 실행 파일 (최종 수정본)
-"""
 import os
 import sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from pathlib import Path
 
-import logging
-from datetime import datetime
-from dotenv import load_dotenv
+# 프로젝트 루트를 시스템 경로에 추가 (강력한 버전)
+current_dir = Path(__file__).parent
+project_root = current_dir.parent
+sys.path.append(str(project_root))
+
+# 절대 임포트로 통일
+from src.content_generator import generate_content
+from src.voice_generator import generate_voice
+from src.video_downloader import download_video
+from src.video_editor import create_video
+from src.thumbnail_generator import create_thumbnail
+from src.config import Config
 
 # 로깅 설정
 logging.basicConfig(
