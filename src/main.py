@@ -1,6 +1,8 @@
 """
 메인 실행 파일 (최종 수정본)
 """
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import logging
 from datetime import datetime
 import os
