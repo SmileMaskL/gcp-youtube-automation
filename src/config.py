@@ -18,3 +18,10 @@ class Config:
     @staticmethod
     def get_api_key(key_name):
         return os.environ[key_name]
+
+    def get_rotated_key(base_name, num_keys=10):
+        for i in range(num_keys):
+            key = os.getenv(f"{base_name}_{i}")
+            if key:
+                return key
+        return os.getenv(base_name)
