@@ -1,5 +1,5 @@
 *.json
-secrets/
+secrets/*.json
 *.txt
 output/
 *.env
