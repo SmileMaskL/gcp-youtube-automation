@@ -2,7 +2,7 @@ import google.generativeai as genai
 from datetime import datetime
 import random
 import json
-from config import Config
+from .config import Config
 import logging
 
 logger = logging.getLogger(__name__)
