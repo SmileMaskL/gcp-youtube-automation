@@ -13,6 +13,13 @@ from tts_generator import generate_tts
 from video_creator import create_video
 from youtube_uploader import upload_to_youtube
 
+from src.config import Config
+from src.content_generator import get_trending_topics
+from src.tts_generator import generate_tts
+from src.video_creator import create_video
+from src.youtube_uploader import upload_to_youtube
+from src.bg_downloader import download_background_video
+
 # 로거 설정
 logging.basicConfig(
     level=logging.INFO,
