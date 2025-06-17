@@ -6,11 +6,13 @@ import sys
 import logging
 import json
 import random
+from .content_generator import ShortsGenerator
 from .config import Config
 from .ai_rotation import AIClient
 from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv
+from .video_editor import create_video
 
 # 프로젝트 루트 경로 추가
 sys.path.insert(0, str(Path(__file__).parent.parent))
