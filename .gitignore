@@ -2,10 +2,10 @@
 secrets/
 *.txt
 output/
-.env
+*.env
 *.pyc
 logs/
-*.env
 service-account.json
 **/__pycache__/
 **/*.py[cod]
+secret/
