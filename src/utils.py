@@ -7,6 +7,7 @@ YouTube 자동화 시스템 설정 (무조건 실행되는 버전)
 """
 from pathlib import Path
 import os
+from .config import config
 
 class Config:
     # 기본 디렉토리 설정
