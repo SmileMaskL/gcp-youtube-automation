@@ -4,6 +4,7 @@ import time
 from datetime import datetime, timedelta
 import logging
 from dotenv import load_dotenv
+from .config import config
 
 # 환경 변수 로드
 load_dotenv()
