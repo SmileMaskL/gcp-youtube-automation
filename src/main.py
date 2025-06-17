@@ -1,8 +1,10 @@
+import sys
 import time
 import random
 import logging
 from datetime import datetime
 from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parent))
 
 # 절대 경로로 임포트 (상대 경로 대신)
 from src.config import Config
