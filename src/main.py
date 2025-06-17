@@ -1,12 +1,13 @@
 import time
 import random
 import logging
+import uuid
+import requests
 from content_generator import get_trending_topics
 from tts_generator import generate_tts
 from video_creator import create_video
 from youtube_uploader import upload_to_youtube
-from config import Config
-import os
+from config import Config  # Config 클래스 import 추가
 
 # 로거 설정
 logging.basicConfig(
@@ -26,17 +27,18 @@ def get_background_video(query):
         headers = {"Authorization": Config.get_api_key("PEXELS_API_KEY")}
         response = requests.get(
             f"https://api.pexels.com/videos/search?query={query}&per_page=5",
-            headers=headers
+            headers=headers,
+            timeout=30
         )
         response.raise_for_status()
         
         videos = response.json().get("videos", [])
         if not videos:
-            raise ValueError("No videos found")
+            raise ValueError("검색 결과 없음")
             
         video = random.choice(videos)
         video_file = next(
-            (f for f in video["video_files"] if f["width"] == Config.SHORTS_WIDTH),
+            (f for f in video["video_files"] if f.get("width") == Config.SHORTS_WIDTH),
             video["video_files"][0]
         )
         
@@ -46,6 +48,7 @@ def get_background_video(query):
                 for chunk in r.iter_content(chunk_size=8192):
                     f.write(chunk)
         
+        logger.info(f"배경 영상 다운로드 성공: {video_path}")
         return video_path
         
     except Exception as e:
@@ -55,7 +58,6 @@ def get_background_video(query):
 def main():
     """메인 실행 함수"""
     try:
-        Config.initialize()
         logger.info("YouTube 자동화 시스템 시작")
         
         # 트렌딩 주제 가져오기
