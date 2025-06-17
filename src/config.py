@@ -1,32 +1,15 @@
+"""
+YouTube 자동화 시스템 설정
+"""
 import os
+import json
+from pathlib import Path
 from dotenv import load_dotenv
 
+# 환경 변수 로드
 load_dotenv()
 
-load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env")
-
-with open(os.getenv("YOUTUBE_CREDENTIALS_PATH")) as f:
-    creds_json = json.load(f)
-
 class Config:
-    GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
-
-    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-    GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-
-    ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
-    ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID")
-
-    PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
-
-    YT_CLIENT_ID = os.getenv("YT_CLIENT_ID")
-    YT_CLIENT_SECRET = os.getenv("YT_CLIENT_SECRET")
-    YT_REDIRECT_URI = os.getenv("YT_REDIRECT_URI")
-
-    GCP_BUCKET_NAME = os.getenv("GCP_BUCKET_NAME")
-
-    YOUTUBE_CREDENTIALS_PATH = os.getenv("YOUTUBE_CREDENTIALS_PATH")
-    
     # 기본 디렉토리 설정
     BASE_DIR = Path(__file__).parent.parent
     TEMP_DIR = BASE_DIR / "temp"
@@ -34,13 +17,18 @@ class Config:
     LOGS_DIR = BASE_DIR / "logs"
     FONT_PATH = BASE_DIR / "fonts" / "Catfont.ttf"
     
+    # 파일 경로 설정
+    AUDIO_FILE_PATH = TEMP_DIR / "output_audio.mp3"
+    VIDEO_FILE_PATH = OUTPUT_DIR / "final_video.mp4"
+    THUMBNAIL_FILE_PATH = OUTPUT_DIR / "thumbnail.jpg"
+    
     # 영상 설정
     SHORTS_WIDTH = 1080
     SHORTS_HEIGHT = 1920
     VIDEO_DURATION = 60  # 60초
     
     # API 설정
-    ELEVENLABS_VOICE_ID = "uyVNoMrnUku1dZyVEXwD"
+    ELEVENLABS_VOICE_ID = "uyVNoMrnUku1dZyVEXwD"  # 안나 킴 목소리
     
     @classmethod
     def initialize(cls):
