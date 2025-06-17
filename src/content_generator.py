@@ -35,8 +35,8 @@ def get_trending_topics():
         response = model.generate_content(
             prompt,
             generation_config={
-                temperature=0.7,
-                max_tokens=512
+                temperature==0.7,
+                max_tokens==512
             }
         )
         
