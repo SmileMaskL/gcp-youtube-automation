@@ -16,6 +16,7 @@ from google_auth_oauthlib.flow import Flow
 from google.auth.transport.requests import Request
 
 from utils import config_manager, RateLimiter, retry_on_failure
+from .config import config
 
 logger = logging.getLogger(__name__)
 
