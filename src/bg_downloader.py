@@ -1,7 +1,7 @@
 import requests
 import uuid
 from pathlib import Path
-from config import Config
+from .config import Config
 import logging
 
 logger = logging.getLogger(__name__)
