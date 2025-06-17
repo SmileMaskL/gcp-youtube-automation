@@ -9,6 +9,7 @@ from pathlib import Path
 import json
 import ffmpeg
 from utils import FileManager, config_manager, retry_on_failure
+from .config import config
 
 logger = logging.getLogger(__name__)
 
