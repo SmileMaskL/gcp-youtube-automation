@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import random
 import logging
+from .config import config
 
 # 로거 설정 추가
 logger = logging.getLogger(__name__)
