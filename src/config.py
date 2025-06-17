@@ -1,8 +1,5 @@
-import json
 import os
-from pathlib import Path
 from dotenv import load_dotenv
-from src.config import config
 
 load_dotenv()
 
@@ -12,6 +9,24 @@ with open(os.getenv("YOUTUBE_CREDENTIALS_PATH")) as f:
     creds_json = json.load(f)
 
 class Config:
+    GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
+
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+    GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+
+    ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
+    ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID")
+
+    PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
+
+    YT_CLIENT_ID = os.getenv("YT_CLIENT_ID")
+    YT_CLIENT_SECRET = os.getenv("YT_CLIENT_SECRET")
+    YT_REDIRECT_URI = os.getenv("YT_REDIRECT_URI")
+
+    GCP_BUCKET_NAME = os.getenv("GCP_BUCKET_NAME")
+
+    YOUTUBE_CREDENTIALS_PATH = os.getenv("YOUTUBE_CREDENTIALS_PATH")
+    
     # 기본 디렉토리 설정
     BASE_DIR = Path(__file__).parent.parent
     TEMP_DIR = BASE_DIR / "temp"
