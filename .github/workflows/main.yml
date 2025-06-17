@@ -1,32 +1,37 @@
 name: YouTube Automation
 on:
-  #schedule:
-    #- cron: '0 3,7,12,18,22 * * *'  # 하루 5회 실행
+  # schedule:
+    # - cron: '0 3,7,12,18,22 * * *'  # 하루 5회 실행
   workflow_dispatch:
+
 jobs:
   run-bot:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+      PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+      YOUTUBE_OAUTH_CREDENTIALS: ${{ secrets.YOUTUBE_OAUTH_CREDENTIALS }}
+
     steps:
     - uses: actions/checkout@v4
+    
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.11'
+    
     - name: Install dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y ffmpeg
         pip install -r requirements.txt
-        pip install -e .
+    
     - name: Run automation
-      env:
-        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
-        PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-        YOUTUBE_OAUTH_CREDENTIALS: ${{ secrets.YOUTUBE_OAUTH_CREDENTIALS }}
       run: |
         python -m src.main
+    
     - name: Upload results
       uses: actions/upload-artifact@v4
       with:
