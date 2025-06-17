@@ -1,11 +1,11 @@
 """
 메인 실행 파일 (최종 수정본)
 """
+import os
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import logging
 from datetime import datetime
-import os
 from dotenv import load_dotenv
 from .content_generator import generate_content
 from .voice_generator import generate_voice
