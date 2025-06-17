@@ -13,6 +13,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+def check_quota(youtube):
+    quota = youtube.quota().get().execute()
+    logger.info(f"현재 API 쿼터: {quota}")
+
 def upload_to_youtube(video_path, title):
     """YouTube에 동영상 업로드"""
     try:
