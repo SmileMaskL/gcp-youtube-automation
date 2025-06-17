@@ -4,7 +4,7 @@
 import os
 import logging
 from PIL import Image, ImageDraw, ImageFont
-import cv2  # OpenCV 추가
+import cv2
 
 logger = logging.getLogger(__name__)
 
@@ -21,14 +21,14 @@ def create_thumbnail(title: str, background_path: str, output_path: str):
         frame_path = os.path.join(os.path.dirname(output_path), "temp_frame.jpg")
         cv2.imwrite(frame_path, image)
         
-        # 2. 이미지 열기
+        # 2. 이미지 열기 (이 부분이 추가되었습니다!)
         img = Image.open(frame_path)
         img = img.resize((1080, 1920))  # 쇼츠 사이즈
         
         # 3. 제목 추가
         draw = ImageDraw.Draw(img)
         try:
-            font = ImageFont.truetype("arial.ttf", 80)
+            font = ImageFont.truetype("fonts/Catfont.ttf", 80)
         except:
             font = ImageFont.load_default()
         
