@@ -12,20 +12,20 @@ class Config:
     SHORTS_WIDTH = 1080
     SHORTS_HEIGHT = 1920
     VIDEO_DURATION = 60  # 60초 영상
-    
+
     # 폰트 설정
     FONT_PATH = Path("fonts/Catfont.ttf")
-    
+
     # API 설정
     ELEVENLABS_VOICE_ID = "uyVNoMrnUku1dZyVEXwD"
-    
+
     @classmethod
     def initialize(cls):
         """필요한 디렉토리 생성 및 초기화"""
         cls.TEMP_DIR.mkdir(parents=True, exist_ok=True)
         cls.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         cls.LOGS_DIR.mkdir(parents=True, exist_ok=True)
-        
+    
     @staticmethod
     def get_api_key(key_name):
         """환경 변수에서 API 키 가져오기"""
