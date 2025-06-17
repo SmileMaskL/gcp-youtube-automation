@@ -4,6 +4,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env")
+
 class Config:
     # 기본 디렉토리 설정
     BASE_DIR = Path(__file__).parent.parent
