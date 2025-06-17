@@ -1,73 +1,47 @@
-name: YouTube Automation (수익 창출 봇)
+name: YouTube Shorts Automation
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
-  # schedule:
-  #   - cron: '0 22 * * *' # 매일 한국 시간 오전 7시에 실행
+  schedule:
+    - cron: '0 22 * * *'  # 매일 한국 시간 오전 7시 실행
 
 jobs:
-  build-and-run:
+  create-and-upload:
     runs-on: ubuntu-latest
-    timeout-minutes: 30  # 타임아웃 설정 추가
-    permissions:
-      contents: read
-      id-token: write
-
+    timeout-minutes: 45
+    
     steps:
-      - name: 1. 코드 체크아웃
-        uses: actions/checkout@v4
-
-      - name: 2. 파이썬 3.12 설치
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-          cache: 'pip'
-
-      - name: 3. 시스템 및 파이썬 라이브러리 한번에 설치
-        run: |
-          # 시스템 필수 프로그램 설치
-          sudo apt-get update -y
-          sudo apt-get install -y ffmpeg imagemagick fonts-noto-cjk
-          sudo mkdir -p /usr/share/fonts/truetype/noto
-          sudo wget -q -O /usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc \
-          https://github.com/googlefonts/noto-cjk/raw/main/Sans/OTF/Japanese/NotoSansCJK-Bold.tt
-          sudo apt-get install -y imagemagick
-          sudo sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/g' /etc/ImageMagick-6/policy.xml
-          sudo sed -i 's/rights="none" pattern="LABEL"/rights="read|write" pattern="LABEL"/g' /etc/ImageMagick-6/policy.xml
-          sudo sed -i 's/rights="none" pattern="MVG"/rights="read|write" pattern="MVG"/g' /etc/ImageMagick-6/policy.xml
-          sudo sed -i 's/rights="none" pattern="PS"/rights="read|write" pattern="PS"/g' /etc/ImageMagick-6/policy.xml
-          sudo sed -i 's/rights="none" pattern="EPS"/rights="read|write" pattern="EPS"/g' /etc/ImageMagick-6/policy.xml
-          sudo sed -i 's/rights="none" pattern="XPS"/rights="read|write" pattern="XPS"/g' /etc/ImageMagick-6/policy.xml
-          sudo sed -i 's/rights="none" pattern="TEXT"/rights="read|write" pattern="TEXT"/g' /etc/ImageMagick-6/policy.xml
-          
-          # ImageMagick 정책 수정 (필요시)
-          sudo sed -i 's/rights="none" pattern="PDF"/rights="read|write"/g' /etc/ImageMagick-6/policy.xml
-
-          # 파이썬 라이브러리 설치 (단 한번만 실행!)
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt         
-          pip install pillow==10.0.0
-
-      - name: 4. 수익 창출 봇 실행
-        env:
-          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
-          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }} # Voice ID도 Secret으로 관리하는 것이 좋습니다.
-        run: python src/main.py # 사용자님의 경로가 src/main.py 이므로 그대로 유지
-
-      - name: 5. 메모리 사용 제한 설정
-        run: |
-          ulimit -Sv 6000000  # 6GB 메모리 제한 설정
-          python src/main.py
-
-      - name: Upload video
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: youtube-shorts
-          path: output/
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
         
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg imagemagick
+        sudo mkdir -p /usr/share/fonts/truetype/custom
+        sudo cp fonts/Catfont.ttf /usr/share/fonts/truetype/custom/
+        
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Run automation
+      env:
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+        PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+        YOUTUBE_CREDENTIALS: ${{ secrets.YOUTUBE_CREDENTIALS }}
+      run: |
+        python src/main.py
+        
+    - name: Upload results
+      uses: actions/upload-artifact@v4
+      with:
+        name: youtube-shorts
+        path: output/
