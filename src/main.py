@@ -1,83 +1,104 @@
-# src/main.py
-
+"""
+YouTube 자동화 메인 시스템
+"""
 import logging
 import sys
+from pathlib import Path
+from datetime import datetime
+import random
+from dotenv import load_dotenv
 
-# ★★★ 핵심 수정 ★★★
-# 모든 'src' 모듈 임포트를 상대 경로 방식으로 변경
-from .config import config
-from .utils import setup_logging
-from .content_generator import generate_content
-from .tts_generator import text_to_speech
-from .bg_downloader import download_background_video
-from .video_creator import create_video_with_subtitles
-from .youtube_uploader import upload_to_youtube
-from .thumbnail_generator import create_thumbnail
+# 프로젝트 루트 경로 추가
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from src.config import Config
+from src.content_generator import generate_content
+from src.tts_generator import text_to_speech
+from src.bg_downloader import download_background_video
+from src.video_creator import create_video_with_subtitles
+from src.thumbnail_generator import create_thumbnail
+from src.youtube_uploader import upload_to_youtube
+
+# 로깅 설정
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(Config.LOGS_DIR / "youtube_automation.log"),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
+def get_daily_trending_topic():
+    """매일 다른 트렌드 주제 선택"""
+    topics = [
+        "부자가 되는 습관 5가지",
+        "성공하는 사람들의 아침 루틴",
+        "돈 버는 부업 아이디어 2025",
+        "초보자도 할 수 있는 투자 방법",
+        "시간 관리의 비밀",
+        "생산성을 높이는 방법",
+        "스트레스 해소 기술",
+        "건강한 삶을 위한 팁",
+        "인간관계 개선 방법",
+        "자기계발 필수 습관"
+    ]
+    return random.choice(topics)
 
 def main():
-    """
-    YouTube 자동화 봇의 메인 실행 함수
-    """
-    setup_logging()
-    logging.info("🚀 YouTube 자동화 프로세스를 시작합니다.")
-
     try:
-        # 1. 콘텐츠 생성
-        logging.info("1단계: 콘텐츠 생성 시작...")
-        content = generate_content("여름철 건강을 지키는 예상 밖의 방법")
+        logger.info("🚀 YouTube 자동화 시스템 시작")
+        
+        # 1. 주제 선정
+        topic = get_daily_trending_topic()
+        logger.info(f"📌 오늘의 주제: {topic}")
+        
+        # 2. 콘텐츠 생성
+        content = generate_content(topic)
         if not content:
-            logging.error("콘텐츠 생성에 실패하여 프로세스를 중단합니다.")
-            sys.exit(1)
-        logging.info(f"✅ 콘텐츠 생성 완료! (제목: {content['title']})")
-
-        # 2. TTS 오디오 생성
-        logging.info("2단계: 음성(TTS) 생성 시작...")
-        text_to_speech(content['script'], config.AUDIO_FILE_PATH)
-        logging.info(f"✅ 음성 파일 저장 완료: {config.AUDIO_FILE_PATH}")
-
-        # 3. 배경 비디오 다운로드
-        logging.info("3단계: 배경 비디오 다운로드 시작...")
-        video_query = content.get("video_query", "nature relaxing")
-        download_background_video(video_query, config.OUTPUT_DIR)
-        logging.info("✅ 배경 비디오 다운로드 완료!")
-
-        # 4. 최종 비디오 생성 (자막 포함)
-        logging.info("4단계: 최종 비디오 생성 시작...")
-        background_video_path = next(config.OUTPUT_DIR.glob("background_*.mp4"))
+            raise ValueError("콘텐츠 생성 실패")
+        logger.info(f"📝 제목: {content['title']}")
+        
+        # 3. 음성 생성
+        text_to_speech(content['script'], Config.AUDIO_FILE_PATH)
+        logger.info(f"🔊 음성 파일 생성 완료: {Config.AUDIO_FILE_PATH}")
+        
+        # 4. 배경 영상 다운로드
+        bg_video_path = download_background_video(content.get("video_query", "nature relaxing"))
+        logger.info(f"🎬 배경 영상 다운로드 완료: {bg_video_path}")
+        
+        # 5. 영상 생성
         create_video_with_subtitles(
-            background_video_path=background_video_path,
-            audio_path=config.AUDIO_FILE_PATH,
+            bg_video_path=bg_video_path,
+            audio_path=Config.AUDIO_FILE_PATH,
             script_with_timing=content['script_with_timing'],
-            output_path=config.VIDEO_FILE_PATH
+            output_path=Config.VIDEO_FILE_PATH
         )
-        logging.info(f"✅ 최종 비디오 생성 완료: {config.VIDEO_FILE_PATH}")
-
-        # 5. 썸네일 생성
-        logging.info("5단계: 썸네일 생성 시작...")
-        thumbnail_text = content['title'].replace('\n', ' ')
+        logger.info(f"🎥 최종 영상 생성 완료: {Config.VIDEO_FILE_PATH}")
+        
+        # 6. 썸네일 생성
         create_thumbnail(
-            text=thumbnail_text,
-            background_path=background_video_path,
-            output_path=config.THUMBNAIL_FILE_PATH
+            text=content['title'],
+            background_path=bg_video_path,
+            output_path=Config.THUMBNAIL_FILE_PATH
         )
-        logging.info(f"✅ 썸네일 생성 완료: {config.THUMBNAIL_FILE_PATH}")
-
-        # 6. YouTube에 업로드
-        logging.info("6단계: YouTube 업로드 시작...")
+        logger.info(f"🖼️ 썸네일 생성 완료: {Config.THUMBNAIL_FILE_PATH}")
+        
+        # 7. 유튜브 업로드
         upload_to_youtube(
-            video_path=config.VIDEO_FILE_PATH,
+            video_path=Config.VIDEO_FILE_PATH,
             title=content['title'],
             description=content['description'],
             tags=content['tags'],
-            thumbnail_path=config.THUMBNAIL_FILE_PATH
+            thumbnail_path=Config.THUMBNAIL_FILE_PATH
         )
-        logging.info("✅ YouTube 업로드 성공!")
-
+        logger.info("✅ YouTube 업로드 완료!")
+        
     except Exception as e:
-        logging.error(f"❌ 프로세스 중 예측하지 못한 오류 발생: {e}", exc_info=True)
+        logger.error(f"❌ 오류 발생: {str(e)}", exc_info=True)
         sys.exit(1)
 
-    logging.info("🎉 모든 프로세스가 성공적으로 완료되었습니다!")
-
 if __name__ == "__main__":
+    load_dotenv()
     main()
