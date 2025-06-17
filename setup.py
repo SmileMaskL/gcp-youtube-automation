@@ -10,6 +10,7 @@ setup(
         "opencv-python-headless>=4.5.0",
         "Pillow>=9.0.0",
         "python-dotenv>=0.19.0",
-        "moviepy>=1.0.3"
+        "moviepy>=1.0.3",
+        "google-cloud-texttospeech>=2.0.0"  # 음성 합성용 추가
     ],
 )
