@@ -6,6 +6,7 @@ import logging
 import google.generativeai as genai
 from google.generativeai.types import GenerationConfig
 from datetime import datetime
+from .config import config
 
 # 로거 설정
 logger = logging.getLogger(__name__)
