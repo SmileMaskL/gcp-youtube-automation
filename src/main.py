@@ -1,11 +1,10 @@
 """
-YouTube 자동화 메인 시스템
+YouTube 자동화 메인 시스템 (최종확인 버전)
 """
 import logging
 import sys
-from pathlib import Path
-from datetime import datetime
 import random
+from pathlib import Path
 from dotenv import load_dotenv
 
 # 프로젝트 루트 경로 추가
@@ -56,47 +55,45 @@ def main():
         
         # 2. 콘텐츠 생성
         content = generate_content(topic)
-        if not content:
-            raise ValueError("콘텐츠 생성 실패")
         logger.info(f"📝 제목: {content['title']}")
         
         # 3. 음성 생성
         text_to_speech(content['script'], Config.AUDIO_FILE_PATH)
-        logger.info(f"🔊 음성 파일 생성 완료: {Config.AUDIO_FILE_PATH}")
+        logger.info(f"🔊 음성 파일 생성 완료")
         
         # 4. 배경 영상 다운로드
-        bg_video_path = download_background_video(content.get("video_query", "nature relaxing"))
-        logger.info(f"🎬 배경 영상 다운로드 완료: {bg_video_path}")
+        bg_path = download_background_video(content['video_query'])
+        logger.info(f"🎬 배경 영상 다운로드 완료")
         
         # 5. 영상 생성
         create_video_with_subtitles(
-            bg_video_path=bg_video_path,
-            audio_path=Config.AUDIO_FILE_PATH,
-            script_with_timing=content['script_with_timing'],
-            output_path=Config.VIDEO_FILE_PATH
+            bg_path,
+            Config.AUDIO_FILE_PATH,
+            content['script_with_timing'],
+            Config.VIDEO_FILE_PATH
         )
-        logger.info(f"🎥 최종 영상 생성 완료: {Config.VIDEO_FILE_PATH}")
+        logger.info(f"🎥 영상 생성 완료")
         
         # 6. 썸네일 생성
         create_thumbnail(
-            text=content['title'],
-            background_path=bg_video_path,
-            output_path=Config.THUMBNAIL_FILE_PATH
+            content['title'],
+            bg_path,
+            Config.THUMBNAIL_FILE_PATH
         )
-        logger.info(f"🖼️ 썸네일 생성 완료: {Config.THUMBNAIL_FILE_PATH}")
+        logger.info(f"🖼️ 썸네일 생성 완료")
         
         # 7. 유튜브 업로드
         upload_to_youtube(
-            video_path=Config.VIDEO_FILE_PATH,
-            title=content['title'],
-            description=content['description'],
-            tags=content['tags'],
-            thumbnail_path=Config.THUMBNAIL_FILE_PATH
+            Config.VIDEO_FILE_PATH,
+            content['title'],
+            content['description'],
+            content['tags'],
+            Config.THUMBNAIL_FILE_PATH
         )
         logger.info("✅ YouTube 업로드 완료!")
         
     except Exception as e:
-        logger.error(f"❌ 오류 발생: {str(e)}", exc_info=True)
+        logger.error(f"❌ 오류 발생: {e}", exc_info=True)
         sys.exit(1)
 
 if __name__ == "__main__":
