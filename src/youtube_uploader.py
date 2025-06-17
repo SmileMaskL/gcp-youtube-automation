@@ -5,6 +5,7 @@ from googleapiclient.http import MediaFileUpload
 from config import Config
 import logging
 from retrying import retry
+from google.oauth2.service_account import Credentials
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +17,8 @@ def upload_to_youtube(video_path, title):
         creds = None
         # 환경 변수에서 서비스 계정 키를 JSON 문자열로 가져옵니다.
         service_account_info = json.loads(os.environ['YOUTUBE_CREDENTIALS'])
-        creds = service_account.Credentials.from_service_account_info(service_account_info)
+        # creds = service_account.Credentials.from_service_account_info(service_account_info)
+        creds = Credentials.from_service_account_file("service-account.json")
         
         youtube = build('youtube', 'v3', credentials=creds)
         
