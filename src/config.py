@@ -1,6 +1,3 @@
-"""
-YouTube 자동화 시스템 설정 (100% 테스트 완료 버전)
-"""
 import os
 from pathlib import Path
 from dotenv import load_dotenv
@@ -18,9 +15,8 @@ class Config:
     SHORTS_HEIGHT = 1920
     MAX_DURATION = 60
     
-    # 수정된 부분: 실제 작동하는 모델 이름으로 변경
     ELEVENLABS_VOICE_ID = "uyVNoMrnUku1dZyVEXwD"
-    AI_MODEL = "gemini-1.0-pro"  # 변경된 모델 이름
+    AI_MODEL = "gemini-1.0-pro"
     
     @classmethod
     def ensure_directories(cls):
