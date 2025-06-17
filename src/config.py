@@ -2,7 +2,6 @@ import json
 import os
 from pathlib import Path
 from dotenv import load_dotenv
-from .config import config
 
 load_dotenv()
 
