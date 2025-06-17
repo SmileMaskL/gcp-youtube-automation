@@ -1,43 +1,32 @@
-name: YouTube Automation
-on:
-  #schedule:
-    #- cron: '0 3,7,12,18,22 * * *'  # 하루 5회 실행
-  workflow_dispatch:
+name: Deploy to GCP
+on: [push]
 
 jobs:
-  run-bot:
+  deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
-      PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-      YOUTUBE_OAUTH_CREDENTIALS: ${{ secrets.YOUTUBE_OAUTH_CREDENTIALS }}
+    permissions:
+      contents: 'read'
+      id-token: 'write'
 
     steps:
     - uses: actions/checkout@v4
     
-    - name: Set up Python
-      uses: actions/setup-python@v4
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v2
       with:
-        python-version: '3.11'
-    
-    - name: Install dependencies
+        credentials_json: ${{ secrets.GCP_SA_KEY }}  # 한 가지 방식만 사용
+
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
+
+    - name: Deploy to Cloud Run
       run: |
-        sudo apt-get update
-        sudo apt-get install -y ffmpeg libsm6 libxext6
-        pip install -r requirements.txt
-    
-    - name: Install fonts
-      run: |
-        sudo apt-get install -y fonts-nanum fonts-noto-cjk
-        
-    - name: Run automation
-      run: |
-        python -m src.main
-    
-    - name: Upload results
-      uses: actions/upload-artifact@v4  # v4로 변경
-      with:
-        name: youtube-shorts
-        path: output/
+        gcloud run deploy ${{ env.SERVICE_NAME }} \
+          --image=gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }} \
+          --region=${{ env.REGION }} \
+          --platform=managed \
+          --allow-unauthenticated
+      env:
+        SERVICE_NAME: youtube-automation
+        REGION: asia-northeast3
+        PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
