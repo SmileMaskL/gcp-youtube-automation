@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 # 모듈 임포트
-from config import Config
+from .config import Config
 from content_generator import get_trending_topics
 from tts_generator import generate_tts
 from video_creator import create_video
