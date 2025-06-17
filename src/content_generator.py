@@ -8,14 +8,12 @@ from .config import Config
 logger = logging.getLogger(__name__)
 
 def get_trending_topics():
-    """실시간 트렌딩 주제 5개 생성"""
     try:
         genai.configure(api_key=Config.get_api_key("GEMINI_API_KEY"))
-        model = genai.GenerativeModel('gemini-pro')
-        
+        model = genai.GenerativeModel("gemini-pro")
+
         today = datetime.now().strftime("%Y년 %m월 %d일")
         prompt = f"""오늘({today}) 한국에서 가장 인기 있는 주제 5개를 JSON 형식으로 생성해주세요.
-각 주제는 다음과 같은 형식이어야 합니다:
 [
   {{
     "title": "제목 (15자 이내)",
@@ -23,30 +21,21 @@ def get_trending_topics():
     "pexel_query": "영어 검색어"
   }}
 ]
+"""
 
-예시:
-{{
-  "title": "AI 기술 동향",
-  "script": "인공지능이 헬스케어 분야를 혁신 중입니다. AI 진단 시스템의 정확도가 크게 향상되었습니다. 앞으로 더 많은 의료 분야에 적용될 전망입니다.",
-  "pexel_query": "AI healthcare technology"
-}}
-
-반드시 유효한 JSON 형식으로 응답하고, 한국어로 생성해주세요. 최신 트렌드에 맞는 실제 주제를 생성해주세요."""
+        config = GenerationConfig(
+            temperature=0.7,
+            max_output_tokens=512
+        )
 
         response = model.generate_content(
-            prompt,
-            generation_config={
-                temperature=0.7,
-                max_output_tokens=512
-            }
+            prompt=prompt,
+            generation_config=config
         )
-        
-        # JSON 응답에서 코드 블록 제거
+
         json_str = response.text.replace('```json', '').replace('```', '').strip()
         topics = json.loads(json_str)
-        
-        logger.info(f"트렌딩 주제 생성 성공: {len(topics)}개")
-        return topics[:5]  # 최대 5개 반환
+        return topics[:5]
         
     except Exception as e:
         logger.error(f"주제 생성 실패: {e}")
