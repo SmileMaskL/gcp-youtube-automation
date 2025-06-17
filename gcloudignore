@@ -1,0 +1,13 @@
+.gcloudignore
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 환경 파일
+.env
+*.env
