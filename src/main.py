@@ -1,5 +1,5 @@
 """
-YouTube 자동화 메인 시스템 (최종확인 버전)
+YouTube 자동화 메인 시스템 (최종 수정본)
 """
 import logging
 import sys
@@ -65,7 +65,7 @@ def main():
         bg_path = download_background_video(content['video_query'])
         logger.info(f"🎬 배경 영상 다운로드 완료")
         
-        # 5. 영상 생성
+        # 5. 영상 생성 (함수 이름 통일)
         create_video_with_subtitles(
             bg_path,
             Config.AUDIO_FILE_PATH,
