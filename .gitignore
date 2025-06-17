@@ -1,10 +1,46 @@
-*.json
-secrets/*.json
-*.txt
-output/
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdk/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# 환경 파일
+.env
 *.env
-*.pyc
+.env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 로그 및 출력
 logs/
-service-account.json
-**/__pycache__/
-**/*.py[cod]
+temp/
+output/
+
+# 시스템
+.DS_Store
+Thumbs.db
+
+# 예외 (필요한 파일만 포함)
+!assets/default_bg.mp4
+!fonts/Catfont.ttf
