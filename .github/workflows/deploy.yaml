@@ -31,6 +31,9 @@ jobs:
 
     - name: Build & Push Docker image
       run: |
+        # GCR 인증 설정 추가
+        gcloud auth configure-docker --quiet
+        
         docker build \
           --build-arg GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }} \
           -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/youtube-automation .
