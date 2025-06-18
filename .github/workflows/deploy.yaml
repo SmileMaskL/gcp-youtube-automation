@@ -46,9 +46,9 @@ jobs:
           --platform managed \
           --allow-unauthenticated \
           --set-env-vars "PORT=8080" \  
-          --timeout=600 \
+          --timeout 600 \
           --cpu=1 \
-          --memory=512Mi \
-          --min-instances=1 \
-          --max-instances=1
+          --memory 512Mi \
+          --min-instances 1 \
+          --max-instances 1
            
