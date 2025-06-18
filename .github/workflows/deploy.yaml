@@ -33,6 +33,9 @@ jobs:
         gcloud auth configure-docker
         docker build -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/youtube-automation .
         docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/youtube-automation
+      env:
+        # 필요시 추가 환경 변수 설정
+        DOCKER_BUILDKIT: 1  # 빌드킷 활성화
 
     # 4. Cloud Run 배포 (동일 리전 지정)
     - name: Deploy to Cloud Run
