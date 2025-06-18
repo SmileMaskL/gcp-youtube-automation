@@ -2,10 +2,14 @@ import os
 import logging
 from moviepy.editor import VideoFileClip, AudioFileClip, CompositeVideoClip
 from moviepy.video.fx.all import resize
+from src.templates import VideoTemplates
 
 logger = logging.getLogger(__name__)
 
 def create_video(bg_video_path: str, audio_path: str, output_path: str) -> str:
+    params = VideoTemplates.SHORTS_TEMPLATE
+    print(f"해상도: {params['resolution']}")  # (1080, 1920)
+    
     """
     배경 영상과 오디오를 결합하여 최종 영상 생성
     
