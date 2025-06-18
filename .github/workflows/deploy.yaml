@@ -6,7 +6,7 @@ on:
 
 env:
   REGION: us-central1
-  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}  # 실제 프로젝트 ID로 교체
+  PROJECT_ID: youtube-fully-automated  # 실제 프로젝트 ID로 교체
 
 jobs:
   deploy:
