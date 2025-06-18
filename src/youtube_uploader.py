@@ -12,9 +12,13 @@ logger = logging.getLogger(__name__)
 def upload_to_youtube(video_path, title):
     """YouTube에 영상 업로드"""
     try:
-        # 1. 인증 정보 로드 (GitHub Secrets 연동)
+        # 1. 환경 변수에서 직접 credentials 로드
+        creds_json = os.getenv("YOUTUBE_OAUTH_CREDENTIALS")
+        if not creds_json:
+            raise ValueError("환경 변수 'YOUTUBE_OAUTH_CREDENTIALS' 누락")
+
         creds = Credentials.from_authorized_user_info(
-            json.loads(Config.get_api_key("YOUTUBE_OAUTH_CREDENTIALS")),
+            json.loads(creds_json),
             scopes=["https://www.googleapis.com/auth/youtube.upload"]
         )
         
@@ -50,5 +54,5 @@ def upload_to_youtube(video_path, title):
         return True
         
     except Exception as e:
-        logger.error(f"업로드 실패: {e}")
+        logger.error(f"업로드 실패: {str(e)}", exc_info=True)
         return False
