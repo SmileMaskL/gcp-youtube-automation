@@ -1,6 +1,6 @@
 FROM python:3.11-slim
 
-# 필수 시스템 패키지 설치 (Gunicorn 의존성)
+# 1. 필수 시스템 패키지 설치
 RUN apt-get update && apt-get install -y \
     gcc python3-dev \
     && rm -rf /var/lib/apt/lists/*
@@ -8,13 +8,17 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 COPY . .
 
-# Gunicorn 명시적 설치
-RUN pip install --no-cache-dir gunicorn uvicorn
+# 2. 명시적 Gunicorn 설치 (버전 고정)
+RUN pip install --no-cache-dir gunicorn==21.2.0 uvicorn==0.29.0
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 포트 설정
+# 3. 포트 설정
 EXPOSE 8080
 
-# 실행 명령 (절대경로 사용)
-CMD ["/usr/local/bin/gunicorn", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", \
-     "--bind", "0.0.0.0:8080", "--timeout", "120", "src.health:app"]
+# 4. 실행 명령 (절대경로 + 타임아웃 설정)
+CMD ["/usr/local/bin/gunicorn", \
+    "--bind", "0.0.0.0:8080", \
+    "--timeout", "300", \
+    "--workers", "1", \
+    "--worker-class", "uvicorn.workers.UvicornWorker", \
+    "src.health:app"]
