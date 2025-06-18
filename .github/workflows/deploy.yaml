@@ -52,3 +52,17 @@ jobs:
           --min-instances 1 \
           --max-instances 1
            
+    - name: Verify Command
+      run: |
+        echo "실행할 명령어:"
+        echo "gcloud run deploy youtube-automation \
+        --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/youtube-automation \
+        --region us-central1 \
+        --platform managed \
+        --allow-unauthenticated \
+        --set-env-vars PORT=8080 \
+        --timeout 600 \
+        --cpu 1 \
+        --memory 512Mi \
+        --min-instances 1 \
+        --max-instances 1"
