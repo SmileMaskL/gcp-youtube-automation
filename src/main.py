@@ -27,19 +27,19 @@ from src.thumbnail_generator import create_thumbnail
 from src.youtube_uploader import upload_to_youtube
 
 app = FastAPI()
-port = int(os.environ.get("PORT", 8080))  # 환경 변수 포트 사용
+port = int(os.getenv('PORT', '8080'))  # 환경 변수 포트 사용
+
+@app.get('/health')
+def health_check():
+    return {'status': 'ok'}, 200
 
 @app.get("/")
 def home():
     return {"status": "ready"}
 
-@app.get("/health")
-def health_check():
-    return {"status": "OK"}
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+    uvicorn.run(app, host='0.0.0.0', port=port)
 
 # 로깅 설정
 logging.basicConfig(
