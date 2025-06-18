@@ -1,60 +1,48 @@
-name: Deploy to GCP
+name: Deploy to Cloud Run
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
 
 env:
   REGION: us-central1
-  ACTIONS_STEP_DEBUG: true
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      id-token: write
+      contents: 'read'
+      id-token: 'write'
 
     steps:
     - uses: actions/checkout@v4
 
-    - name: Authenticate to Google Cloud
+    - name: Auth to GCP
       uses: google-github-actions/auth@v2
       with:
-        workload_identity_provider: projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1
-        service_account: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
-        audience: https://iam.googleapis.com/projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1
+        workload_identity_provider: projects/YOUR_PROJECT_NUMBER/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1
+        service_account: your-service-account@your-project.iam.gserviceaccount.com
         create_credentials_file: true
-        export_environment_variables: true
 
-    - uses: google-github-actions/setup-gcloud@v2
-      with:
-        project_id: ${{ secrets.GCP_PROJECT_ID }}
+    - name: Set up gcloud
+      uses: google-github-actions/setup-gcloud@v2
 
-    - name: Build & Push Docker image
+    - name: Build & Push
       run: |
-        gcloud auth configure-docker
         docker build \
-          --build-arg OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}" \
-          --build-arg GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}" \
-          --build-arg ELEVENLABS_API_KEY="${{ secrets.ELEVENLABS_API_KEY }}" \
-          --build-arg YOUTUBE_CREDENTIALS="${{ secrets.YOUTUBE_OAUTH_CREDENTIALS }}" \
-          --build-arg STORAGE_BUCKET="${{ secrets.STORAGE_BUCKET }}" \
-          --build-arg GCP_PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}" \
+          --build-arg GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }} \
           -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/youtube-automation .
         docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/youtube-automation
 
-    - name: Deploy to Cloud Run
+    - name: Deploy
       run: |
         gcloud run deploy youtube-automation \
           --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/youtube-automation \
-          --region ${REGION} \
+          --region ${{ env.REGION }} \
           --platform managed \
           --allow-unauthenticated \
-          --timeout 900 \
           --cpu 2 \
-          --memory 1Gi \
+          --memory 2Gi \
           --min-instances 1 \
           --max-instances 3 \
-          --update-env-vars "GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}"
+          --timeout 900
