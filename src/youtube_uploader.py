@@ -31,35 +31,31 @@ def upload_to_youtube(video_path, title):
             "#" + title.replace(" ", ""), "#자동생성영상"
         ]
         
-        # 4. 업로드 요청 본문
-        request_body = {
-            "snippet": {
-                "title": f"{title} | 오늘의 핫이슈",
-                "description": f"""이 영상은 자동 생성되었습니다. 오늘의 핫한 주제를 알려드립니다!\n\n{" ".join(hashtags)}\n\n#YouTubeAutomation""",
-                "categoryId": "22",  # 엔터테인먼트
-                "tags": ["Shorts", "자동생성", "트렌드"]
-            },
-            "status": {
-                "privacyStatus": "public",
-                "selfDeclaredMadeForKids": False,
-                "publishAt": (datetime.now() + timedelta(hours=1)).isoformat() + "Z"  # 1시간 후 공개
-            }
+    """60초 Shorts 전용 업로드"""
+    request_body = {
+        "snippet": {
+            "title": f"{content['title']} #shorts",
+            "description": f"오늘의 핫이슈! {content['title']}\n\n{' '.join(content['hashtags'])}",
+            "categoryId": "24"  # 엔터테인먼트
+        },
+        "status": {
+            "privacyStatus": "public",
+            "madeForKids": False
+        },
+        "contentDetails": {
+            "duration": "PT60S",  # 60초 고정
+            "dimension": "portrait",  # 세로 영상
+            "definition": "hd"  # 720p 이상
         }
-        
-        # 5. 미디어 파일 업로드
-        media = MediaFileUpload(
-            str(video_path),
-            mimetype="video/mp4",
-            resumable=True,
-            chunksize=1024*1024
-        )
-        
-        # 6. API 요청 실행
-        request = youtube.videos().insert(
-            part="snippet,status",
-            body=request_body,
-            media_body=media
-        )
+    }
+    
+    # 업로드 실행
+    youtube = build("youtube", "v3", credentials=get_credentials())
+    request = youtube.videos().insert(
+        part="snippet,status,contentDetails",
+        body=request_body,
+        media_body=MediaFileUpload(video_path)
+    )
         
         response = request.execute()
         logger.info(f"업로드 성공! 영상 ID: {response['id']}")
