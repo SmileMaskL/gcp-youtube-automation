@@ -1,7 +1,7 @@
 name: YouTube Automation
 on:
-  #schedule:
-    #- cron: '0 3,7,12,18,22 * * *'  # 하루 5회 실행
+  schedule:
+    - cron: '0 3,7,12,18,22 * * *'  # 하루 5회 실행
   workflow_dispatch:
 
 jobs:
