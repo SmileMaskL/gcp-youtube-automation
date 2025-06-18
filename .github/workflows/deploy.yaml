@@ -45,8 +45,10 @@ jobs:
           --region ${{ env.REGION }} \
           --platform managed \
           --allow-unauthenticated \
-           # 명시적 포트 설정
           --set-env-vars "PORT=8080" \  
-          # 타임아웃 연장(기본값: 300s)
-          --timeout 600
+          --timeout=600 \
+          --cpu=1 \
+          --memory=512Mi \
+          --min-instances=1 \
+          --max-instances=1
            
