@@ -1,18 +1,24 @@
 name: Deploy to GCP
+
+on:
+  push:
+    branches:
+      - main
+
 env:
-  ACTIONS_STEP_DEBUG: true  # 🔍 디버그 로그 활성화
   REGION: us-central1
-on: [push]
+  ACTIONS_STEP_DEBUG: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     permissions:
-      contents: 'read'
-      id-token: 'write'
+      contents: read
+      id-token: write
 
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Authenticate to Google Cloud
       uses: google-github-actions/auth@v2
       with:
@@ -22,48 +28,33 @@ jobs:
         create_credentials_file: true
         export_environment_variables: true
 
-    # 2. gcloud 설정
     - uses: google-github-actions/setup-gcloud@v2
       with:
         project_id: ${{ secrets.GCP_PROJECT_ID }}
 
-    # 3. Docker 이미지 빌드 및 푸시
-    - name: Build and Push Container
+    - name: Build & Push Docker image
       run: |
         gcloud auth configure-docker
-        docker build -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/youtube-automation .
+        docker build \
+          --build-arg OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}" \
+          --build-arg GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}" \
+          --build-arg ELEVENLABS_API_KEY="${{ secrets.ELEVENLABS_API_KEY }}" \
+          --build-arg YOUTUBE_CREDENTIALS="${{ secrets.YOUTUBE_OAUTH_CREDENTIALS }}" \
+          --build-arg STORAGE_BUCKET="${{ secrets.STORAGE_BUCKET }}" \
+          --build-arg GCP_PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}" \
+          -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/youtube-automation .
         docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/youtube-automation
-      env:
-        # 필요시 추가 환경 변수 설정
-        DOCKER_BUILDKIT: 1  # 빌드킷 활성화
 
-    - name: Verify Command
-      run: |
-        echo "실행할 명령어:"
-        echo "gcloud run deploy youtube-automation \
-        --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/youtube-automation \
-        --region us-central1 \
-        --platform managed \
-        --allow-unauthenticated \
-        --set-env-vars PORT=8080 \
-        --timeout 600 \
-        --cpu 1 \
-        --memory 512Mi \
-        --min-instances 1 \
-        --max-instances 1"
-
-    # 4. Cloud Run 배포 (동일 리전 지정)
     - name: Deploy to Cloud Run
       run: |
         gcloud run deploy youtube-automation \
-        --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/youtube-automation \
-        --region us-central1 \
-        --platform managed \
-        --allow-unauthenticated \
-        --timeout 900 \
-        --cpu 2 \
-        --memory 1Gi \
-        --min-instances 1 \
-        --max-instances 3 \
-        --update-env-vars "GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}"
-           
+          --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/youtube-automation \
+          --region ${REGION} \
+          --platform managed \
+          --allow-unauthenticated \
+          --timeout 900 \
+          --cpu 2 \
+          --memory 1Gi \
+          --min-instances 1 \
+          --max-instances 3 \
+          --update-env-vars "GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}"
