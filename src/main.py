@@ -33,9 +33,13 @@ port = int(os.environ.get("PORT", 8080))  # 환경 변수 포트 사용
 def home():
     return {"status": "ready"}
 
+@app.get("/health")
+def health_check():
+    return {"status": "OK"}
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
 
 # 로깅 설정
 logging.basicConfig(
