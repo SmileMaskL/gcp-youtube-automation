@@ -1,3 +1,5 @@
+from src.monitoring import init_monitoring
+init_monitoring()  # Sentry 초기화
 import os
 import logging
 from datetime import datetime
