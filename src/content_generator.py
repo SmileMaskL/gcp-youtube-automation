@@ -1,52 +1,58 @@
 """
-콘텐츠 생성 모듈 (100% 테스트 완료 버전)
+핫이슈 기반 60초 YouTube Shorts 콘텐츠 생성 모듈
 """
 import logging
+import json
+from datetime import datetime
 from .config import Config
 import google.generativeai as genai
+from .trend_api import get_today_trends  # 실시간 트렌드 API (직접 구현 필요)
 
 logger = logging.getLogger(__name__)
 
 class ShortsGenerator:
     def __init__(self):
-        # 수정된 부분: 안정적인 모델 초기화
         genai.configure(api_key=Config.get_api_key("GEMINI_API_KEY"))
-        self.model = genai.GenerativeModel(Config.AI_MODEL)
-        self.trending_topics = self._get_default_topics()
+        self.model = genai.GenerativeModel("gemini-pro")
+        
+    def _get_today_hot_topics(self):
+        """오늘의 핫이슈 5개 조회"""
+        try:
+            trends = get_today_trends()  # 커스텀 트렌드 API (예: 네이버/구글 트렌드)
+            return trends[:5]
+        except Exception as e:
+            logger.error(f"트렌드 조회 실패: {e}")
+            return [
+                "오늘 가장 화제된 뉴스",
+                "인기 급상승 검색어 1위",
+                "SNS에서 핫한 주제",
+                "최신 유행어",
+                "이번 주 가장 많이 본 영상"
+            ]
 
-    def _get_default_topics(self):
-        """기본 주제 목록 (API 실패시 사용)"""
-        return [
-            "요즘 뜨는 부업 아이디어 5가지",
-            "집에서 쉽게 하는 체중 감량 운동",
-            "저축률 2배로 높이는 방법",
-            "무료로 코딩 배우는 최고의 방법",
-            "하루 30분으로 시간 관리하는 법"
-        ]
+    def _generate_script(self, topic):
+        """60초 대본 생성 (정확한 포맷 강제)"""
+        prompt = f"""오늘의 핫이슈: {topic}
+        
+        - 60초 YouTube Shorts용 대본 생성
+        - 구조: 인트로(10초) + 본문(40초) + 마무리(10초)
+        - 출력 형식 (JSON):
+        {{
+            "title": "제목 (이모지 포함)",
+            "script": "대본 (시간 표시 필수)\n예) [0:00-0:10] 인트로...",
+            "hashtags": ["#해시태그1", "#해시태그2"]
+        }}"""
+        
+        response = self.model.generate_content(prompt)
+        return json.loads(response.text)
 
-    def generate_daily_contents(self):
-        """하루 콘텐츠 생성 (에러 처리 강화)"""
+    def generate_contents(self):
+        """오늘의 핫이슈 기반 콘텐츠 5개 생성"""
         contents = []
-        for topic in self.trending_topics:
+        for topic in self._get_today_hot_topics():
             try:
-                prompt = f"""60초 YouTube Shorts 대본 생성 요청:
-- 주제: {topic}
-- 언어: 한국어
-- 구성: 5개 장면 (각 10-12초)
-- 출력 형식: {{"title": "제목", "script": "대본", "video_query": "검색어"}}"""
-                
-                response = self.model.generate_content(prompt)
-                content = eval(response.text)  # 안전한 평가
+                content = self._generate_script(topic)
                 contents.append(content)
             except Exception as e:
-                logger.error(f"주제 '{topic[:15]}...' 생성 실패: {str(e)[:100]}...")
-                continue
-        return contents or [self._generate_fallback_content()]
-    
-    def _generate_fallback_content(self):
-        """에러 시 기본 콘텐츠"""
-        return {
-            "title": "성공을 위한 5가지 습관",
-            "script": "첫 번째, 아침 30분 일찍 일어나기...",
-            "video_query": "success habits"
-        }
+                logger.error(f"주제 '{topic}' 생성 실패: {e}")
+        return contents
