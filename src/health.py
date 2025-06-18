@@ -1,12 +1,19 @@
 from fastapi import FastAPI
 import os
+import logging
 
 app = FastAPI()
+PORT = int(os.getenv("PORT", "8080"))
+
+# 로깅 설정
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 @app.get("/health")
 def health_check():
-    return {"status": "OK"}
+    logger.info(f"Health check on port {PORT}")
+    return {"status": "ok", "port": PORT}
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+@app.get("/")
+def home():
+    return {"message": "YouTube Automation Service"}
