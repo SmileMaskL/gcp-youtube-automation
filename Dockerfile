@@ -24,6 +24,10 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# 필수 설정 추가
+ENV PORT=8080  # Cloud Run은 반드시 8080 포트 사용
+EXPOSE $PORT    # 컨테이너 포트 노출
+
 # 폰트 설치 (한글 지원)
 RUN wget -O /usr/share/fonts/NanumGothic.ttf \
     https://github.com/naver/nanumfont/raw/master/fonts/NanumGothic.ttf || \
@@ -62,5 +66,6 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8080/health || exit 1
 
 # 애플리케이션 실행
-CMD exec gunicorn --bind :8080 --workers 1 --threads 8 --timeout 3600 --keep-alive 2 --max-requests 1000 --max-requests-jitter 100 main:app
+CMD ["gunicorn", "--bind", "0.0.0.0:$PORT", "src.main:app"]
+# CMD exec gunicorn --bind :8080 --workers 1 --threads 8 --timeout 3600 --keep-alive 2 --max-requests 1000 --max-requests-jitter 100 main:app
 CMD ["python", "-m", "src.main"]
