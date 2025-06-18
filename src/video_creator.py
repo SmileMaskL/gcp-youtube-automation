@@ -1,45 +1,33 @@
 """
-영상 생성 모듈 (최종 완성본)
+60초 Shorts 영상 생성 모듈
 """
-import subprocess
-from pathlib import Path
+from moviepy.editor import *
 import logging
 from .config import Config
 
 logger = logging.getLogger(__name__)
 
-def create_video_with_subtitles(
-    background_video_path: str,
-    audio_path: str,
-    script_with_timing: list,
-    output_path: str
-):
-    """자막이 포함된 최종 영상 생성"""
-    try:
-        # FFmpeg 명령어 구성
-        cmd = [
-            "ffmpeg",
-            "-y",  # 덮어쓰기 허용
-            "-i", str(background_video_path),
-            "-i", str(audio_path),
-            "-vf", f"scale={Config.SHORTS_WIDTH}:{Config.SHORTS_HEIGHT}:force_original_aspect_ratio=decrease,pad={Config.SHORTS_WIDTH}:{Config.SHORTS_HEIGHT}:(ow-iw)/2:(oh-ih)/2,setsar=1",
-            "-c:v", "libx264",
-            "-c:a", "aac",
-            "-shortest",
-            str(output_path)
-        ]
-        
-        logger.info(f"영상 생성 명령어: {' '.join(cmd)}")
-        
-        # 영상 생성 실행
-        subprocess.run(cmd, check=True)
-        logger.info(f"영상 생성 완료: {output_path}")
-        
-        return output_path
-        
-    except subprocess.CalledProcessError as e:
-        logger.error(f"영상 생성 실패 (FFmpeg 오류): {e}")
-        raise
-    except Exception as e:
-        logger.error(f"영상 생성 중 오류 발생: {e}")
-        raise
+def create_short_video(script, output_path):
+    """대본 → 60초 영상 생성"""
+    # 1. TTS로 음성 파일 생성 (11Labs 등 활용)
+    audio_path = "temp/audio.mp3"
+    generate_tts(script["script"], audio_path)  # TTS 모듈 호출
+    
+    # 2. 영상 클립 조합
+    clips = []
+    bg_clip = VideoFileClip("assets/shorts_bg.mp4").subclip(0, 60)
+    
+    # 3. 텍스트 오버레이 추가
+    txt_clip = TextClip(
+        script["title"],
+        fontsize=50,
+        color="white",
+        font=Config.FONT_PATH,
+        stroke_color="black",
+        stroke_width=2
+    ).set_position(("center", "top")).set_duration(60)
+    
+    # 4. 최종 영상 렌더링
+    final_clip = CompositeVideoClip([bg_clip, txt_clip])
+    final_clip = final_clip.set_audio(AudioFileClip(audio_path))
+    final_clip.write_videofile(output_path, fps=24, codec="libx264")
