@@ -41,4 +41,7 @@ jobs:
           --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/youtube-automation \
           --region ${{ env.REGION }} \
           --platform managed \
-          --allow-unauthenticated
+          --allow-unauthenticated \
+           --set-env-vars "PORT=8080" \  # 명시적 포트 설정
+           --timeout 600s  # 타임아웃 연장(기본값: 300s)
+           
