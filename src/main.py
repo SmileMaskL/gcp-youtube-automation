@@ -26,36 +26,28 @@ from src.video_editor import create_video
 from src.thumbnail_generator import create_thumbnail
 from src.youtube_uploader import upload_to_youtube
 
-app = FastAPI()
-
-port = int(os.environ.get('PORT', 8080))  # 환경 변수 포트 사용
+PORT = int(os.getenv('PORT', '8080'))  # 환경 변수 포트 사용
 
 # Health Check 엔드포인트
 @app.get('/health')
 def health_check():
-    return {
-        'status': 'ok',
-        'port': port,
-        'services': ['database', 'storage']  # 추가 검증 항목
+    logger.info(f"Health check called on port {PORT}")
+    return {'status': 'ok', 'port': PORT}
 
-@app.get("/")
+@app.get('/')
 def home():
-    return {"status": "ready"}
+    return {'message': 'Service is running'}
 
 if __name__ == '__main__':
     import uvicorn
-    uvicorn.run(app, host='0.0.0.0', port=port)
+    logger.info(f"Starting server on port {PORT}")
+    uvicorn.run(app, host='0.0.0.0', port=PORT)
 
 # 로깅 설정
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(Config.LOG_DIR / "youtube_automation.log"),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+
+app = FastAPI()
 
 def cleanup_temp_files():
     """임시 파일 정리"""
