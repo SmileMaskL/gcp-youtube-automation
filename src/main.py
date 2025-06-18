@@ -28,7 +28,7 @@ from src.youtube_uploader import upload_to_youtube
 
 app = FastAPI()
 
-port = int(os.getenv('PORT', '8080'))  # 환경 변수 포트 사용
+port = int(os.environ.get('PORT', 8080))  # 환경 변수 포트 사용
 
 # Health Check 엔드포인트
 @app.get('/health')
