@@ -48,5 +48,5 @@ jobs:
            # 명시적 포트 설정
           --set-env-vars "PORT=8080" \  
           # 타임아웃 연장(기본값: 300s)
-          --timeout 600s  
+          --timeout 600
            
