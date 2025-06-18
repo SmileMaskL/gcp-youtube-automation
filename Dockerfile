@@ -25,8 +25,10 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 필수 설정 추가
-ENV PORT=8080  # Cloud Run은 반드시 8080 포트 사용
-EXPOSE $PORT    # 컨테이너 포트 노출
+# Cloud Run은 반드시 8080 포트 사용
+ENV PORT=8080  
+# 컨테이너 포트 노출
+EXPOSE $PORT    
 
 # 폰트 설치 (한글 지원)
 RUN wget -O /usr/share/fonts/NanumGothic.ttf \
