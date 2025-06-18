@@ -1,19 +1,22 @@
-FROM python:3.10.13-slim
+FROM python:3.11-slim
+
 WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 애플리케이션 코드 복사
+COPY . .
+
+EXPOSE 8080
 
 # 시스템 패키지 설치
 RUN apt-get update && apt-get install -y \
     ffmpeg libsm6 libxext6 wget curl \
     && rm -rf /var/lib/apt/lists/*
 
-# 애플리케이션 코드 복사
-COPY . .
-
-# Python 의존성 설치
-RUN pip install --no-cache-dir -r requirements.txt
-
 # 포트 설정 (Cloud Run 표준)
-EXPOSE 8080
+
 
 # Health Check 추가
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
@@ -25,7 +28,6 @@ RUN wget -O /usr/share/fonts/NanumGothic.ttf \
     echo "Font download failed"
 
 # 의존성 설치
-COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 
@@ -57,5 +59,4 @@ HEALTHCHECK --interval=30s --timeout=30s \
     CMD curl -f http://localhost:8080/health || exit 1
 
 # 애플리케이션 실행
-CMD ["gunicorn", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", \
-     "--bind", "0.0.0.0:8080", "--timeout", "120", "src.main:app"]
+CMD ["gunicorn", "-w", "2", "-k", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8080", "src.main:app"]
