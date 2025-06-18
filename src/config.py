@@ -27,18 +27,16 @@ class Config:
     
     @classmethod
     def ensure_directories(cls):
-        """필요한 디렉토리들이 존재하는지 확인하고 없으면 생성합니다."""
-        cls.TEMP_DIR.mkdir(exist_ok=True, parents=True)
-        cls.OUTPUT_DIR.mkdir(exist_ok=True, parents=True)
-        cls.LOG_DIR.mkdir(exist_ok=True, parents=True)
+        os.makedirs(cls.TEMP_DIR, exist_ok=True)
+        os.makedirs(cls.OUTPUT_DIR, exist_ok=True)
+        os.makedirs(cls.LOG_DIR, exist_ok=True)
 
-    @staticmethod
-    def get_api_key(key_name):
-        """환경 변수에서 API 키를 안전하게 가져옵니다."""
-        key = os.getenv(key_name)
-        if not key:
-            raise ValueError(f"환경 변수 '{key_name}'가 설정되지 않았습니다. .env 파일을 확인해주세요.")
-        return key
+    @classmethod
+    def get_api_key(cls, key_name: str) -> str:
+        load_dotenv()
+        if key_name not in os.environ:
+            raise ValueError(f"환경변수 {key_name}가 설정되지 않았습니다")
+        return os.environ[key_name]
 
 # 클래스가 로드될 때 디렉토리 생성 실행
 Config.ensure_directories()
