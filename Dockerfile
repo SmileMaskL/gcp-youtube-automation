@@ -3,6 +3,9 @@ FROM python:3.10.13-slim
 # 작업 디렉토리 설정
 WORKDIR /app
 
+ENV PORT=8080  
+EXPOSE $PORT
+
 # 시스템 패키지 업데이트 및 필요한 패키지 설치
 RUN apt-get update && apt-get install -y \
     ffmpeg \
@@ -24,12 +27,6 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 필수 설정 추가
-# Cloud Run은 반드시 8080 포트 사용
-ENV PORT=8080  
-# 컨테이너 포트 노출
-EXPOSE $PORT    
-
 # 폰트 설치 (한글 지원)
 RUN wget -O /usr/share/fonts/NanumGothic.ttf \
     https://github.com/naver/nanumfont/raw/master/fonts/NanumGothic.ttf || \
@@ -37,6 +34,10 @@ RUN wget -O /usr/share/fonts/NanumGothic.ttf \
 
 # 애플리케이션 코드 복사
 COPY . .
+
+# Health Check 추가
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:$PORT/health || exit 1
 
 # 환경 변수 설정을 위한 ARG
 ARG OPENAI_API_KEY
