@@ -26,22 +26,28 @@ from src.video_editor import create_video
 from src.thumbnail_generator import create_thumbnail
 from src.youtube_uploader import upload_to_youtube
 
-PORT = int(os.getenv('PORT', '8080'))  # 환경 변수 포트 사용
+app = FastAPI()
+
+# 포트 설정
+PORT = int(os.getenv('PORT', '8080'))
+
+# 로깅 설정
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Health Check 엔드포인트
 @app.get('/health')
 def health_check():
-    logger.info(f"Health check called on port {PORT}")
+    logger.info(f"✅ Health check OK on port {PORT}")
     return {'status': 'ok', 'port': PORT}
 
 @app.get('/')
 def home():
-    return {'message': 'Service is running'}
-
+    return {'message': '🚀 YouTube Automation is running on Cloud Run'}
 if __name__ == '__main__':
     import uvicorn
-    logger.info(f"Starting server on port {PORT}")
-    uvicorn.run(app, host='0.0.0.0', port=PORT)
+    logger.info(f"🚀 FastAPI 서버 실행 on port {PORT}")
+    uvicorn.run("src.main:app", host="0.0.0.0", port=PORT, reload=False)
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
