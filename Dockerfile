@@ -1,6 +1,4 @@
 FROM python:3.10.13-slim
-
-# 작업 디렉토리 설정
 WORKDIR /app
 
 ENV PORT=8080  
@@ -60,9 +58,6 @@ ENV FLASK_ENV=production
 
 # 필요한 디렉토리 생성
 RUN mkdir -p /app/temp /app/outputs
-
-# 포트 설정
-EXPOSE 8080
 
 # 헬스체크
 HEALTHCHECK --interval=30s --timeout=30s --start-period=60s --retries=3 \
