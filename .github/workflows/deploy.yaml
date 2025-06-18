@@ -6,6 +6,7 @@ on:
 
 env:
   REGION: us-central1
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}  # 실제 프로젝트 ID로 교체
 
 jobs:
   deploy:
@@ -17,24 +18,26 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Auth to GCP
+    - name: Authenticate to Google Cloud
       uses: google-github-actions/auth@v2
       with:
-        workload_identity_provider: projects/YOUR_PROJECT_NUMBER/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1
-        service_account: your-service-account@your-project.iam.gserviceaccount.com
-        create_credentials_file: true
+        workload_identity_provider: projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1
+        service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+        audience: https://iam.googleapis.com/projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1
 
     - name: Set up gcloud
       uses: google-github-actions/setup-gcloud@v2
+      with:
+        project_id: ${{ secrets.GCP_PROJECT_ID }}
 
-    - name: Build & Push
+    - name: Build & Push Docker image
       run: |
         docker build \
           --build-arg GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }} \
           -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/youtube-automation .
         docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/youtube-automation
 
-    - name: Deploy
+    - name: Deploy to Cloud Run
       run: |
         gcloud run deploy youtube-automation \
           --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/youtube-automation \
