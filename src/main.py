@@ -1,6 +1,7 @@
 """
 유튜브 자동화 메인 시스템 (무조건 실행되는 버전)
 """
+from fastapi import FastAPI
 import os
 import sys
 import logging
@@ -24,6 +25,17 @@ from src.bg_downloader import download_background_video
 from src.video_editor import create_video
 from src.thumbnail_generator import create_thumbnail
 from src.youtube_uploader import upload_to_youtube
+
+app = FastAPI()
+port = int(os.environ.get("PORT", 8080))  # 환경 변수 포트 사용
+
+@app.get("/")
+def home():
+    return {"status": "ready"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=port)
 
 # 로깅 설정
 logging.basicConfig(
