@@ -51,3 +51,4 @@ def upload_to_youtube(video_path, title):
         
     except Exception as e:
         logger.error(f"업로드 실패: {e}")
+        return False
