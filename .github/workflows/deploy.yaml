@@ -42,12 +42,13 @@ jobs:
     - name: Deploy to Cloud Run
       run: |
         gcloud run deploy youtube-automation \
-          --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/youtube-automation \
-          --region ${{ env.REGION }} \
-          --platform managed \
-          --allow-unauthenticated \
-          --cpu 2 \
-          --memory 2Gi \
-          --min-instances 1 \
-          --max-instances 3 \
-          --timeout 900
+        --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/youtube-automation \
+        --region us-central1 \
+        --platform managed \
+        --allow-unauthenticated \
+        --cpu 2 \
+        --memory 2Gi \
+        --min-instances 1 \
+        --max-instances 3 \
+        --timeout 1200 \
+        --update-env-vars "GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}"
