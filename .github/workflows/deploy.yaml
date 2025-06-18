@@ -1,6 +1,7 @@
 name: Deploy to GCP
 env:
   ACTIONS_STEP_DEBUG: true  # 🔍 디버그 로그 활성화
+  REGION: us-central1
 on: [push]
 jobs:
   deploy:
@@ -21,17 +22,23 @@ jobs:
         create_credentials_file: true
         export_environment_variables: true
 
-    - name: Set up Cloud SDK
-      uses: google-github-actions/setup-gcloud@v2
+    # 2. gcloud 설정
+    - uses: google-github-actions/setup-gcloud@v2
+      with:
+        project_id: ${{ secrets.GCP_PROJECT_ID }}
 
+    # 3. Docker 이미지 빌드 및 푸시
+    - name: Build and Push Container
+      run: |
+        gcloud auth configure-docker
+        docker build -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/youtube-automation .
+        docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/youtube-automation
+
+    # 4. Cloud Run 배포 (동일 리전 지정)
     - name: Deploy to Cloud Run
       run: |
-        gcloud run deploy ${{ env.SERVICE_NAME }} \
-          --image=gcr.io/${{ env.PROJECT_ID }}/youtube-automation \
-          --region=us-central1 \
-          --platform=managed \
+        gcloud run deploy youtube-automation \
+          --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/youtube-automation \
+          --region ${{ env.REGION }} \
+          --platform managed \
           --allow-unauthenticated
-      env:
-        SERVICE_NAME: youtube-automation
-        REGION: asia-northeast3
-        PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
