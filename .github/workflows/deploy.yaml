@@ -1,6 +1,7 @@
 name: Deploy to GCP
+env:
+  ACTIONS_STEP_DEBUG: true  # 🔍 디버그 로그 활성화
 on: [push]
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
