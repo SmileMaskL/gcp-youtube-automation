@@ -18,6 +18,7 @@ jobs:
         service_account: my-service-account@my-project.iam.gserviceaccount.com
         create_credentials_file: true
         export_environment_variables: true
+        audience: https://iam.googleapis.com/projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1
 
     - name: Set up Cloud SDK
       uses: google-github-actions/setup-gcloud@v2
