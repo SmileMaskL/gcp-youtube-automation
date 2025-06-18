@@ -4,7 +4,7 @@ FROM python:3.10.13-slim
 WORKDIR /app
 
 ENV PORT=8080  
-EXPOSE $PORT
+EXPOSE 8080
 
 # 시스템 패키지 업데이트 및 필요한 패키지 설치
 RUN apt-get update && apt-get install -y \
