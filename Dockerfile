@@ -56,6 +56,6 @@ HEALTHCHECK --interval=30s --timeout=30s \
     CMD curl -f http://localhost:8080/health || exit 1
 
 # 애플리케이션 실행
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["sh", "-c", "uvicorn src.main:app --host 0.0.0.0 --port ${PORT}"]
 # CMD exec gunicorn --bind :8080 --workers 1 --threads 8 --timeout 3600 --keep-alive 2 --max-requests 1000 --max-requests-jitter 100 main:app
 # CMD ["python", "-m", "src.main"]
