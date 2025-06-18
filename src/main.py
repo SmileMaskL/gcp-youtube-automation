@@ -27,11 +27,16 @@ from src.thumbnail_generator import create_thumbnail
 from src.youtube_uploader import upload_to_youtube
 
 app = FastAPI()
+
 port = int(os.getenv('PORT', '8080'))  # 환경 변수 포트 사용
 
+# Health Check 엔드포인트
 @app.get('/health')
 def health_check():
-    return {'status': 'ok'}, 200
+    return {
+        'status': 'ok',
+        'port': port,
+        'services': ['database', 'storage']  # 추가 검증 항목
 
 @app.get("/")
 def home():
