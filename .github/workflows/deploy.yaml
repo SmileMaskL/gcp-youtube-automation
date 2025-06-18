@@ -21,10 +21,9 @@ jobs:
     - name: Authenticate to Google Cloud
       uses: google-github-actions/auth@v2
       with:
-        workload_identity_provider: projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1
-        service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-        audience: https://iam.googleapis.com/projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1
-
+        workload_identity_provider: projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1
+        service_account: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
+        audience: https://iam.googleapis.com/projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1
     - name: Set up gcloud
       uses: google-github-actions/setup-gcloud@v2
       with:
