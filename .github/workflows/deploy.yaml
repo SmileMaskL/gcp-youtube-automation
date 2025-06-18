@@ -60,7 +60,6 @@ jobs:
           --region us-central1 \
           --platform managed \
           --allow-unauthenticated \
-          --set-env-vars "PORT=8080" \
           --timeout 600 \
           --cpu 1 \
           --memory 512Mi \
