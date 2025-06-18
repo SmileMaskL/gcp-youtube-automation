@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# 시스템 종속성 (한글 폰트 URL 수정)
+# 시스템 종속성 (한글 폰트 포함)
 RUN apt-get update && apt-get install -y \
     ffmpeg libsm6 libxext6 wget curl fonts-nanum \
     && rm -rf /var/lib/apt/lists/*
@@ -14,9 +14,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 애플리케이션 복사
 COPY . .
 
-# 환경 변수
+# 환경 변수 설정
+ARG GCP_PROJECT_ID
+ENV GCP_PROJECT_ID=${GCP_PROJECT_ID}
 ENV PYTHONPATH=/app
-ENV PORT=8080  # Cloud Run과 호환되도록 설정
+
+# Cloud Run은 자동으로 PORT=8080을 설정하므로 주석 처리
+# ENV PORT=8080
 
 # 디렉토리 생성
 RUN mkdir -p /app/temp /app/outputs
