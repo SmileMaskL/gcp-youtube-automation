@@ -1,52 +1,56 @@
-"""
-배경 영상 다운로더 (최종 수정본)
-"""
+import os
 import requests
 import logging
-from pathlib import Path
-from .config import Config
-import uuid
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-def download_background_video(query: str) -> str:
-    """Pexels에서 배경 영상 다운로드"""
-    try:
-        video_path = Config.TEMP_DIR / f"bg_{uuid.uuid4()}.mp4"
+class VideoDownloader:
+    def __init__(self):
+        self.api_key = os.getenv("PEXELS_API_KEY")
+        self.base_url = "https://api.pexels.com/videos/search"
         
-        # API 요청
-        headers = {"Authorization": Config.get_api_key("PEXELS_API_KEY")}
-        params = {"query": query, "per_page": 5, "size": "small"}
-        
-        response = requests.get(
-            "https://api.pexels.com/videos/search",
-            headers=headers,
-            params=params,
-            timeout=30
-        )
-        response.raise_for_status()
-        
-        # 영상 선택 및 다운로드
-        videos = response.json().get("videos", [])
-        if not videos:
-            raise ValueError("검색 결과 없음")
+    def download_video(self, query: str) -> Optional[str]:
+        try:
+            headers = {"Authorization": self.api_key}
+            params = {
+                "query": query + " background",
+                "per_page": 3,
+                "orientation": "portrait",
+                "size": "small"
+            }
             
-        video = videos[0]  # 가장 관련성 높은 영상 선택
-        video_file = next(
-            (f for f in video["video_files"] 
-            if f.get("width") == Config.SHORTS_WIDTH),
-            video["video_files"][0]
-        )
-        
-        with requests.get(video_file["link"], stream=True, timeout=30) as r:
-            r.raise_for_status()
-            with open(video_path, "wb") as f:
-                for chunk in r.iter_content(chunk_size=8192):
-                    f.write(chunk)
-                    
-        logger.info(f"배경 영상 다운로드 완료: {video_path}")
-        return str(video_path)
-        
-    except Exception as e:
-        logger.error(f"배경 영상 다운로드 실패: {e}")
-        raise
+            response = requests.get(self.base_url, headers=headers, params=params, timeout=10)
+            response.raise_for_status()
+            
+            videos = response.json().get('videos', [])
+            if not videos:
+                logger.warning(f"검색 결과 없음: {query}")
+                return None
+                
+            # 가장 작은 크기의 동영상 선택
+            video_file = min(videos[0]['video_files'], key=lambda x: x['width'])['link']
+            os.makedirs("temp", exist_ok=True)
+            video_path = f"temp/bg_{query.replace(' ', '_')}.mp4"
+            
+            with requests.get(video_file, stream=True, timeout=20) as r:
+                r.raise_for_status()
+                with open(video_path, 'wb') as f:
+                    for chunk in r.iter_content(chunk_size=8192):
+                        f.write(chunk)
+            
+            return video_path
+            
+        except Exception as e:
+            logger.error(f"비디오 다운로드 실패: {str(e)}")
+            return None
+
+def download_background(query: str) -> str:
+    downloader = VideoDownloader()
+    for attempt in range(3):
+        video_path = downloader.download_video(query)
+        if video_path:
+            return video_path
+        logger.warning(f"재시도 {attempt + 1}/3")
+    
+    raise ValueError(f"'{query}'에 대한 배경 영상을 찾을 수 없습니다")
