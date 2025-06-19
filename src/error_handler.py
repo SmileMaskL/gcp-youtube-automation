@@ -1,24 +1,48 @@
-import time
+# src/error_handler.py
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
-def retry_on_failure(func, max_retries=3, delay_seconds=5):
+def log_error_and_notify(message: str, level: str = "ERROR", exc_info: bool = False):
     """
-    함수 실행을 재시도하는 데코레이터/헬퍼 함수.
-    func: 실행할 함수
-    max_retries: 최대 재시도 횟수
-    delay_seconds: 재시도 전 대기 시간 (지수 백오프 적용)
+    오류를 로깅하고, 필요에 따라 알림을 보냅니다 (예: Slack, Email).
+    현재는 로깅만 구현되어 있습니다.
+
+    Args:
+        message (str): 오류 메시지.
+        level (str): 로깅 레벨 (INFO, WARNING, ERROR, CRITICAL).
+        exc_info (bool): 예외 정보(traceback)를 로깅에 포함할지 여부.
     """
-    for attempt in range(max_retries):
-        try:
-            return func()
-        except Exception as e:
-            logger.warning(f"Attempt {attempt + 1}/{max_retries} failed for {func.__name__ if hasattr(func, '__name__') else 'anonymous function'}: {e}")
-            if attempt < max_retries - 1:
-                sleep_time = delay_seconds * (2 ** attempt) + random.uniform(0, 1) # 지수 백오프 + 랜덤 지터
-                logger.info(f"Retrying in {sleep_time:.2f} seconds...")
-                time.sleep(sleep_time)
-            else:
-                logger.error(f"All {max_retries} attempts failed for {func.__name__ if hasattr(func, '__name__') else 'anonymous function'}.")
-                raise # 모든 재시도 실패 시 예외 다시 발생
+    if level.upper() == "INFO":
+        logger.info(message)
+    elif level.upper() == "WARNING":
+        logger.warning(message)
+    elif level.upper() == "ERROR":
+        logger.error(message, exc_info=exc_info)
+    elif level.upper() == "CRITICAL":
+        logger.critical(message, exc_info=exc_info)
+    else:
+        logger.debug(message, exc_info=exc_info) # 기본값
+
+    # TODO: Slack, Email, Discord 등으로 알림을 보내는 로직 추가
+    # 예를 들어, 특정 임계값 이상의 오류 발생 시 알림을 보내도록 구현할 수 있습니다.
+    # if level.upper() in ["ERROR", "CRITICAL"]:
+    #     send_notification_to_slack(message)
+    #     send_notification_to_email(message)
+    
+    logger.info(f"Error/Notification logged: {message}")
+
+# 추가: 알림 함수 (예시)
+# def send_notification_to_slack(message: str):
+#     # Slack Webhook URL은 GitHub Secret 또는 GCP Secret Manager에 저장
+#     slack_webhook_url = os.environ.get("SLACK_WEBHOOK_URL")
+#     if slack_webhook_url:
+#         try:
+#             import requests
+#             payload = {"text": f"🚨 YouTube Automation Alert: {message}"}
+#             response = requests.post(slack_webhook_url, json=payload)
+#             response.raise_for_status()
+#             logger.info("Slack notification sent successfully.")
+#         except Exception as e:
+#             logger.error(f"Failed to send Slack notification: {e}")
