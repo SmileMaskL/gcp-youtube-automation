@@ -7,7 +7,7 @@ on:
 
 permissions:
   contents: 'read'
-  id-token: 'write' # Workload Identity Federation에 필수
+  id-token: 'write'
 
 jobs:
   produce_shorts:
