@@ -1,32 +1,37 @@
-# Google Cloud SDK 및 API 관련
-google-api-python-client==2.126.0
-google-auth-oauthlib==1.2.0
-google-auth==2.29.0
-google-cloud-secret-manager==2.17.0
-google-cloud-logging==3.11.1
-google-cloud-storage==2.15.0
+# 웹 프레임워크 (선택 사항 - Cloud Run Service를 사용할 경우 필요)
+# Flask==2.3.3
+# gunicorn==21.2.0
 
-# AI 관련
-openai==1.30.1
-elevenlabs==1.0.5  # 0.2.29 → 1.0.5 (최신 안정 버전)
-google-generativeai==0.3.2
+# AI/NLP
+openai==1.35.1
+google-generativeai==0.7.0 # Google Gemini API
+python-dotenv==1.0.1 # .env 파일 로드를 위함 (로컬 테스트용)
 
 # 영상/이미지 처리
-moviepy==1.0.3
-pillow==10.3.0
+moviepy==1.0.3 # 영상 편집
+Pillow==10.3.0 # 이미지 처리 (썸네일 생성 등)
+opencv-python-headless==4.9.0.80 # OpenCV (headless 버전: GUI 불필요)
+imageio==2.34.0
+imageio-ffmpeg==0.4.9
 
-# 기타 주요 유틸
-python-dotenv==1.0.1
-requests==2.31.0
-schedule==1.2.1
-python-dateutil==2.8.2
-psutil==5.9.8
+# 음성 생성
+elevenlabs==0.4.0 # ElevenLabs API
 
-# YouTube 및 검색 관련
-pexels==0.0.11
-youtube-search-python==1.6.6
-yt-dlp==2024.05.27
-pytrends==4.9.2
-sentry-sdk==1.45.0
-Flask==2.3.3
-Gunicorn==21.2.0
+# YouTube API 연동
+google-api-python-client==2.130.0
+google-auth-oauthlib==1.2.0
+google-auth-httplib2==0.2.0
+
+# 클라우드 서비스 연동
+google-cloud-storage==2.16.0 # GCP Cloud Storage
+google-cloud-secret-manager==2.20.0 # GCP Secret Manager
+
+# 기타 유틸리티
+requests==2.32.3 # HTTP 요청
+APScheduler==3.10.4 # 스케줄링 (선택 사항, Cloud Scheduler 사용 시 불필요)
+beautifulsoup4==4.12.3 # 웹 스크래핑 (핫이슈 수집 시 필요할 수 있음)
+lxml==5.2.2 # BeautifulSoup4의 파서
+
+# 로깅 및 모니터링
+# 예를 들어, loguru를 사용할 수 있지만, 표준 logging 모듈 사용을 권장합니다.
+# loguru==0.7.2
