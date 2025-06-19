@@ -5,6 +5,8 @@ import random
 from datetime import datetime, timedelta
 import logging
 
+
+
 # 로깅 설정
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -27,6 +29,9 @@ from src.thumbnail_generator import generate_thumbnail
 from src.youtube_uploader import upload_video, refresh_youtube_oauth_token
 from src.comment_poster import post_comment
 from src.cleanup_manager import cleanup_old_files
+
+if os.environ.get("PORT") is not None:
+    logger.info(f"Ignoring PORT: {os.environ['PORT']}")
 
 def main_batch_process():
     logger.info("🎬 YouTube Automation Batch Process Started!")
