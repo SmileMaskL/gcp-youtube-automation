@@ -1,79 +1,58 @@
-import os
 import requests
+import json
+import logging
 import random
 from datetime import datetime, timedelta
-from google.cloud import secretmanager
 
-def get_trending_topics(country='kr', count=10):
-    """네이버/구글 트렌드에서 인기 주제 가져오기"""
+logger = logging.getLogger(__name__)
+
+def get_trending_news(api_key: str, country='kr', language='ko') -> str:
+    """
+    News API에서 현재 대한민국 (또는 지정된 국가/언어)의 트렌딩 뉴스 헤드라인을 가져옵니다.
+    뉴스 API의 무료 티어 제한을 고려하여 사용합니다.
+    """
+    if not api_key:
+        logger.error("News API Key is not provided.")
+        return ""
+
+    # News API의 무료 플랜은 개발용으로, 검색 결과가 제한될 수 있습니다.
+    # 상업적 사용 또는 더 많은 데이터가 필요하면 유료 플랜을 고려해야 합니다.
+    # 여기서는 'top-headlines' 엔드포인트를 사용하여 최신 트렌드를 파악합니다.
+    url = f"https://newsapi.org/v2/top-headlines?country={country}&language={language}&apiKey={api_key}"
+
     try:
-        # 방법 1: NewsAPI 사용 (GitHub Secrets에 NEWS_API_KEY 필요)
-        news_api_key = os.getenv("NEWS_API_KEY")
-        if not news_api_key:
-            # GCP Secret Manager에서 키 가져오기
-            try:
-                client = secretmanager.SecretManagerServiceClient()
-                secret_name = f"projects/{os.getenv('GCP_PROJECT_ID')}/secrets/news-api-key/versions/latest"
-                response = client.access_secret_version(name=secret_name)
-                news_api_key = response.payload.data.decode("UTF-8")
-            except Exception as e:
-                print(f"Failed to get news api key: {e}")
-                news_api_key = None
+        response = requests.get(url, timeout=10) # 10초 타임아웃
+        response.raise_for_status() # HTTP 오류 발생 시 예외 발생
+        data = response.json()
 
-        if news_api_key:
-            # 최신 뉴스 헤드라인에서 키워드 추출
-            url = f"https://newsapi.org/v2/top-headlines?country={country}&apiKey={news_api_key}"
-            response = requests.get(url)
-            articles = response.json().get('articles', [])
-            
-            topics = []
-            for article in articles[:count]:
-                title = article.get('title', '')
-                # 제목에서 주요 키워드 추출
-                if title:
-                    topics.append(title.split('-')[0].strip())
-            return topics if topics else get_default_topics()
+        articles = data.get('articles', [])
+        if not articles:
+            logger.warning("No trending articles found from News API.")
+            return "최신 인기 뉴스, 오늘 이슈" # 기본 주제 반환
+
+        # 무작위로 하나의 기사 선택하여 제목 반환
+        # 더 복잡한 로직이 필요하면 여러 기사를 분석하여 핵심 키워드 추출 가능
+        selected_article = random.choice(articles)
+        title = selected_article.get('title', "오늘의 흥미로운 소식")
         
-        # 방법 2: 구글 트렌드 대체 (API 키 없을 경우)
-        return get_google_trends(country)
+        # 제목에서 불필요한 부분 제거 (예: "- 뉴스 출처")
+        if ' - ' in title:
+            title = title.split(' - ')[0]
         
+        logger.info(f"Successfully fetched trending news: {title}")
+        return title
+
+    except requests.exceptions.HTTPError as http_err:
+        logger.error(f"HTTP error occurred while fetching news: {http_err} - {response.text}")
+    except requests.exceptions.ConnectionError as conn_err:
+        logger.error(f"Connection error occurred while fetching news: {conn_err}")
+    except requests.exceptions.Timeout as timeout_err:
+        logger.error(f"Timeout error occurred while fetching news: {timeout_err}")
+    except requests.exceptions.RequestException as req_err:
+        logger.error(f"An error occurred while fetching news: {req_err}")
+    except json.JSONDecodeError as json_err:
+        logger.error(f"JSON decoding error: {json_err} - Response text: {response.text}")
     except Exception as e:
-        print(f"Error fetching trends: {e}")
-        return get_default_topics()
-
-def get_google_trends(country='kr'):
-    """구글 트렌드 대체 함수 (실제 API 대신 고정 목록)"""
-    # 국가별 기본 트렌드 주제
-    trends_by_country = {
-        'kr': [
-            "최신 IT 기술", "AI 활용 사례", "파이썬 프로그래밍", 
-            "클라우드 컴퓨팅", "자동화 도구", "빅데이터 분석",
-            "머신러닝 입문", "챗GPT 활용법", "개발자 취업 정보",
-            "신규 스타트업 소식", "개발자 회고록", "기술 블로그"
-        ],
-        'us': [
-            "Latest tech news", "Python tutorials", "Cloud computing",
-            "AI innovations", "Programming tips", "Startup news",
-            "Developer tools", "Machine learning", "Data science",
-            "Coding interviews", "Tech careers", "Open source"
-        ]
-    }
-    return trends_by_country.get(country, trends_by_country['kr'])
-
-def get_default_topics():
-    """API 실패 시 사용할 기본 주제"""
-    return [
-        "최신 기술 동향",
-        "인공지능 활용 방법",
-        "파이썬 코딩 팁",
-        "클라우드 서비스 비교",
-        "개발자 생산성 향상 방법",
-        "빅데이터 분석 기법",
-        "머신러닝 모델 최적화",
-        "챗GPT 활용 사례",
-        "IT 취업 시장 현황",
-        "개발 도구 추천"
-    ]
-
-if __name__ == "__main__":
-    print("현재 인기 주제:", get_trending_topics())
+        logger.error(f"An unexpected error occurred in get_trending_news: {e}")
+        
+    return "오늘의 인기 토픽, 최신 정보" # 오류 발생 시 기본 주제 반환
