@@ -1,151 +1,183 @@
 import os
-import datetime
-from src.content_generator import get_trending_topic, generate_video_script, generate_video_title, generate_video_description, generate_video_tags, generate_youtube_comments, generate_short_summary
-from src.bg_downloader import download_background
-from src.tts_generator import generate_audio
-from src.video_editor import create_video
-from src.thumbnail_generator import create_thumbnail
-from src.youtube_uploader import upload_video, post_comment
-from src.cleanup_manager import cleanup_gcs_bucket
-from src.monitoring import log_system_health, upload_log_to_gcs
-from src.config import OUTPUT_DIR, LOG_DIR, GCS_BUCKET_NAME
-import shutil
+import json
 import time
+import random
+from datetime import datetime, timedelta
+import logging
 
-def process_single_video(video_number):
-    """단일 유튜브 Shorts 영상 생성 및 업로드 프로세스."""
-    log_system_health(f"--- 영상 #{video_number} 처리 시작 ---", level="info")
+# 로깅 설정
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s',
+                    handlers=[
+                        logging.FileHandler("youtube_automation.log"),
+                        logging.StreamHandler()
+                    ])
+logger = logging.getLogger(__name__)
 
+# 다른 모듈 임포트 (src/ 폴더 내 파일들)
+from src.config import Config
+from src.error_handler import retry_on_failure
+from src.usage_tracker import check_quota, update_usage, get_max_limit
+from src.trend_api import get_trending_news # News API 연동
+from src.content_generator import generate_content_with_ai # AI 로테이션 적용
+from src.tts_generator import generate_audio
+from src.bg_downloader import download_background_video
+from src.video_creator import create_video
+from src.thumbnail_generator import generate_thumbnail
+from src.youtube_uploader import upload_video, refresh_youtube_oauth_token
+from src.comment_poster import post_comment
+from src.cleanup_manager import cleanup_old_files
+
+def main_batch_process():
+    logger.info("🎬 YouTube Automation Batch Process Started!")
+
+    # 1. 설정 로드 (환경 변수 또는 .env 파일)
+    # Cloud Run 환경에서는 환경 변수가 우선적으로 로드됩니다.
+    # 로컬 테스트 시에는 .env 파일이 사용됩니다.
+    config = Config()
+    logger.info(f"Loaded config: Project ID={config.GCP_PROJECT_ID}, Bucket Name={config.GCP_BUCKET_NAME}")
+
+    # 2. YouTube OAuth 토큰 새로고침 (만료 방지)
+    # 깃허브 시크릿에서 가져온 YOUTUBE_OAUTH_CREDENTIALS 값을 사용합니다.
     try:
-        # 1. 최신 트렌드 토픽 가져오기
-        topic = get_trending_topic()
-        log_system_health(f"획득된 트렌드 토픽: {topic}", level="info")
-
-        # 2. 영상 스크립트 생성
-        script = generate_video_script(topic)
-        if not script:
-            raise ValueError("스크립트 생성 실패.")
-        log_system_health(f"생성된 스크립트:\n{script}", level="info")
-
-        # 3. 배경 이미지 다운로드
-        background_image_filename = f"background_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}_{video_number}.jpg"
-        background_path = download_background(keyword=topic, output_filename=background_image_filename)
-        if not background_path:
-            raise ValueError("배경 이미지 다운로드 실패.")
-        log_system_health(f"다운로드된 배경 이미지: {background_path}", level="info")
-
-        # 4. 음성 생성
-        audio_filename = f"audio_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}_{video_number}.mp3"
-        audio_path = generate_audio(script, output_filename=audio_filename)
-        if not audio_path:
-            raise ValueError("오디오 생성 실패.")
-        log_system_health(f"생성된 오디오: {audio_path}", level="info")
-
-        # 5. 비디오 생성
-        video_filename = f"shorts_video_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}_{video_number}.mp4"
-        video_path = create_video(audio_path, background_path, output_filename=video_filename)
-        if not video_path:
-            raise ValueError("비디오 생성 실패.")
-        log_system_health(f"생성된 비디오: {video_path}", level="info")
-
-        # 6. 영상 제목, 설명, 태그, 썸네일 요약 텍스트, 댓글 생성
-        title = generate_video_title(script, topic)
-        description = generate_video_description(script, title, topic)
-        tags = generate_video_tags(topic, title)
-        thumbnail_summary = generate_short_summary(script)
-        generated_comments = generate_youtube_comments(title, num_comments=3) # 3개 댓글 생성
-
-        log_system_health(f"생성된 제목: {title}", level="info")
-        log_system_health(f"생성된 설명: {description}", level="info")
-        log_system_health(f"생성된 태그: {tags}", level="info")
-        log_system_health(f"생성된 썸네일 요약: {thumbnail_summary}", level="info")
-        log_system_health(f"생성된 댓글: {generated_comments}", level="info")
-
-        # 7. 썸네일 생성
-        thumbnail_filename = f"thumbnail_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}_{video_number}.jpg"
-        thumbnail_path = create_thumbnail(thumbnail_summary, background_path, output_filename=thumbnail_filename)
-        if not thumbnail_path:
-            raise ValueError("썸네일 생성 실패.")
-        log_system_health(f"생성된 썸네일: {thumbnail_path}", level="info")
-
-        # 8. YouTube에 업로드
-        uploaded_video_id = upload_video(video_path, thumbnail_path, title, description, tags)
-        if not uploaded_video_id:
-            raise ValueError("YouTube 업로드 실패.")
-        log_system_health(f"비디오가 YouTube에 성공적으로 업로드되었습니다. ID: {uploaded_video_id}", level="info")
-
-        # 9. 댓글 포스팅
-        for comment_text in generated_comments:
-            try:
-                post_comment(uploaded_video_id, comment_text)
-                log_system_health(f"댓글 '{comment_text}' 포스팅 완료.", level="info")
-            except Exception as e:
-                log_system_health(f"댓글 포스팅 중 오류 발생: {e}", level="error")
-
-        log_system_health(f"--- 영상 #{video_number} 처리 완료 ---", level="info")
-        return True
-
+        updated_credentials_json = retry_on_failure(lambda: refresh_youtube_oauth_token(config.YOUTUBE_OAUTH_CREDENTIALS))
+        config.YOUTUBE_OAUTH_CREDENTIALS = updated_credentials_json
+        logger.info("YouTube OAuth token refreshed successfully.")
+        # 업데이트된 자격증명을 환경 변수로 다시 설정 (다음 작업에 사용)
+        # 이 부분은 실제 GCP Secret Manager에 업데이트하는 로직이 필요할 수 있으나
+        # Cloud Run Job은 단발성 실행이므로, 메모리에서만 업데이트하고 다음 실행 시 새롭게 로드합니다.
     except Exception as e:
-        log_system_health(f"영상 #{video_number} 처리 중 치명적인 오류 발생: {e}", level="critical")
-        return False
+        logger.error(f"Failed to refresh YouTube OAuth token: {e}")
+        # 중요한 오류이므로, 여기서 프로세스 중단 또는 알림 전송 고려
+        return
 
-def main():
-    log_system_health("자동화 프로세스 시작.", level="info")
+    # 3. API 쿼터 초기화 및 로딩
+    # API 사용량은 Cloud Run Job 실행 시마다 초기화되므로,
+    # 장기적인 쿼터 관리는 Secret Manager에 저장된 값을 읽어오거나 외부 DB 사용 필요
+    # 여기서는 간단하게 이 세션 내에서만 사용량 추적
+    daily_api_usage = {
+        "gemini": 0,
+        "openai": 0,
+        "elevenlabs": 0,
+        "pexels": 0,
+        "youtube": 0,
+        "news_api": 0
+    }
+    
+    # 4. 일일 5개 영상 생성을 위한 루프
+    num_videos_to_create = 5
+    for i in range(num_videos_to_create):
+        logger.info(f"✨ Starting video generation process {i+1}/{num_videos_to_create}")
 
-    # 출력 및 로그 디렉토리 생성
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-    os.makedirs(LOG_DIR, exist_ok=True)
-    os.makedirs(os.path.join(OUTPUT_DIR, "backgrounds"), exist_ok=True)
-    os.makedirs(os.path.join(OUTPUT_DIR, "audio"), exist_ok=True)
-    os.makedirs(os.path.join(OUTPUT_DIR, "videos"), exist_ok=True)
-    os.makedirs(os.path.join(OUTPUT_DIR, "thumbnails"), exist_ok=True)
+        try:
+            # 4-1. 핫이슈 뉴스 가져오기
+            logger.info("Fetching trending news...")
+            trending_topic = retry_on_failure(lambda: get_trending_news(config.NEWS_API_KEY))
+            if not trending_topic:
+                logger.warning("No trending topic found. Skipping video generation.")
+                continue
+            logger.info(f"Trending topic for video {i+1}: {trending_topic}")
+            update_usage("news_api", 1) # News API 사용량 업데이트
+            check_quota("news_api", daily_api_usage["news_api"])
 
-    # 시스템 로그 파일을 이 특정 실행의 로그 파일로 설정
-    log_file_path = os.path.join(LOG_DIR, f"automation_run_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
-    # 실제 로깅 핸들러는 src/monitoring.py에서 초기화되므로,
-    # 이 변수는 GCS 업로드 시 로그 파일 경로로 사용됩니다.
 
-    # 하루 5개의 Shorts 영상 생성 목표 (시간표 0 3,7,12,18,22 * * * 고려)
-    # 매 스케줄 실행 시마다 1개의 영상을 생성하도록 로직 변경
-    # GitHub Actions 스케줄러가 여러 번 트리거되므로, 1회 트리거당 1개 영상 생성으로 충분.
-    # 즉, main.yml에서 5번의 스케줄을 설정하면 하루에 5개 생성 가능.
-    num_videos_to_create = int(os.getenv("NUM_VIDEOS_PER_RUN", "1")) # 기본 1개 생성
+            # 4-2. AI를 사용하여 콘텐츠 (스크립트, 제목, 설명, 태그, 댓글) 생성 (Gemini & OpenAI 로테이션)
+            logger.info("Generating content using AI (Gemini/OpenAI rotation)...")
+            ai_choice = "gemini" if daily_api_usage["gemini"] < get_max_limit("gemini") else "openai"
+            if ai_choice == "openai" and daily_api_usage["openai"] >= get_max_limit("openai"):
+                 logger.warning("Both Gemini and OpenAI API quotas exceeded or near limit. Skipping this video.")
+                 continue # 두 API 모두 한도 초과 시 다음 영상으로 넘어감
 
-    for i in range(1, num_videos_to_create + 1):
-        success = process_single_video(i)
-        if not success:
-            log_system_health(f"영상 #{i} 생성 및 업로드 실패. 다음 영상으로 넘어갑니다.", level="error")
+            generated_content = retry_on_failure(
+                lambda: generate_content_with_ai(
+                    ai_choice,
+                    trending_topic,
+                    config.GEMINI_API_KEY,
+                    config.OPENAI_KEYS_JSON # JSON 문자열 형태로 전달
+                )
+            )
+            update_usage(ai_choice, 1) # AI API 사용량 업데이트
+            check_quota(ai_choice, daily_api_usage[ai_choice])
 
-        # 다음 영상 생성을 위해 잠시 대기 (API Rate Limit 및 자원 소모 방지)
-        if i < num_videos_to_create:
-            log_system_health(f"{i}번째 영상 처리 완료. 다음 영상 처리를 위해 10분 대기...", level="info")
-            time.sleep(600) # 10분 대기
 
-    # 모든 작업 완료 후 로컬 생성 파일 정리 및 GCS에 로그 업로드
-    log_system_health("모든 영상 처리 완료. 로컬 출력 파일 정리 및 로그 업로드 시작.", level="info")
+            script = generated_content.get("script", "Generated script is empty.")
+            video_title = generated_content.get("title", f"자동 생성 영상 {datetime.now().strftime('%Y%m%d_%H%M%S')}")
+            video_description = generated_content.get("description", "자동 생성된 영상입니다.")
+            video_tags = generated_content.get("tags", "자동생성,shorts,핫이슈").split(',')
+            auto_comment = generated_content.get("comment", "흥미로운 영상이네요!")
 
-    # 임시 파일 및 결과물 GCS에 업로드 후 로컬에서 삭제
-    # GCS에 업로드할 로그 파일 이름
-    gcs_log_blob_name = f"logs/automation_run_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}.log"
-    # 현재 실행의 로그를 GCS에 업로드
-    # Cloud Logging으로 이미 로그가 전송되므로, 파일 자체를 업로드하는 것은 선택 사항
-    # 여기서는 파일 기반 로깅을 가정하고 업로드 로직 유지.
-    # 실제 GitHub Actions에서는 Cloud Logging으로 충분합니다.
+            if not script:
+                logger.error("Generated script is empty. Skipping video generation.")
+                continue
 
-    # 로컬 아웃풋 디렉토리 정리 (선택 사항: 디버깅을 위해 남겨둘 수도 있음)
-    # if os.path.exists(OUTPUT_DIR):
-    #     shutil.rmtree(OUTPUT_DIR)
-    #     log_system_health(f"로컬 '{OUTPUT_DIR}' 디렉토리 정리 완료.", level="info")
-    # else:
-    #     log_system_health(f"로컬 '{OUTPUT_DIR}' 디렉토리가 존재하지 않습니다.", level="info")
+            logger.info(f"Video {i+1} Title: {video_title}")
 
-    # GCP Cloud Storage 버킷 정리 (7일 이상 된 파일 삭제)
-    try:
-        cleanup_gcs_bucket(days_old=7)
-    except Exception as e:
-        log_system_health(f"GCS 버킷 정리 중 오류 발생: {e}", level="error")
+            # 4-3. ElevenLabs로 음성 생성
+            logger.info("Generating audio with ElevenLabs...")
+            audio_output_path = f"output/audio_{i}.mp3"
+            retry_on_failure(lambda: generate_audio(script, audio_output_path, config.ELEVENLABS_API_KEY, config.ELEVENLABS_VOICE_ID))
+            logger.info(f"Audio generated at {audio_output_path}")
+            update_usage("elevenlabs", len(script)) # 글자 수에 비례하여 사용량 업데이트
+            check_quota("elevenlabs", daily_api_usage["elevenlabs"])
 
-    log_system_health("자동화 프로세스 완료.", level="info")
+            # 4-4. Pexels에서 배경 영상 다운로드
+            logger.info("Downloading background video from Pexels...")
+            video_query = trending_topic.split(' ')[0] # 키워드에서 첫 단어 사용
+            background_video_path = f"output/bg_video_{i}.mp4"
+            retry_on_failure(lambda: download_background_video(video_query, background_video_path, config.PEXELS_API_KEY))
+            logger.info(f"Background video downloaded to {background_video_path}")
+            update_usage("pexels", 1)
+            check_quota("pexels", daily_api_usage["pexels"])
+
+            # 4-5. 최종 영상 생성 (고양이체.ttf 폰트 사용)
+            logger.info("Creating final video...")
+            final_video_path = f"output/final_video_{i}.mp4"
+            font_path = "/app/fonts/Catfont.ttf" # Dockerfile에서 복사된 경로
+            retry_on_failure(lambda: create_video(background_video_path, audio_output_path, final_video_path, font_path=font_path))
+            logger.info(f"Final video created at {final_video_path}")
+
+            # 4-6. 썸네일 자동 생성
+            logger.info("Generating thumbnail...")
+            thumbnail_path = f"output/thumbnail_{i}.jpg"
+            retry_on_failure(lambda: generate_thumbnail(final_video_path, thumbnail_path, video_title))
+            logger.info(f"Thumbnail created at {thumbnail_path}")
+
+            # 4-7. YouTube에 영상 업로드
+            logger.info("Uploading video to YouTube...")
+            # YouTube API 쿼터 관리
+            check_quota("youtube", daily_api_usage["youtube"])
+            video_id = retry_on_failure(
+                lambda: upload_video(
+                    final_video_path,
+                    video_title,
+                    video_description,
+                    video_tags,
+                    config.YOUTUBE_OAUTH_CREDENTIALS,
+                    thumbnail_path
+                )
+            )
+            update_usage("youtube", 1)
+            logger.info(f"Video uploaded successfully! Video ID: {video_id}")
+            
+            # 4-8. YouTube 댓글 자동 작성
+            if video_id:
+                logger.info("Posting comment to YouTube video...")
+                retry_on_failure(lambda: post_comment(video_id, auto_comment, config.YOUTUBE_OAUTH_CREDENTIALS))
+                logger.info("Comment posted successfully!")
+
+            # 모든 단계 성공 시, 임시 파일 정리 (버킷 사용량 관리)
+            cleanup_old_files(config.GCP_BUCKET_NAME, hours_to_keep=1) # 1시간 지난 파일 정리
+            logger.info(f"Temporary files for video {i+1} cleaned up in Cloud Storage.")
+
+            logger.info(f"✅ Video {i+1} generation and upload completed!")
+            time.sleep(10) # 다음 영상 생성 전 잠시 대기
+            
+        except Exception as e:
+            logger.error(f"❌ Error during video {i+1} processing: {e}", exc_info=True)
+            # 오류 발생 시에도 임시 파일 정리 시도
+            cleanup_old_files(config.GCP_BUCKET_NAME, hours_to_keep=1)
+
+    logger.info("🎉 YouTube Automation Batch Process Finished!")
 
 if __name__ == "__main__":
-    main()
+    main_batch_process()
