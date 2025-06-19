@@ -1,7 +1,7 @@
 name: YouTube Shorts Automation
 on:
   schedule:
-    - cron: '0 3,7,12,18,22 * * *'  # 매일 5회 실행
+    - cron: '0 3,7,12,18,22 * * *'  # 매일 5회 실행 (03:00, 07:00, 12:00, 18:00, 22:00)
   workflow_dispatch:
 
 permissions:
@@ -30,10 +30,10 @@ jobs:
       with:
         python-version: '3.11'
 
-    - name: Install dependencies (캐시 무효화)
+    - name: Install dependencies
       run: |
         pip cache purge  # 캐시 강제 초기화
-        pip install --upgrade pip
+        python -m pip install --upgrade pip
         pip install -r requirements.txt
         sudo apt-get update
         sudo apt-get install -y ffmpeg
