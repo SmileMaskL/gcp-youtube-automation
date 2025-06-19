@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Delete old workflow runs
-        uses: actions/delete-package-versions@v4 # 또는 다른 cleanup 액션
+        uses: actions/delete-old-workflow-runs@v4 # 또는 다른 cleanup 액션
         with:
           package-type: workflow_run # workflow run artifacts를 대상으로 지정
           min-versions-to-keep: 5 # 최근 5개 런은 유지
