@@ -1,51 +1,49 @@
-name: YouTube Automation
-
+name: YouTube Shorts Automation
 on:
   schedule:
-    - cron: '0 3,7,12,18,22 * * *'  # 하루 5회 실행 (KST 기준)
+    - cron: '0 3,7,12,18,22 * * *'  # 하루 5회 실행
   workflow_dispatch:
 
-permissions:
-  contents: 'read'
-  id-token: 'write'
-
 jobs:
-  produce_shorts:
+  generate-and-upload:
     runs-on: ubuntu-latest
-    env:
-      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-      ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
-
+    timeout-minutes: 30
+    
     steps:
-    - name: 체크아웃
-      uses: actions/checkout@v4
-
-    - name: Python 설정
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.11'
-
-    - name: 의존성 설치
+    
+    - name: Install dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install -y ffmpeg
+        python -m pip install --upgrade pip
         pip install -r requirements.txt
-
-    - name: GCP 인증
+        
+    - name: Authenticate with Google Cloud
       uses: google-github-actions/auth@v1
       with:
-        workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-        service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-
-    - name: 실행
+        credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+        
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v1
+        
+    - name: Run YouTube Automation
+      env:
+        GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+        ELEVENLABS_VOICE_ID: uyVNoMrnUku1dZyVEXwD
+        FONT_PATH: ./fonts/Catfont.ttf
       run: |
         mkdir -p output logs
         python -m src.batch_processor
-
-    - name: 결과 업로드
-      uses: actions/upload-artifact@v4
+        
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      if: always()
       with:
-        name: youtube-output
+        name: youtube-shorts-output
         path: |
           output/
           logs/
