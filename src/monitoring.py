@@ -1,6 +1,12 @@
 # src/monitoring.py
-import os
-import sentry_sdk
+import logging
+import psutil
+
+def log_system_health():
+    logger = logging.getLogger(__name__)
+    cpu_percent = psutil.cpu_percent()
+    memory = psutil.virtual_memory()
+    logger.info(f"시스템 상태: CPU={cpu_percent}%, 메모리={memory.percent}%")
 
 def init_monitoring():
     sentry_sdk.init(
