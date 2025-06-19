@@ -1,51 +1,44 @@
-name: YouTube Automation Batch
-
+name: YouTube Shorts Auto Producer
 on:
   schedule:
-    - cron: '0 3,7,12,18,22 * * *'  # 하루 5회 실행
+    - cron: '0 3,7,12,18,22 * * *'
   workflow_dispatch:
 
 jobs:
-  run-batch:
+  produce_shorts:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    env:
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
-      PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-      YOUTUBE_OAUTH_CREDENTIALS: ${{ secrets.YOUTUBE_OAUTH_CREDENTIALS }}
-
     steps:
     - uses: actions/checkout@v4
+    
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.11'
+    
     - name: Install dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y ffmpeg
+        pip install --upgrade pip
         pip install -r requirements.txt
-    - name: Run Batch Processor
-      env:
-        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        OPENAI_API_KEYS: ${{ secrets.OPENAI_API_KEYS }}
-        ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
-        PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-        YOUTUBE_CREDENTIALS: ${{ secrets.YOUTUBE_OAUTH_CREDENTIALS }}
-      run: python -m src.batch_processor
-    
-    - name: Install fonts
-      run: |
-        sudo apt-get install -y fonts-nanum fonts-noto-cjk
         
-    - name: Run batch process
+    - name: Run Production
+      env:
+        GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+        GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEY }}
+        OPENAI_KEYS_JSON: ${{ secrets.OPENAI_KEYS_JSON }}
+        ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+        ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
+        PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+        YOUTUBE_OAUTH_CREDENTIALS: ${{ secrets.YOUTUBE_OAUTH_CREDENTIALS }}
       run: |
         python -m src.batch_processor
-    
-    - name: Upload results
-      uses: actions/upload-artifact@v4
+        
+    - name: Upload Artifacts
       if: always()
+      uses: actions/upload-artifact@v4
       with:
-        name: youtube-shorts
-        path: output/
+        name: youtube-output
+        path: temp/
+        retention-days: 1
