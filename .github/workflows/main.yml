@@ -1,8 +1,8 @@
-name: YouTube Shorts Auto Producer
+name: YouTube Automation
 
 on:
   schedule:
-    - cron: '0 18,22,3,9,13 * * *' # UTC 기준 (KST 3,7,12,18,22시)
+    - cron: '0 3,7,12,18,22 * * *'
   workflow_dispatch:
 
 permissions:
@@ -10,58 +10,24 @@ permissions:
   id-token: 'write'
 
 jobs:
-  produce_shorts:
+  run-automation:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
     env:
       GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-      ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
-      YOUTUBE_OAUTH_CREDENTIALS: ${{ secrets.YOUTUBE_OAUTH_CREDENTIALS }}
-
+      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      
     steps:
-    - name: Checkout Repository
     - uses: actions/checkout@v4
-   
+    
     - uses: google-github-actions/auth@v1
-      with:
-        credentials_json: ${{ secrets.GCP_SA_KEY }}
-    - run: pip install -r requirements.txt
-    - run: python -m src.batch_processor
-
-
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-        
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y ffmpeg
-        pip install --upgrade pip
-        pip install -r requirements.txt
-
-    - name: Authenticate to GCP
-      uses: google-github-actions/auth@v2
       with:
         workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
         service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
         create_credentials_file: true
-
-    - name: Set up Cloud SDK
-      uses: google-github-actions/setup-gcloud@v2
-
-    - name: Run Production Script
-      run: |
-        mkdir -p logs
+        
+    - run: |
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg
+        pip install -r requirements.txt
         python -m src.batch_processor
-
-    - name: Upload Artifacts
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: youtube-output-${{ github.run_id }}
-        path: |
-          temp/
-          logs/
-        retention-days: 1
