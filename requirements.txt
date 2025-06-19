@@ -15,7 +15,7 @@ imageio==2.34.0
 imageio-ffmpeg==0.4.8      # 0.4.9에서 일부 시스템 충돌 보고됨 → 0.4.8이 안정적
 
 # 음성 생성
-elevenlabs==0.4.0          # 안정적인 최신 버전
+elevenlabs==2.3.0          # 안정적인 최신 버전
 
 # YouTube API 연동
 google-api-python-client==2.130.0
