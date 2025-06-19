@@ -11,7 +11,6 @@ class Config:
             client = secretmanager.SecretManagerServiceClient()
             name = f"projects/{os.getenv('GCP_PROJECT_ID')}/secrets/{secret_name}/versions/latest"
             response = client.access_secret_version(name=name)
-            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "gha-creds.json"
             return response.payload.data.decode('UTF-8')
         except Exception as e:
             logging.error(f"GCP Secret 접근 오류: {str(e)}")
@@ -20,7 +19,14 @@ class Config:
     @classmethod
     def get_openai_keys(cls) -> List[str]:
         keys_json = cls._get_secret("openai-api-keys")
-        return json.loads(keys_json)['keys']
+        try:
+            # JSON 배열 또는 Python 리스트 모두 처리
+            keys = json.loads(keys_json)
+            if isinstance(keys, dict):
+                return keys.get('keys', [])
+            return keys if isinstance(keys, list) else []
+        except json.JSONDecodeError:
+            return keys_json.split(',') if keys_json else []
 
     @classmethod
     def get_gemini_key(cls) -> str:
