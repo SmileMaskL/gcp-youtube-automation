@@ -1,64 +1,96 @@
-name: YouTube Automation Pipeline
+name: YouTube Automation Job Deployment and Execution
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - main
+  # 매일 5번 (UTC 기준 03시, 07시, 12시, 18시, 22시) Cloud Run Job 실행
   schedule:
-    - cron: '0 3 * * *'
-    - cron: '0 7 * * *'
-    - cron: '0 12 * * *'
-    - cron: '0 18 * * *'
-    - cron: '0 22 * * *'
+    # 한국 시간 (KST) = UTC + 9시간
+    # UTC 03시 = KST 12시
+    # UTC 07시 = KST 16시
+    # UTC 12시 = KST 21시
+    # UTC 18시 = KST 다음날 03시
+    # UTC 22시 = KST 다음날 07시
+    - cron: '0 3,7,12,18,22 * * *'
+  workflow_dispatch: # 수동 실행을 허용
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: us-central1 # Cloud Run Job이 배포될 리전 (us-west1, us-west2 로테이션은 Cloud Run Job에서는 복잡하므로 us-central1로 고정)
+  IMAGE_NAME: youtube-automation
 
 jobs:
-  build-deploy-execute:
+  build-and-deploy:
     runs-on: ubuntu-latest
     permissions:
       contents: 'read'
-      id-token: 'write'
+      id-token: 'write' # OIDC를 사용하여 GCP 인증
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup GCP Auth
-        uses: google-github-actions/auth@v1
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Google Cloud Artifact Registry (or Container Registry)
+        id: 'auth'
+        uses: 'google-github-actions/auth@v2'
         with:
-          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+          credentials_json: '${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}'
 
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v1
+      - name: Configure Docker to use gcloud as a credential helper
+        run: |
+          gcloud auth configure-docker
 
-      - name: Configure Docker
-        run: gcloud auth configure-docker
+      - name: Build and Push Docker image
+        run: |
+          docker build -t gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }} .
+          docker push gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}
 
-      - name: Build Docker image
-        run: |-
-          docker build -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/youtube-automation:$GITHUB_SHA \
-          --build-arg ENVIRONMENT=production .
-
-      - name: Push Docker image
-        run: docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/youtube-automation:$GITHUB_SHA
-
-      - name: Deploy Cloud Run Job
-        run: |-
+      - name: Deploy to Google Cloud Run Job
+        run: |
           gcloud run jobs deploy youtube-automation-job \
-            --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/youtube-automation:$GITHUB_SHA \
-            --region us-central1 \
-            --set-env-vars "ENVIRONMENT=production" \
-            --set-env-vars "GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}" \
-            --set-env-vars "GCP_BUCKET_NAME=${{ secrets.GCP_BUCKET_NAME }}" \
-            --set-env-vars "ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }}" \
-            --set-env-vars "ELEVENLABS_VOICE_ID=${{ secrets.ELEVENLABS_VOICE_ID }}" \
-            --set-env-vars "PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }}" \
-            --set-env-vars "YOUTUBE_OAUTH_CREDENTIALS=${{ secrets.YOUTUBE_OAUTH_CREDENTIALS }}" \
-            --set-env-vars "OPENAI_KEYS_JSON=${{ secrets.OPENAI_KEYS_JSON }}" \
-            --set-env-vars "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" \
-            --set-env-vars "NEWS_API_KEY=${{ secrets.NEWS_API_KEY }}" \
-            --max-retries 0 \
-            --task-timeout 3600s
+            --image gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }} \
+            --region ${{ env.REGION }} \
+            --project=${{ env.PROJECT_ID }} \
+            --max-retries 1 # 작업 실패 시 최대 1회 재시도 (오류 핸들링과 연계)
+            --timeout 3600s \ # Job 최대 실행 시간 (1시간). 필요시 조절
+            --cpu 2 \
+            --memory 2Gi \
+            --set-env-vars \
+"GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }},\
+GCP_BUCKET_NAME=${{ secrets.GCP_BUCKET_NAME }},\
+ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }},\
+ELEVENLABS_VOICE_ID=${{ secrets.ELEVENLABS_VOICE_ID }},\
+PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }},\
+NEWS_API_KEY=${{ secrets.NEWS_API_KEY }},\
+YOUTUBE_OAUTH_CREDENTIALS=${{ secrets.YOUTUBE_OAUTH_CREDENTIALS }},\
+OPENAI_KEYS_JSON=${{ secrets.OPENAI_KEYS_JSON }},\
+GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }},\
+GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}"
 
-      - name: Execute Job
-        run: |-
+      - name: Execute Cloud Run Job
+        # push 이벤트 시에는 배포만 하고, schedule 이벤트 시에만 실행
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: |
+          echo "Executing Cloud Run Job: youtube-automation-job"
           gcloud run jobs execute youtube-automation-job \
-            --region us-central1 \
-            --wait
+            --region ${{ env.REGION }} \
+            --project=${{ env.PROJECT_ID }} \
+            --wait # 작업 완료까지 기다림
+          echo "Cloud Run Job 'youtube-automation-job' 실행 완료."
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          REGION: us-central1 # Cloud Run Job이 배포된 리전과 동일하게 설정
+
+# Cleanup Job (선택 사항, 빌드 캐시 등을 정리하고 싶을 때)
+#  cleanup:
+#    runs-on: ubuntu-latest
+#    needs: build-and-deploy # 빌드 및 배포 후에 실행
+#    steps:
+#      - name: Cleanup old Docker images
+#        run: |
+#          # 오래된 Docker 이미지 정리 로직 (gcloud CLI 또는 Docker CLI 사용)
+#          echo "Cleanup not implemented in this example."
