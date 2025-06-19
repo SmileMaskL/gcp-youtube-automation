@@ -2,7 +2,7 @@ import os
 import json
 import logging
 from google.cloud import secretmanager
-from typing import Optional, List, Dict
+from typing import List, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -21,13 +21,13 @@ class Config:
     @classmethod
     def get_gemini_keys(cls) -> List[str]:
         keys = cls._get_secret_from_gcp("gemini-api-key")
-        return [keys.strip()]  # 단일 키를 리스트로 변환
+        return [keys.strip()]
 
     @classmethod
     def get_openai_keys(cls) -> List[str]:
         keys_json = cls._get_secret_from_gcp("openai-api-keys")
         try:
-            return list(json.loads(keys_json).values())  # 10개 키 로테이션 (괄호 닫기 추가)
+            return list(json.loads(keys_json).values())
         except json.JSONDecodeError as e:
             logger.error(f"OPENAI_KEYS_JSON 파싱 실패: {e}")
             raise
