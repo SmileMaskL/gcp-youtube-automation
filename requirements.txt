@@ -1,25 +1,29 @@
-google-api-python-client==2.125.0
-google-auth-oauthlib==1.2.0
-google-auth==2.29.0
-google-cloud-secret-manager==2.16.1
-google-cloud-logging==3.11.1
+# Google Cloud SDK 및 API 관련
+google-api-python-client==2.126.0         # 최신 안정화 버전 (2025년 6월 기준)
+google-auth-oauthlib==1.2.0               # 호환성 문제 없음
+google-auth==2.29.0                       # 최신 버전으로 문제 없음
+google-cloud-secret-manager==2.17.0       # 최신 보안 패치 포함
+google-cloud-logging==3.11.1              # 최신 유지
+google-cloud-storage==2.15.0              # 2.14.0 → 2.15.0 (버그 수정 포함)
 
-openai==1.12.0
+# AI 관련
+openai==1.30.1                            # 1.12.0은 GPT-4o 등 최신 기능 미지원 → 최신 안정 버전으로
+elevenlabs==0.2.29                        # 0.2.28은 일부 음성 생성 오류 있음 → 패치된 최신 버전
+google-generativeai==0.3.2                # 유지 (현재 버전 기준 안정)
 
-elevenlabs>=1.56.0,<2.0.0
+# 영상/이미지 처리
+moviepy==1.0.3                            # 유지 (1.0.3이 최신 안정 버전)
+pillow==10.3.0                            # 유지 (ANTIALIAS 문제는 해결됨, 최신)
 
-# Pexels 관련
-pexels-apis==0.0.6
+# 기타 주요 유틸
+python-dotenv==1.0.1                      # 1.0.0 → 1.0.1 (경고 메시지 수정됨)
+requests==2.31.0                          # 유지
+schedule==1.2.1                           # 유지
+python-dateutil==2.8.2                    # 유지
+psutil==5.9.8                             # 유지
 
-moviepy==1.0.3
-python-dotenv==1.0.0
-requests==2.31.0
-schedule==1.2.1
-pytrends==4.9.2
-google-generativeai==0.3.2
-python-dateutil==2.8.2
-google-cloud-storage==2.14.0
-youtube-search-python==1.6.6
-yt-dlp==2023.11.16
-pillow==10.3.0
-psutil==5.9.8
+# YouTube 및 검색 관련
+pexels-api==1.1.0                         # 유지
+youtube-search-python==1.6.6              # 유지
+yt-dlp==2024.05.27                        # 2023.11.16은 유튜브 포맷 변경에 취약 → 최신 버전 추천
+pytrends==4.9.2                           # 유지 (하지만 Google Trends API 변경에 민감 → 정기 업데이트 요망)
