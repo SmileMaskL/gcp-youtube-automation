@@ -1,6 +1,6 @@
 import os
-from elevenlabs import Voice, VoiceSettings, generate, play
 import logging
+from elevenlabs import Voice, VoiceSettings, generate, play, set_api_key  # set_api_key 추가
 
 logger = logging.getLogger(__name__)
 
@@ -22,13 +22,16 @@ def generate_audio(text: str, output_path: str, api_key: str, voice_id: str = "u
         raise ValueError("ElevenLabs Voice ID is missing.")
 
     try:
+        # API 키 설정
+        set_api_key(api_key)
+
+        # 음성 생성
         audio = generate(
             text=text,
             voice=Voice(
                 voice_id=voice_id,
                 settings=VoiceSettings(stability=0.71, similarity_boost=0.5, style=0.0, use_speaker_boost=True)
-            ),
-            api_key=api_key
+            )
         )
         
         # 출력 디렉토리 확인 및 생성
@@ -36,9 +39,9 @@ def generate_audio(text: str, output_path: str, api_key: str, voice_id: str = "u
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
 
+        # 오디오 파일 저장
         with open(output_path, "wb") as f:
-            for chunk in audio:
-                f.write(chunk)
+            f.write(audio)  # audio는 bytes 형식입니다.
         logger.info(f"Audio successfully generated and saved to {output_path}")
 
     except Exception as e:
