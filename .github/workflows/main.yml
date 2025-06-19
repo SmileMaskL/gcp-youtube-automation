@@ -21,18 +21,18 @@ jobs:
       uses: actions/setup-python@v4
       with:
         python-version: '3.11'
-    
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y ffmpeg libsm6 libxext6
+        sudo apt-get install -y ffmpeg
         pip install -r requirements.txt
     - name: Run Batch Processor
       env:
         GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        OPENAI_API_KEYS: ${{ secrets.OPENAI_API_KEYS }}
         ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
         PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-        YOUTUBE_CREDENTIALS: ${{ secrets.YOUTUBE_CREDENTIALS }}
+        YOUTUBE_CREDENTIALS: ${{ secrets.YOUTUBE_OAUTH_CREDENTIALS }}
       run: python -m src.batch_processor
     
     - name: Install fonts
