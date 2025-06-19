@@ -1,188 +1,202 @@
+# src/batch_processor.py
 import os
+import logging
 import json
 import time
-import random
 from datetime import datetime, timedelta
-import logging
 
+# 로컬 테스트 환경을 위한 환경 변수 로드 (배포 시에는 GCP 환경 변수 사용)
+from dotenv import load_dotenv
+load_dotenv()
 
+# 모듈 임포트
+from src.config import get_secret, setup_logging
+from src.ai_manager import AIManager
+from src.content_curator import ContentCurator
+from src.content_generator import generate_content_with_ai
+from src.bg_downloader import download_pexels_videos
+from src.tts_generator import generate_audio
+from src.video_creator import create_video_from_frames
+from src.thumbnail_generator import generate_thumbnail
+from src.youtube_uploader import upload_video_to_youtube
+from src.shorts_converter import convert_to_shorts
+from src.cleanup_manager import cleanup_old_files
+from src.error_handler import log_error_and_notify # 에러 처리 추가
+from src.utils import generate_unique_id, upload_to_gcs, download_from_gcs, check_gcs_file_exists, delete_gcs_file
 
 # 로깅 설정
-logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s - %(levelname)s - %(message)s',
-                    handlers=[
-                        logging.FileHandler("youtube_automation.log"),
-                        logging.StreamHandler()
-                    ])
+setup_logging()
 logger = logging.getLogger(__name__)
 
-# 다른 모듈 임포트 (src/ 폴더 내 파일들)
-from src.config import Config
-from src.error_handler import retry_on_failure
-from src.usage_tracker import check_quota, update_usage, get_max_limit
-from src.trend_api import get_trending_news # News API 연동
-from src.content_generator import generate_content_with_ai # AI 로테이션 적용
-from src.tts_generator import generate_audio
-from src.bg_downloader import download_background_video
-from src.video_creator import create_video
-from src.thumbnail_generator import generate_thumbnail
-from src.youtube_uploader import upload_video, refresh_youtube_oauth_token
-from src.comment_poster import post_comment
-from src.cleanup_manager import cleanup_old_files
+# 전역 설정
+GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID")
+GCP_BUCKET_NAME = os.environ.get("GCP_BUCKET_NAME")
+ELEVENLABS_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "uyVNoMrnUku1dZyVEXwD") # 안나 킴
 
-if os.environ.get("PORT") is not None:
-    logger.info(f"Ignoring PORT: {os.environ['PORT']}")
+# AI Manager 초기화 (API 키는 get_secret을 통해 Secret Manager에서 동적으로 로드)
+ai_manager = AIManager()
 
-def main_batch_process():
-    logger.info("🎬 YouTube Automation Batch Process Started!")
+def main_automation_pipeline():
+    """
+    YouTube Shorts 자동화 파이프라인의 메인 실행 함수입니다.
+    콘텐츠 생성부터 업로드까지의 전 과정을 담당합니다.
+    """
+    logger.info("Starting YouTube Automation Pipeline...")
+    start_time = time.time()
+    video_count = 0
 
-    # 1. 설정 로드 (환경 변수 또는 .env 파일)
-    # Cloud Run 환경에서는 환경 변수가 우선적으로 로드됩니다.
-    # 로컬 테스트 시에는 .env 파일이 사용됩니다.
-    config = Config()
-    logger.info(f"Loaded config: Project ID={config.GCP_PROJECT_ID}, Bucket Name={config.GCP_BUCKET_NAME}")
-
-    # 2. YouTube OAuth 토큰 새로고침 (만료 방지)
-    # 깃허브 시크릿에서 가져온 YOUTUBE_OAUTH_CREDENTIALS 값을 사용합니다.
     try:
-        updated_credentials_json = retry_on_failure(lambda: refresh_youtube_oauth_token(config.YOUTUBE_OAUTH_CREDENTIALS))
-        config.YOUTUBE_OAUTH_CREDENTIALS = updated_credentials_json
-        logger.info("YouTube OAuth token refreshed successfully.")
-        # 업데이트된 자격증명을 환경 변수로 다시 설정 (다음 작업에 사용)
-        # 이 부분은 실제 GCP Secret Manager에 업데이트하는 로직이 필요할 수 있으나
-        # Cloud Run Job은 단발성 실행이므로, 메모리에서만 업데이트하고 다음 실행 시 새롭게 로드합니다.
+        # 1. API 키 로드 (Secret Manager에서 동적으로 로드)
+        logger.info("Loading API keys from Secret Manager...")
+        elevenlabs_api_key = get_secret("ELEVENLABS_API_KEY")
+        pexels_api_key = get_secret("PEXELS_API_KEY")
+        news_api_key = get_secret("NEWS_API_KEY")
+        youtube_oauth_credentials_json = get_secret("YOUTUBE_OAUTH_CREDENTIALS")
+        
+        # OpenAI 키는 AIManager 내부에서 관리하므로 별도로 로드할 필요 없음
+
+        if not all([elevenlabs_api_key, pexels_api_key, news_api_key, youtube_oauth_credentials_json]):
+            raise ValueError("One or more essential API keys or credentials are missing from Secret Manager.")
+
+        # 2. 기존 파일 정리 (Cloud Storage 버킷) - 무료 할당량 관리
+        logger.info(f"Cleaning up old files in GCS bucket: {GCP_BUCKET_NAME}...")
+        cleanup_old_files(GCP_BUCKET_NAME, hours_to_keep=24) # 24시간 이전 파일 삭제
+
+        # 3. 콘텐츠 주제 생성 (뉴스 API 활용)
+        logger.info("Generating content topics based on hot issues...")
+        curator = ContentCurator(news_api_key)
+        hot_topics = curator.get_hot_topics(query="technology OR science OR daily news", num_topics=2) # 하루 2개 영상 예시
+        if not hot_topics:
+            logger.warning("No hot topics found. Using a default topic.")
+            hot_topics = ["The Future of AI", "Space Exploration Latest Discoveries"]
+
+        # 4. 여러 영상 제작 및 업로드 반복
+        for i, topic in enumerate(hot_topics):
+            unique_id = generate_unique_id()
+            base_filename = f"youtube_shorts_{unique_id}"
+            
+            logger.info(f"Processing video {i+1}/{len(hot_topics)} for topic: '{topic}'")
+
+            try:
+                # 4.1. AI를 활용한 콘텐츠 생성 (GPT-4o, Gemini 로테이션)
+                logger.info(f"Generating content for '{topic}' using AI...")
+                current_ai_model = ai_manager.get_current_model()
+                logger.info(f"Using AI model: {current_ai_model}")
+                generated_content = generate_content_with_ai(topic, current_ai_model)
+                if not generated_content:
+                    log_error_and_notify(f"Failed to generate content for topic: {topic}")
+                    continue
+                
+                script_text = generated_content.get("script", "Generated script is empty.")
+                title = generated_content.get("title", f"Amazing Shorts on {topic}")
+                tags = generated_content.get("tags", f"shorts, {topic.replace(' ', ',')}, youtube").split(',')
+                description = generated_content.get("description", f"This short video explores {topic}.")
+
+                # 4.2. 배경 영상 다운로드 (Pexels API)
+                logger.info(f"Downloading background video for '{topic}'...")
+                video_url = download_pexels_videos(pexels_api_key, query=topic, max_videos=1)
+                if not video_url:
+                    log_error_and_notify(f"Failed to download background video for topic: {topic}")
+                    continue
+                
+                # 배경 영상 GCS에 업로드 (로컬 용량 확보)
+                video_local_path = f"/tmp/{base_filename}_bg.mp4"
+                # TODO: download_pexels_videos 함수가 url을 반환하고, 이 url을 직접 다운로드하는 로직 필요
+                # 현재 로직은 download_pexels_videos가 내부적으로 저장한다고 가정.
+                # 편의상 직접 wget으로 다운로드하는 예시 (실제 구현 시 bg_downloader.py에 로직 추가)
+                try:
+                    import subprocess
+                    subprocess.run(["wget", "-O", video_local_path, video_url], check=True)
+                    logger.info(f"Background video downloaded to {video_local_path}")
+                except Exception as e:
+                    log_error_and_notify(f"Error downloading background video from URL {video_url}: {e}")
+                    continue
+                
+                gcs_video_path = f"raw_videos/{base_filename}_bg.mp4"
+                upload_to_gcs(GCP_BUCKET_NAME, video_local_path, gcs_video_path)
+                os.remove(video_local_path) # 로컬 파일 삭제
+
+                # 4.3. 음성 생성 (ElevenLabs)
+                logger.info("Generating audio for the script...")
+                audio_local_path = f"/tmp/{base_filename}_audio.mp3"
+                if not generate_audio(script_text, audio_local_path, elevenlabs_api_key, ELEVENLABS_VOICE_ID):
+                    log_error_and_notify(f"Failed to generate audio for topic: {topic}")
+                    continue
+                
+                # 음성 파일 GCS에 업로드 (로컬 용량 확보)
+                gcs_audio_path = f"audios/{base_filename}_audio.mp3"
+                upload_to_gcs(GCP_BUCKET_NAME, audio_local_path, gcs_audio_path)
+                os.remove(audio_local_path) # 로컬 파일 삭제
+
+                # 4.4. 영상 제작 (영상, 음성 결합)
+                logger.info("Creating the final video...")
+                final_video_local_path = f"/tmp/{base_filename}_final.mp4"
+                if not create_video_from_frames(gcs_video_path, gcs_audio_path, final_video_local_path, GCP_BUCKET_NAME):
+                    log_error_and_notify(f"Failed to create video for topic: {topic}")
+                    continue
+
+                # 4.5. Shorts 변환 (60초 이하, 최적화)
+                logger.info("Converting video to Shorts format...")
+                shorts_video_local_path = f"/tmp/{base_filename}_shorts.mp4"
+                if not convert_to_shorts(final_video_local_path, shorts_video_local_path):
+                    log_error_and_notify(f"Failed to convert video to Shorts for topic: {topic}")
+                    continue
+                os.remove(final_video_local_path) # 중간 파일 삭제
+
+                # 4.6. 썸네일 자동 생성
+                logger.info("Generating thumbnail...")
+                thumbnail_local_path = f"/tmp/{base_filename}_thumbnail.jpg"
+                if not generate_thumbnail(shorts_video_local_path, thumbnail_local_path):
+                    log_error_and_notify(f"Failed to generate thumbnail for topic: {topic}")
+                    continue
+                
+                # Shorts 영상 및 썸네일 GCS에 업로드
+                gcs_shorts_path = f"shorts/{base_filename}_shorts.mp4"
+                gcs_thumbnail_path = f"thumbnails/{base_filename}_thumbnail.jpg"
+                upload_to_gcs(GCP_BUCKET_NAME, shorts_video_local_path, gcs_shorts_path)
+                upload_to_gcs(GCP_BUCKET_NAME, thumbnail_local_path, gcs_thumbnail_path)
+                
+                os.remove(shorts_video_local_path)
+                os.remove(thumbnail_local_path)
+                
+                # 4.7. YouTube 업로드
+                logger.info("Uploading video to YouTube...")
+                # youtube_oauth_credentials_json은 JSON 문자열이므로 파싱해야 합니다.
+                youtube_credentials = json.loads(youtube_oauth_credentials_json)
+                
+                video_url = upload_video_to_youtube(
+                    shorts_video_local_path, # 실제 업로드 시에는 GCS URL 대신 다운로드 받아 업로드
+                    title,
+                    description,
+                    tags,
+                    GCP_PROJECT_ID, # 프로젝트 ID 전달
+                    thumbnail_path=thumbnail_local_path, # 실제 업로드 시에는 GCS URL 대신 다운로드 받아 업로드
+                    oauth_credentials=youtube_credentials
+                )
+                if video_url:
+                    logger.info(f"Video uploaded successfully! URL: {video_url}")
+                    video_count += 1
+                else:
+                    log_error_and_notify(f"Failed to upload video for topic: {topic}")
+
+                # 4.8. 댓글 자동 작성 (선택 사항) - YouTube API 쿼터 고려하여 신중하게 사용
+                # comment_poster.post_comment(video_id, "Interesting video!", youtube_credentials)
+
+                # API 쿼터 사용량 모니터링 (가상)
+                logger.info(f"API usage for this video: OpenAI={ai_manager.get_api_usage('openai')}, Gemini={ai_manager.get_api_usage('gemini')}, ElevenLabs=..., Pexels=..., YouTube=...")
+
+            except Exception as e:
+                log_error_and_notify(f"Error processing video for topic '{topic}': {e}", exc_info=True)
+                continue # 다음 영상 처리를 위해 계속 진행
+
     except Exception as e:
-        logger.error(f"Failed to refresh YouTube OAuth token: {e}")
-        # 중요한 오류이므로, 여기서 프로세스 중단 또는 알림 전송 고려
-        return
+        log_error_and_notify(f"Critical error in main automation pipeline: {e}", exc_info=True)
 
-    # 3. API 쿼터 초기화 및 로딩
-    # API 사용량은 Cloud Run Job 실행 시마다 초기화되므로,
-    # 장기적인 쿼터 관리는 Secret Manager에 저장된 값을 읽어오거나 외부 DB 사용 필요
-    # 여기서는 간단하게 이 세션 내에서만 사용량 추적
-    daily_api_usage = {
-        "gemini": 0,
-        "openai": 0,
-        "elevenlabs": 0,
-        "pexels": 0,
-        "youtube": 0,
-        "news_api": 0
-    }
-    
-    # 4. 일일 5개 영상 생성을 위한 루프
-    num_videos_to_create = 5
-    for i in range(num_videos_to_create):
-        logger.info(f"✨ Starting video generation process {i+1}/{num_videos_to_create}")
-
-        try:
-            # 4-1. 핫이슈 뉴스 가져오기
-            logger.info("Fetching trending news...")
-            trending_topic = retry_on_failure(lambda: get_trending_news(config.NEWS_API_KEY))
-            if not trending_topic:
-                logger.warning("No trending topic found. Skipping video generation.")
-                continue
-            logger.info(f"Trending topic for video {i+1}: {trending_topic}")
-            update_usage("news_api", 1) # News API 사용량 업데이트
-            check_quota("news_api", daily_api_usage["news_api"])
-
-
-            # 4-2. AI를 사용하여 콘텐츠 (스크립트, 제목, 설명, 태그, 댓글) 생성 (Gemini & OpenAI 로테이션)
-            logger.info("Generating content using AI (Gemini/OpenAI rotation)...")
-            ai_choice = "gemini" if daily_api_usage["gemini"] < get_max_limit("gemini") else "openai"
-            if ai_choice == "openai" and daily_api_usage["openai"] >= get_max_limit("openai"):
-                 logger.warning("Both Gemini and OpenAI API quotas exceeded or near limit. Skipping this video.")
-                 continue # 두 API 모두 한도 초과 시 다음 영상으로 넘어감
-
-            generated_content = retry_on_failure(
-                lambda: generate_content_with_ai(
-                    ai_choice,
-                    trending_topic,
-                    config.GEMINI_API_KEY,
-                    config.OPENAI_KEYS_JSON # JSON 문자열 형태로 전달
-                )
-            )
-            update_usage(ai_choice, 1) # AI API 사용량 업데이트
-            check_quota(ai_choice, daily_api_usage[ai_choice])
-
-
-            script = generated_content.get("script", "Generated script is empty.")
-            video_title = generated_content.get("title", f"자동 생성 영상 {datetime.now().strftime('%Y%m%d_%H%M%S')}")
-            video_description = generated_content.get("description", "자동 생성된 영상입니다.")
-            video_tags = generated_content.get("tags", "자동생성,shorts,핫이슈").split(',')
-            auto_comment = generated_content.get("comment", "흥미로운 영상이네요!")
-
-            if not script:
-                logger.error("Generated script is empty. Skipping video generation.")
-                continue
-
-            logger.info(f"Video {i+1} Title: {video_title}")
-
-            # 4-3. ElevenLabs로 음성 생성
-            logger.info("Generating audio with ElevenLabs...")
-            audio_output_path = f"output/audio_{i}.mp3"
-            retry_on_failure(lambda: generate_audio(script, audio_output_path, config.ELEVENLABS_API_KEY, config.ELEVENLABS_VOICE_ID))
-            logger.info(f"Audio generated at {audio_output_path}")
-            update_usage("elevenlabs", len(script)) # 글자 수에 비례하여 사용량 업데이트
-            check_quota("elevenlabs", daily_api_usage["elevenlabs"])
-
-            # 4-4. Pexels에서 배경 영상 다운로드
-            logger.info("Downloading background video from Pexels...")
-            video_query = trending_topic.split(' ')[0] # 키워드에서 첫 단어 사용
-            background_video_path = f"output/bg_video_{i}.mp4"
-            retry_on_failure(lambda: download_background_video(video_query, background_video_path, config.PEXELS_API_KEY))
-            logger.info(f"Background video downloaded to {background_video_path}")
-            update_usage("pexels", 1)
-            check_quota("pexels", daily_api_usage["pexels"])
-
-            # 4-5. 최종 영상 생성 (고양이체.ttf 폰트 사용)
-            logger.info("Creating final video...")
-            final_video_path = f"output/final_video_{i}.mp4"
-            font_path = "/app/fonts/Catfont.ttf" # Dockerfile에서 복사된 경로
-            retry_on_failure(lambda: create_video(background_video_path, audio_output_path, final_video_path, font_path=font_path))
-            logger.info(f"Final video created at {final_video_path}")
-
-            # 4-6. 썸네일 자동 생성
-            logger.info("Generating thumbnail...")
-            thumbnail_path = f"output/thumbnail_{i}.jpg"
-            retry_on_failure(lambda: generate_thumbnail(final_video_path, thumbnail_path, video_title))
-            logger.info(f"Thumbnail created at {thumbnail_path}")
-
-            # 4-7. YouTube에 영상 업로드
-            logger.info("Uploading video to YouTube...")
-            # YouTube API 쿼터 관리
-            check_quota("youtube", daily_api_usage["youtube"])
-            video_id = retry_on_failure(
-                lambda: upload_video(
-                    final_video_path,
-                    video_title,
-                    video_description,
-                    video_tags,
-                    config.YOUTUBE_OAUTH_CREDENTIALS,
-                    thumbnail_path
-                )
-            )
-            update_usage("youtube", 1)
-            logger.info(f"Video uploaded successfully! Video ID: {video_id}")
-            
-            # 4-8. YouTube 댓글 자동 작성
-            if video_id:
-                logger.info("Posting comment to YouTube video...")
-                retry_on_failure(lambda: post_comment(video_id, auto_comment, config.YOUTUBE_OAUTH_CREDENTIALS))
-                logger.info("Comment posted successfully!")
-
-            # 모든 단계 성공 시, 임시 파일 정리 (버킷 사용량 관리)
-            cleanup_old_files(config.GCP_BUCKET_NAME, hours_to_keep=1) # 1시간 지난 파일 정리
-            logger.info(f"Temporary files for video {i+1} cleaned up in Cloud Storage.")
-
-            logger.info(f"✅ Video {i+1} generation and upload completed!")
-            time.sleep(10) # 다음 영상 생성 전 잠시 대기
-            
-        except Exception as e:
-            logger.error(f"❌ Error during video {i+1} processing: {e}", exc_info=True)
-            # 오류 발생 시에도 임시 파일 정리 시도
-            cleanup_old_files(config.GCP_BUCKET_NAME, hours_to_keep=1)
-
-    logger.info("🎉 YouTube Automation Batch Process Finished!")
+    finally:
+        end_time = time.time()
+        duration = end_time - start_time
+        logger.info(f"YouTube Automation Pipeline completed. Total videos uploaded: {video_count}. Total duration: {duration:.2f} seconds.")
+        # 작업 완료 후에도 cleanup_manager는 주기적으로 실행되므로 여기서 추가 정리 필요 없음
 
 if __name__ == "__main__":
-    main_batch_process()
+    main_automation_pipeline()
