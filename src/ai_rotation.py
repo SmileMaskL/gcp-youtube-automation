@@ -19,3 +19,7 @@ class AIRotator:
 
     def get_elevenlabs_key(self) -> str:
         return Config.get_elevenlabs_key()
+
+    def get_ai_manager(self) -> tuple[str, str]:
+        """Returns (api_key, ai_type)"""
+        return self.get_ai_key()
