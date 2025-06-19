@@ -13,4 +13,7 @@ COPY fonts/Catfont.ttf /app/fonts/Catfont.ttf
 
 COPY src /app/src
 
+# PORT 환경 변수 설정 (Cloud Run이 요구하지만, 우리는 사용하지 않음)
+ENV PORT=8080
+
 CMD ["python", "-m", "src.batch_processor"]
