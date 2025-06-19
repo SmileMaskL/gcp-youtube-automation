@@ -1,68 +1,48 @@
-from src.monitoring import init_monitoring
-init_monitoring()  # Sentry 초기화
 import os
 import logging
 from datetime import datetime
-from pathlib import Path
-from dotenv import load_dotenv
+from src.content_rotator import generate_content
+from src.tts_generator import generate_tts
+from src.bg_downloader import download_background
+from src.video_editor import create_video
+from src.youtube_uploader import upload_video
+from src.cleanup_manager import cleanup_temp_files
 
-# 로깅 설정
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def main():
     try:
-        from src.config import Config
-        from src.content_generator import ShortsGenerator
-        from src.tts_generator import text_to_speech
-        from src.bg_downloader import download_background_video
-        from src.video_editor import create_video
-        from src.thumbnail_generator import create_thumbnail
-        from src.youtube_uploader import upload_to_youtube
-
-        # 환경변수 로드
-        load_dotenv()
-        Config.ensure_directories()
-
-        logger.info("=" * 50)
-        logger.info("💰 유튜브 자동화 배치 시스템 시작 💰")
-        logger.info("=" * 50)
-
-        generator = ShortsGenerator()
-        contents = generator.generate_daily_contents()
+        logger.info("💰 유튜브 자동화 시스템 시작")
         
-        for content in contents:
-            try:
-                logger.info(f"📌 주제: {content['title']}")
-
-                # 오디오 생성
-                audio_path = Config.TEMP_DIR / "output_audio.mp3"
-                text_to_speech(content['script'], str(audio_path))
-
-                # 배경 영상 다운로드
-                bg_video = download_background_video(content['video_query'])
-                
-                # 영상 생성
-                output_vid = Config.OUTPUT_DIR / f"final_{datetime.now().strftime('%Y%m%d%H%M%S')}.mp4"
-                create_video(str(bg_video), str(audio_path), str(output_vid))
-
-                # 썸네일 생성
-                thumbnail = Config.OUTPUT_DIR / "thumbnail.jpg"
-                create_thumbnail(content['title'], str(bg_video), str(thumbnail))
-
-                # YouTube 업로드
-                if upload_to_youtube(str(output_vid), content['title']):
-                    logger.info(f"✅ 업로드 완료: {content['title']}")
-
-            except Exception as e:
-                logger.error(f"❌ 콘텐츠 처리 중 오류: {e}", exc_info=True)
-                continue
-
+        # 1. 콘텐츠 생성 (AI 로테이션)
+        content = generate_content()
+        
+        # 2. 음성 생성
+        audio_path = generate_tts(content['script'])
+        
+        # 3. 배경 영상 다운로드
+        video_path = download_background(content['keywords'])
+        
+        # 4. 영상 편집
+        output_path = create_video(
+            video_path=video_path,
+            audio_path=audio_path,
+            text=content['title'],
+            font_path="fonts/Catfont.ttf"
+        )
+        
+        # 5. 유튜브 업로드
+        upload_video(
+            file_path=output_path,
+            title=content['title'],
+            description=content['description'],
+            keywords=",".join(content['keywords'])
+        )
+        
     except Exception as e:
-        logger.error(f"❌ 시스템 전체 오류: {e}", exc_info=True)
-        raise
+        logger.error(f"❌ 오류 발생: {str(e)}")
     finally:
-        from src.cleanup_manager import cleanup_temp_files
         cleanup_temp_files()
 
 if __name__ == "__main__":
