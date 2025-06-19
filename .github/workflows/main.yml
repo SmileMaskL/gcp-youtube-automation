@@ -6,8 +6,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: 'read'
-  id-token: 'write'
+  contents: read
+  id-token: write
 
 jobs:
   produce_shorts:
@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 30
     env:
       GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      GCP_WIF_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
       GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
       ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
 
@@ -38,7 +38,7 @@ jobs:
     - name: Authenticate to Google Cloud
       uses: google-github-actions/auth@v1
       with:
-        workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+        workload_identity_provider: ${{ env.GCP_WIF_PROVIDER }}
         service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
         create_credentials_file: true
 
@@ -46,11 +46,11 @@ jobs:
       run: |
         python -m src.batch_processor
 
-    - name: Upload Artifacts
-      uses: actions/upload-artifact@v3
-      if: always()
+    - name: Upload Output
+      uses: actions/upload-artifact@v4
       with:
-        name: output
+        name: youtube-output
         path: |
           output/
           logs/
+        retention-days: 3
