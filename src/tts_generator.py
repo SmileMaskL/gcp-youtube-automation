@@ -7,41 +7,34 @@ class TTSGenerator:
     def __init__(self, api_key):
         self.api_key = api_key
 
-    def generate_tts(self, text, voice_id):
-        # ElevenLabs API를 사용한 TTS 생성
-        # 구현은 elevenlabs 라이브러리를 사용
-        import elevenlabs
-        audio = elevenlabs.generate(text=text, voice=voice_id, api_key=self.api_key)
-        return audio
-
-def generate_tts(text: str, voice_id: str, output_dir: str = "temp") -> Optional[str]:
-    """ElevenLabs API를 사용해 TTS 생성"""
-    try:
-        api_key = Config.get_elevenlabs_key()
-        url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
+    def generate_tts(text: str, voice_id: str, output_dir: str = "temp") -> Optional[str]:
+        """ElevenLabs API를 사용해 TTS 생성"""
+        try:
+            api_key = Config.get_elevenlabs_key()
+            url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
         
-        headers = {
-            "xi-api-key": api_key,
-            "Content-Type": "application/json"
-        }
-        
-        data = {
-            "text": text,
-            "voice_settings": {
-                "stability": 0.7,
-                "similarity_boost": 0.8
+            headers = {
+                "xi-api-key": api_key,
+                "Content-Type": "application/json"
             }
-        }
         
-        response = requests.post(url, json=data, headers=headers)
-        response.raise_for_status()
+            data = {
+                "text": text,
+                "voice_settings": {
+                    "stability": 0.7,
+                    "similarity_boost": 0.8
+                }
+            }
         
-        os.makedirs(output_dir, exist_ok=True)
-        output_path = os.path.join(output_dir, "tts_audio.mp3")
-        with open(output_path, "wb") as f:
-            f.write(response.content)
+            response = requests.post(url, json=data, headers=headers)
+            response.raise_for_status()
         
-        return output_path
-    except Exception as e:
-        print(f"TTS 생성 오류: {e}")
-        return None
+            os.makedirs(output_dir, exist_ok=True)
+            output_path = os.path.join(output_dir, "tts_audio.mp3")
+            with open(output_path, "wb") as f:
+                f.write(response.content)
+        
+            return output_path
+        except Exception as e:
+            print(f"TTS 생성 오류: {e}")
+            return None
