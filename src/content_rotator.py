@@ -10,12 +10,28 @@ logger = logging.getLogger(__name__)
 
 class ContentGenerator:
     def __init__(self):
-        self.gemini_keys = os.getenv("GEMINI_API_KEY").split(",")
+        # 10개의 Gemini 키 로드 (콤마로 구분)
+        self.gemini_keys = os.getenv("GEMINI_API_KEYS").split(",")
+        # 10개의 OpenAI 키 로드
         self.openai_keys = os.getenv("OPENAI_API_KEYS").split(",")
+        self.current_gemini_key = 0
+        self.current_openai_key = 0
         
+    def rotate_gemini_key(self):
+        self.current_gemini_key = (self.current_gemini_key + 1) % len(self.gemini_keys)
+        return self.gemini_keys[self.current_gemini_key]
+    
+    def rotate_openai_key(self):
+        self.current_openai_key = (self.current_openai_key + 1) % len(self.openai_keys)
+        return self.openai_keys[self.current_openai_key]
+    
     def get_daily_trends(self):
-        """실시간 트렌드 크롤링 (무료 API 사용)"""
-        return ["AI 뉴스", "주식 분석", "테크 리뷰"]
+        """실시간 트렌드 크롤링"""
+        try:
+            # 여기에 실제 트렌드 API 호출 코드
+            return ["AI 기술", "주식 시장", "과학 뉴스"]
+        except:
+            return ["AI 동향", "테크 리뷰", "경제 분석"]
     
     def generate_with_gemini(self, prompt):
         genai.configure(api_key=random.choice(self.gemini_keys))
