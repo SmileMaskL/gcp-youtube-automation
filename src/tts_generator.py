@@ -3,6 +3,17 @@ import requests
 from typing import Optional  # ✅ 추가
 from src.config import Config
 
+class TTSGenerator:
+    def __init__(self, api_key):
+        self.api_key = api_key
+
+    def generate_tts(self, text, voice_id):
+        # ElevenLabs API를 사용한 TTS 생성
+        # 구현은 elevenlabs 라이브러리를 사용
+        import elevenlabs
+        audio = elevenlabs.generate(text=text, voice=voice_id, api_key=self.api_key)
+        return audio
+
 def generate_tts(text: str, voice_id: str, output_dir: str = "temp") -> Optional[str]:
     """ElevenLabs API를 사용해 TTS 생성"""
     try:
