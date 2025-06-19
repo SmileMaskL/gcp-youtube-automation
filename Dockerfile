@@ -27,3 +27,6 @@ COPY .env /app/env.temp
 
 # 기본 명령어 (GitHub Actions에서는 재정의될 수 있음)
 CMD ["python", "-m", "src.batch_processor"]
+
+# 실행 명령어: Flask 앱을 Gunicorn으로 실행
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "src.app:app"]
