@@ -44,3 +44,4 @@ Thumbs.db
 # 예외 (필요한 파일만 포함)
 !assets/default_bg.mp4
 !fonts/Catfont.ttf
+credentials.json
