@@ -1,22 +1,8 @@
 name: YouTube Shorts Automation
 
 on:
-  workflow_dispatch: # 수동 실행 가능
+  workflow_dispatch: # 수동 실행
   schedule:
-    # 한국 시간 기준 (UTC+9)으로 설정합니다.
-    # UTC 0시 = 한국 시간 오전 9시
-    # UTC 18시 = 한국 시간 오전 3시 (다음 날)
-    # UTC 22시 = 한국 시간 오전 7시 (다음 날)
-    # UTC 3시 = 한국 시간 오후 12시
-    # UTC 7시 = 한국 시간 오후 4시
-    # UTC 12시 = 한국 시간 오후 9시
-
-    # cron 표현식 (분 시 일 월 요일)
-    # 0 3 * * * : 매일 UTC 03:00 (한국 시간 12:00 PM)
-    # 0 7 * * * : 매일 UTC 07:00 (한국 시간 16:00 PM)
-    # 0 12 * * * : 매일 UTC 12:00 (한국 시간 21:00 PM)
-    # 0 18 * * * : 매일 UTC 18:00 (한국 시간 다음 날 03:00 AM)
-    # 0 22 * * * : 매일 UTC 22:00 (한국 시간 다음 날 07:00 AM)
     - cron: '0 3 * * *'
     - cron: '0 7 * * *'
     - cron: '0 12 * * *'
@@ -24,53 +10,63 @@ on:
     - cron: '0 22 * * *'
 
 jobs:
-  build-and-run:
+  deploy-and-run-cloud-run-job:
     runs-on: ubuntu-latest
 
     env:
-      OUTPUT_DIR: ./output
-      LOG_DIR: ./logs
-      NUM_VIDEOS_PER_RUN: 1 # 한 번의 스케줄 실행당 생성할 영상 수 (GCP 무료 한도 고려)
+      REGION: us-central1
+      IMAGE_NAME: youtube-automation
+      JOB_NAME: youtube-automation-job
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Docker BuildX
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Docker Hub (Optional: if pushing to Docker Hub)
-        # Docker Hub에 이미지를 푸시할 계획이 없다면 이 단계는 건너뛸 수 있습니다.
-        # GitHub Packages (GHCR)를 사용할 수도 있습니다.
-        # uses: docker/login-action@v3
-        # with:
-        #   username: ${{ secrets.DOCKER_USERNAME }}
-        #   password: ${{ secrets.DOCKER_TOKEN }}
-        run: echo "Skipping Docker Hub login as not pushing to public registry."
-
-
-      - name: Build and run Docker image
-        run: |
-          docker build -t youtube-automation-image .
-          docker run --rm \
-            -e ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }} \
-            -e ELEVENLABS_VOICE_ID=${{ secrets.ELEVENLABS_VOICE_ID }} \
-            -e PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }} \
-            -e YOUTUBE_OAUTH_CREDENTIALS=${{ secrets.YOUTUBE_OAUTH_CREDENTIALS }} \
-            -e OPENAI_KEYS_JSON=${{ secrets.OPENAI_KEYS_JSON }} \
-            -e GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }} \
-            -e GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }} \
-            -e GCP_BUCKET_NAME=${{ secrets.GCP_BUCKET_NAME }} \
-            -e GCP_SERVICE_ACCOUNT_KEY=${{ secrets.GCP_SERVICE_ACCOUNT_KEY }} \
-            -e NEWS_API_KEY=${{ secrets.NEWS_API_KEY }} \
-            -e NUM_VIDEOS_PER_RUN=${{ env.NUM_VIDEOS_PER_RUN }} \
-            -v ${{ github.workspace }}/output:/app/output \
-            -v ${{ github.workspace }}/logs:/app/logs \
-            youtube-automation-image
-
-      - name: Upload logs to artifacts (Optional for debugging)
-        uses: actions/upload-artifact@v4
+      - name: Authenticate with Google Cloud
+        uses: google-github-actions/auth@v2
         with:
-          name: automation-logs-${{ github.run_id }}
-          path: logs/
-          if-no-files-found: ignore # ignore if no logs
+          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+
+      - name: Set up gcloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          install_components: 'beta'
+
+      - name: Configure Docker for GCR
+        run: gcloud auth configure-docker
+
+      - name: Build and push Docker image to GCR
+        run: |
+          docker build -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_NAME }} .
+          docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_NAME }}
+
+      - name: Deploy to Google Cloud Run Job
+        run: |
+          gcloud run jobs deploy ${{ env.JOB_NAME }} \
+            --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_NAME }} \
+            --region ${{ env.REGION }} \
+            --service-account=github-actions-sa@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com \
+            --set-env-vars \
+ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }},\
+ELEVENLABS_VOICE_ID=${{ secrets.ELEVENLABS_VOICE_ID }},\
+PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }},\
+YOUTUBE_OAUTH_CREDENTIALS=${{ secrets.YOUTUBE_OAUTH_CREDENTIALS }},\
+OPENAI_KEYS_JSON=${{ secrets.OPENAI_KEYS_JSON }},\
+GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }},\
+GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }},\
+GCP_BUCKET_NAME=${{ secrets.GCP_BUCKET_NAME }},\
+NEWS_API_KEY=${{ secrets.NEWS_API_KEY }}
+
+      - name: Execute Cloud Run Job
+        run: |
+          gcloud run jobs execute ${{ env.JOB_NAME }} \
+            --region ${{ env.REGION }} \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --wait
+          echo "✅ Cloud Run Job '${{ env.JOB_NAME }}' 실행 완료"
+
+      - name: Cleanup artifacts (optional)
+        run: |
+          rm -rf output/* logs/*
+          echo "🧹 로컬 임시 파일 정리 완료"
