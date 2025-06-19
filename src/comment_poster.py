@@ -1,14 +1,29 @@
+import logging
 from googleapiclient.errors import HttpError
-from src.monitoring import log_system_health
-from src.youtube_uploader import get_authenticated_service # 인증 서비스 재활용
+from src.youtube_uploader import get_authenticated_service # 인증 서비스 재사용
 
-def post_comment(video_id, text_content):
+logger = logging.getLogger(__name__)
+
+def post_comment(video_id: str, comment_text: str, credentials_json_str: str):
     """
-    특정 비디오에 댓글을 포스팅합니다.
+    지정된 YouTube 동영상에 댓글을 게시합니다.
+    Args:
+        video_id (str): 댓글을 게시할 동영상의 ID.
+        comment_text (str): 게시할 댓글 내용.
+        credentials_json_str (str): YouTube OAuth 2.0 클라이언트 ID JSON 문자열.
+    Returns:
+        bool: 댓글 게시 성공 여부.
     """
-    youtube = get_authenticated_service()
+    if not video_id or not comment_text:
+        logger.warning("Video ID or comment text is missing. Skipping comment post.")
+        return False
+
+    logger.info(f"Attempting to post comment to video ID: {video_id}")
 
     try:
+        youtube = get_authenticated_service(credentials_json_str)
+
+        # 댓글 스레드 생성 (최상위 댓글)
         request = youtube.commentThreads().insert(
             part="snippet",
             body={
@@ -16,22 +31,26 @@ def post_comment(video_id, text_content):
                     "videoId": video_id,
                     "topLevelComment": {
                         "snippet": {
-                            "textOriginal": text_content
+                            "textOriginal": comment_text
                         }
                     }
                 }
             }
         )
         response = request.execute()
-        log_system_health(f"댓글이 성공적으로 포스팅되었습니다. 댓글 ID: {response['id']}", level="info")
-        return response
+        
+        logger.info(f"Comment posted successfully to video ID {video_id}: '{comment_text}'")
+        return True
+
     except HttpError as e:
-        # YouTube API 오류 코드에 따라 처리
-        if e.resp.status == 403 and "commentsDisabled" in str(e.content):
-            log_system_health(f"댓글 포스팅 실패: 비디오 '{video_id}'에 댓글이 비활성화되어 있습니다.", level="warning")
+        logger.error(f"HTTP error occurred while posting comment: {e.content.decode()}")
+        if 'commentsDisabled' in e.content.decode():
+            logger.warning(f"Comments are disabled for video ID {video_id}. Cannot post comment.")
+        elif 'quotaExceeded' in e.content.decode():
+            logger.critical("YouTube API Daily Quota Exceeded for comments. Cannot post more comments today.")
         else:
-            log_system_health(f"댓글 포스팅 중 오류 발생: {e.resp.status}, {e.content.decode()}", level="error")
-        raise ValueError(f"댓글 포스팅 실패: {e.content.decode()}")
+            logger.error("Unknown error during comment post. Check YouTube API settings.")
+        return False
     except Exception as e:
-        log_system_health(f"댓글 포스팅 중 예상치 못한 오류 발생: {e}", level="error")
-        raise ValueError(f"댓글 포스팅 실패: {e}")
+        logger.error(f"An unexpected error occurred during comment post: {e}", exc_info=True)
+        return False
