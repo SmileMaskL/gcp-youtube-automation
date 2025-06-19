@@ -7,7 +7,7 @@ class TTSGenerator:
     def __init__(self, api_key):
         self.api_key = api_key
 
-    def generate_tts(text: str, voice_id: str, output_dir: str = "temp") -> Optional[str]:
+    def generate_tts(self, text: str, voice_id: str, output_dir: str = "temp") -> Optional[str]:
         """ElevenLabs API를 사용해 TTS 생성"""
         try:
             api_key = Config.get_elevenlabs_key()
