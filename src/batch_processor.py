@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import sys
+import json
 import logging
 from datetime import datetime
 from google.cloud import secretmanager
@@ -37,7 +38,7 @@ class BatchProcessor:
             project_id = os.getenv('GCP_PROJECT_ID')
             
             secrets = {
-                'OPENAI_API_KEYS': self._get_secret(client, project_id, 'openai-api-keys'),
+                'OPENAI_API_KEYS': json.loads(self._get_secret(client, project_id, 'openai-api-keys')),
                 'GEMINI_API_KEY': self._get_secret(client, project_id, 'gemini-api-key'),
                 'ELEVENLABS_API_KEY': self._get_secret(client, project_id, 'elevenlabs-api-key'),
                 'PEXELS_API_KEY': self._get_secret(client, project_id, 'pexels-api-key'),
@@ -62,8 +63,13 @@ class BatchProcessor:
 
     def _load_fallback_config(self):
         """시크릿 관리자 실패 시 환경 변수 사용"""
+        try:
+            openai_keys = json.loads(os.getenv('OPENAI_API_KEYS', '[]'))
+        except json.JSONDecodeError:
+            openai_keys = os.getenv('OPENAI_API_KEYS', '').split(',')
+            
         return {
-            'OPENAI_API_KEYS': os.getenv('OPENAI_API_KEYS', '').split(','),
+            'OPENAI_API_KEYS': openai_keys,
             'GEMINI_API_KEY': os.getenv('GEMINI_API_KEY'),
             'ELEVENLABS_API_KEY': os.getenv('ELEVENLABS_API_KEY'),
             'PEXELS_API_KEY': os.getenv('PEXELS_API_KEY'),
@@ -78,18 +84,23 @@ class BatchProcessor:
         try:
             logger.info("🎬 콘텐츠 생성 시작")
             
-            # API 키 로테이션 적용
-            current_key = self.ai_rotation.get_next_key()
-            os.environ['OPENAI_API_KEY'] = current_key
+            # 1. AI 로테이션 적용 (GPT-4o 또는 Gemini)
+            current_ai = self.ai_rotation.get_next_ai()
+            if current_ai == 'gemini' and self.config.get('GEMINI_API_KEY'):
+                os.environ['GEMINI_API_KEY'] = self.config['GEMINI_API_KEY']
+                generator = ContentGenerator(ai_type='gemini')
+            else:
+                current_key = self.ai_rotation.get_next_key(self.config['OPENAI_API_KEYS'])
+                os.environ['OPENAI_API_KEY'] = current_key
+                generator = ContentGenerator(ai_type='gpt-4o')
             
-            # 1. 콘텐츠 생성
-            generator = ContentGenerator()
+            # 2. 콘텐츠 생성
             script = generator.generate_script()
             
             if not script or not script.get('script'):
                 raise ValueError("생성된 스크립트가 유효하지 않습니다.")
             
-            # 2. 영상 제작
+            # 3. 영상 제작
             video_creator = VideoCreator()
             video_path = video_creator.create_video(
                 script=script['script'],
@@ -101,7 +112,7 @@ class BatchProcessor:
             if not video_path:
                 raise ValueError("영상 생성 실패")
                 
-            # 3. 유튜브 업로드
+            # 4. 유튜브 업로드
             uploader = YouTubeUploader(self.config['YOUTUBE_CREDENTIALS'])
             upload_result = uploader.upload_video(
                 video_path=video_path,
