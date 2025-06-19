@@ -1,16 +1,9 @@
 name: YouTube Shorts Auto Producer
 
-# 매일 지정된 시간에 5번 실행됩니다. (KST 기준으로 3시, 7시, 12시, 18시, 22시)
 on:
   schedule:
-    # UTC 기준이므로, KST (UTC+9)로 변환 시 아래와 같습니다.
-    # KST 03:00 -> UTC 18:00 (전날)
-    # KST 07:00 -> UTC 22:00 (전날)
-    # KST 12:00 -> UTC 03:00
-    # KST 18:00 -> UTC 09:00
-    # KST 22:00 -> UTC 13:00
-    - cron: '0 18,22,3,9,13 * * *' # UTC 기준
-  workflow_dispatch: # 수동 실행을 위한 트리거
+    - cron: '0 18,22,3,9,13 * * *' # UTC 기준 (KST 3,7,12,18,22시)
+  workflow_dispatch:
 
 permissions:
   contents: 'read'
@@ -19,13 +12,16 @@ permissions:
 jobs:
   produce_shorts:
     runs-on: ubuntu-latest
-    timeout-minutes: 30 # 각 작업은 최대 30분 동안 실행됩니다.
+    timeout-minutes: 30
+    env:
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
 
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v4
       
-    - name: Set up Python 3.11
+    - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.11'
@@ -33,50 +29,33 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y ffmpeg # 비디오 처리를 위한 FFmpeg 설치
+        sudo apt-get install -y ffmpeg
         pip install --upgrade pip
         pip install -r requirements.txt
-        # Google Cloud Storage 라이브러리가 cleanup_manager.py에서 사용될 경우 설치
-        # pip install google-cloud-storage
-      
-    - name: Authenticate to GCP (Workload Identity Federation)
-      id: 'auth'
-      uses: 'google-github-actions/auth@v2'
+
+    - name: Authenticate to GCP
+      uses: google-github-actions/auth@v2
       with:
-        # github secrets에 저장된 서비스 계정 키를 직접 사용하지 않고, Workload Identity Federation을 사용합니다.
-        # GCP_PROJECT_ID, GCP_SERVICE_ACCOUNT, GCP_WORKLOAD_IDENTITY_PROVIDER 설정 필요
         workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
         service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+        create_credentials_file: true
+
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
 
     - name: Run Production Script
       env:
-        GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-        # GitHub Secrets에 있는 키들을 직접 환경 변수로 전달
-        GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEY }}
-        OPENAI_KEYS_JSON: ${{ secrets.OPENAI_KEYS_JSON }}
-        ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
-        ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }} # 음성 ID를 환경 변수로 전달
-        PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
         YOUTUBE_OAUTH_CREDENTIALS: ${{ secrets.YOUTUBE_OAUTH_CREDENTIALS }}
-        GCP_BUCKET_NAME: ${{ secrets.GCP_BUCKET_NAME }} # GCP 버킷 이름을 환경 변수로 전달 (파일 정리용)
-        NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }} # 핫이슈 트렌드용 API 키
       run: |
-        # 실행 전에 logs/ 폴더가 있는지 확인하고 없으면 생성
         mkdir -p logs
         python -m src.batch_processor
-      
+
     - name: Upload Artifacts
-      if: always() # 실패해도 아티팩트 업로드 시도
+      if: always()
       uses: actions/upload-artifact@v4
       with:
         name: youtube-output-${{ github.run_id }}
-        path: temp/ # temp 폴더의 결과물 업로드
-        retention-days: 1 # 아티팩트 보존 기간을 1일로 설정 (저장 공간 절약)
-
-    - name: Upload Logs
-      if: always() # 실패해도 로그 업로드 시도
-      uses: actions/upload-artifact@v4
-      with:
-        name: youtube-logs-${{ github.run_id }}
-        path: logs/ # logs 폴더의 로그 파일 업로드
-        retention-days: 7 # 로그 파일은 7일 보존
+        path: |
+          temp/
+          logs/
+        retention-days: 1
