@@ -1,109 +1,71 @@
-import json
+import logging
 import os
-from datetime import datetime, timedelta
-from google.cloud import storage
-from google.oauth2 import service_account
-from src.monitoring import log_system_health
-from src.config import GCP_PROJECT_ID, GCS_BUCKET_NAME # config에서 GCP 설정 가져오기
+import json
 
-# GCP 서비스 계정 키를 환경 변수에서 로드
-try:
-    service_account_info = json.loads(os.getenv("GCP_SERVICE_ACCOUNT_KEY"))
-    credentials = service_account.Credentials.from_service_account_info(service_account_info)
-except Exception as e:
-    log_system_health(f"Error loading GCP service account key for usage tracker: {e}", level="error")
-    credentials = None # Fallback if key is not found or invalid
+logger = logging.getLogger(__name__)
 
-def get_storage_client():
-    if credentials:
-        return storage.Client(project=GCP_PROJECT_ID, credentials=credentials)
+# 각 API의 최대 허용 사용량 (무료 티어 기준 또는 설정한 한도)
+# 이 값은 프로젝트의 실제 무료 티어 정책에 따라 정확하게 설정해야 합니다.
+# YouTube API는 10,000 할당량/일, ElevenLabs는 10,000자/월 등
+# 여기서는 대략적인 값이며, 실제 API 문서를 참고하세요.
+API_LIMITS = {
+    "gemini": 1000, # 예시: 하루 1000회 요청 (실제 무료 할당량 확인 필요)
+    "openai": 1000, # 예시: 하루 1000회 요청 (실제 무료 할당량 확인 필요)
+    "elevenlabs": 10000, # 예시: 월 10,000자 (이 코드는 글자 수로 계산)
+    "pexels": 1000, # 예시: 하루 1000회 요청
+    "youtube": 9000, # 예시: 하루 9000 할당량 (10,000 중 1000 남겨둠)
+    "news_api": 500, # 예시: 하루 500회 요청
+}
+
+# 현재 API 사용량을 저장하는 임시 변수 (Cloud Run Job이 종료되면 초기화됨)
+# 장기적인 사용량 관리가 필요하면 Cloud Firestore 등 영구 저장소 사용 필요
+current_api_usage = {
+    "gemini": 0,
+    "openai": 0,
+    "elevenlabs": 0,
+    "pexels": 0,
+    "youtube": 0,
+    "news_api": 0
+}
+
+def update_usage(api_name, amount=1):
+    """API 사용량을 업데이트합니다."""
+    if api_name in current_api_usage:
+        current_api_usage[api_name] += amount
+        logger.info(f"API Usage for {api_name}: {current_api_usage[api_name]}")
     else:
-        return storage.Client() # Default credentials (e.g., Cloud Run environment)
+        logger.warning(f"Unknown API name for usage tracking: {api_name}")
 
-def load_usage_data(bucket_name, blob_name="api_usage_data.json"):
-    """GCS에서 API 사용량 데이터를 로드합니다."""
-    client = get_storage_client()
-    bucket = client.bucket(bucket_name)
-    blob = bucket.blob(blob_name)
-    try:
-        data = blob.download_as_text()
-        return json.loads(data)
-    except Exception as e:
-        log_system_health(f"사용량 데이터 로드 실패 또는 파일 없음 ({e}). 새 데이터 생성.", level="warning")
-        return {}
+def get_current_usage(api_name):
+    """현재 API 사용량을 반환합니다."""
+    return current_api_usage.get(api_name, 0)
 
-def save_usage_data(usage_data, bucket_name, blob_name="api_usage_data.json"):
-    """API 사용량 데이터를 GCS에 저장합니다."""
-    client = get_storage_client()
-    bucket = client.bucket(bucket_name)
-    blob = bucket.blob(blob_name)
-    try:
-        blob.upload_from_string(json.dumps(usage_data))
-        log_system_health("API 사용량 데이터가 GCS에 성공적으로 저장되었습니다.", level="info")
-    except Exception as e:
-        log_system_health(f"API 사용량 데이터 저장 실패: {e}", level="error")
+def get_max_limit(api_name):
+    """API의 최대 허용 한도를 반환합니다."""
+    return API_LIMITS.get(api_name, float('inf')) # 설정되지 않은 API는 무한대로 간주
 
-class APIUsageTracker:
-    def __init__(self, bucket_name=GCS_BUCKET_NAME, blob_name="api_usage_data.json"):
-        self.bucket_name = bucket_name
-        self.blob_name = blob_name
-        self.usage_data = self.load_data()
-        self._initialize_daily_data()
+def check_quota(api_name, current_usage=None):
+    """
+    API 쿼터를 확인하고, 한도에 근접하면 경고를 출력합니다.
+    current_usage: 현재 API 사용량 (없으면 전역 current_api_usage 참조)
+    """
+    if current_usage is None:
+        current_usage = get_current_usage(api_name)
 
-    def load_data(self):
-        return load_usage_data(self.bucket_name, self.blob_name)
+    max_limit = get_max_limit(api_name)
+    if max_limit == float('inf'):
+        return # 한도가 설정되지 않은 API는 체크하지 않음
 
-    def save_data(self):
-        save_usage_data(self.usage_data, self.bucket_name, self.blob_name)
-
-    def _initialize_daily_data(self):
-        """매일 자정에 사용량 데이터를 초기화합니다."""
-        today_str = datetime.now().strftime("%Y-%m-%d")
-        if "last_reset_date" not in self.usage_data or self.usage_data["last_reset_date"] != today_str:
-            self.usage_data["daily_counts"] = {
-                "openai": 0,
-                "gemini": 0,
-                "elevenlabs_chars": 0,
-                "pexels": 0
-            }
-            self.usage_data["last_reset_date"] = today_str
-            log_system_health(f"API 일일 사용량 데이터가 {today_str}로 초기화되었습니다.", level="info")
-            self.save_data() # 초기화 후 즉시 저장
-
-    def record_usage(self, api_name, count=1):
-        """API 사용량을 기록합니다."""
-        self._initialize_daily_data() # 매 호출 시점에도 날짜 확인 및 초기화
-        if api_name in self.usage_data["daily_counts"]:
-            self.usage_data["daily_counts"][api_name] += count
-            log_system_health(f"API 사용량 기록: {api_name} +{count}. 총: {self.usage_data['daily_counts'][api_name]}", level="info")
-        else:
-            self.usage_data["daily_counts"][api_name] = count
-            log_system_health(f"새로운 API '{api_name}' 사용량 기록: {count}", level="info")
-        self.save_data()
-
-    def get_usage(self, api_name):
-        """특정 API의 현재 사용량을 반환합니다."""
-        self._initialize_daily_data()
-        return self.usage_data["daily_counts"].get(api_name, 0)
-
-    def check_limit(self, api_name, current_usage, max_limit):
-        """API 사용 한도를 확인하고 초과 여부를 반환합니다."""
-        if current_usage >= max_limit:
-            log_system_health(f"경고: {api_name} API 일일 사용 한도({max_limit})를 초과했습니다. 현재: {current_usage}", level="warning")
-            return False
-        return True
-
-    def reset_daily_usage(self):
-        """수동으로 일일 사용량을 초기화합니다."""
-        self.usage_data["daily_counts"] = {
-            "openai": 0,
-            "gemini": 0,
-            "elevenlabs_chars": 0,
-            "pexels": 0
-        }
-        self.usage_data["last_reset_date"] = datetime.now().strftime("%Y-%m-%d")
-        self.save_data()
-        log_system_health("API 일일 사용량이 수동으로 초기화되었습니다.", level="info")
-
-# APIUsageTracker 인스턴스 생성
-api_usage_tracker = APIUsageTracker()
+    # 80% 이상 사용 시 경고
+    if current_usage / max_limit > 0.8:
+        logger.warning(f"🚨 ALERT: {api_name} quota is at {current_usage / max_limit:.2%} ({current_usage}/{max_limit}). Consider reducing usage or preparing for new keys.")
+    
+    # 95% 이상 사용 시 심각 경고
+    if current_usage / max_limit > 0.95:
+        logger.error(f"🔥 CRITICAL ALERT: {api_name} quota is nearly exhausted at {current_usage / max_limit:.2%} ({current_usage}/{max_limit}). Operations may fail soon.")
+        
+    # 한도를 초과했을 경우
+    if current_usage >= max_limit:
+        logger.critical(f"🚫 QUOTA EXCEEDED: {api_name} quota has been fully consumed ({current_usage}/{max_limit}). All subsequent requests will likely fail.")
+        # 이 시점에서 해당 API를 사용하는 작업을 중단하거나 다른 키로 전환하는 로직이 필요
+        # (로테이션 로직은 content_generator.py에서 처리)
