@@ -1,15 +1,17 @@
 import time
-from src.config import Config
+import logging
+from typing import Callable
 
-def retry_on_failure(max_retries=3):
-    def decorator(func):
+def retry(max_attempts=3, delay=1):
+    def decorator(func: Callable):
         def wrapper(*args, **kwargs):
-            for attempt in range(max_retries):
+            for attempt in range(max_attempts):
                 try:
                     return func(*args, **kwargs)
                 except Exception as e:
-                    if attempt == max_retries - 1:
+                    if attempt == max_attempts - 1:
                         raise
-                    time.sleep(2 ** attempt)
+                    logging.warning(f"재시도 중... ({attempt + 1}/{max_attempts})")
+                    time.sleep(delay * (attempt + 1))
         return wrapper
     return decorator
