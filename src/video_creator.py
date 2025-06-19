@@ -1,95 +1,138 @@
+# src/video_creator.py
 import os
 import logging
-from moviepy.editor import VideoFileClip, AudioFileClip, CompositeAudioClip, concatenate_videoclips, TextClip
-from moviepy.video.tools.subtitles import SubtitlesClip
-from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
+from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips
+from src.utils import download_from_gcs, upload_to_gcs, delete_gcs_file
 
 logger = logging.getLogger(__name__)
 
-def create_video(
-    background_video_path: str,
-    audio_path: str,
-    output_video_path: str,
-    font_path: str = "/app/fonts/Catfont.ttf", # Dockerfile에서 복사된 폰트 경로
-    target_resolution=(1080, 1920) # YouTube Shorts 세로 비율 (9:16)
-):
+def create_video_from_frames(video_gcs_path: str, audio_gcs_path: str, output_path: str, gcp_bucket_name: str):
     """
-    배경 영상과 음성을 결합하여 최종 영상을 생성합니다.
+    GCS에 저장된 배경 영상과 오디오를 결합하여 최종 영상을 생성합니다.
+    
     Args:
-        background_video_path (str): 배경 비디오 파일 경로.
-        audio_path (str): 음성 파일 경로.
-        output_video_path (str): 최종 비디오를 저장할 경로.
-        font_path (str): 자막에 사용할 폰트 파일 경로 (고양이체.ttf).
-        target_resolution (tuple): 최종 영상 해상도 (너비, 높이).
+        video_gcs_path (str): GCS에 저장된 배경 영상 파일의 경로.
+        audio_gcs_path (str): GCS에 저장된 오디오 파일의 경로.
+        output_path (str): 생성될 최종 영상 파일의 로컬 경로.
+        gcp_bucket_name (str): GCP 버킷 이름.
+        
+    Returns:
+        bool: 영상 생성 성공 시 True, 실패 시 False.
     """
-    logger.info(f"Creating video: BG={background_video_path}, Audio={audio_path}, Output={output_video_path}")
+    video_local_path = f"/tmp/{os.path.basename(video_gcs_path)}"
+    audio_local_path = f"/tmp/{os.path.basename(audio_gcs_path)}"
 
     try:
-        # 배경 비디오 로드
-        bg_clip = VideoFileClip(background_video_path)
-        logger.info(f"Background video loaded. Duration: {bg_clip.duration:.2f}s")
+        # GCS에서 영상 및 오디오 파일 다운로드
+        logger.info(f"Downloading video from GCS: {video_gcs_path} to {video_local_path}")
+        if not download_from_gcs(gcp_bucket_name, video_gcs_path, video_local_path):
+            logger.error("Failed to download background video from GCS.")
+            return False
+            
+        logger.info(f"Downloading audio from GCS: {audio_gcs_path} to {audio_local_path}")
+        if not download_from_gcs(gcp_bucket_name, audio_gcs_path, audio_local_path):
+            logger.error("Failed to download audio file from GCS.")
+            # 실패하더라도 이미 다운로드된 비디오 파일 삭제
+            if os.path.exists(video_local_path):
+                os.remove(video_local_path)
+            return False
 
-        # 오디오 클립 로드
-        audio_clip = AudioFileClip(audio_path)
-        logger.info(f"Audio clip loaded. Duration: {audio_clip.duration:.2f}s")
+        logger.info(f"Loading video from: {video_local_path}")
+        video_clip = VideoFileClip(video_local_path)
+        logger.info(f"Loading audio from: {audio_local_path}")
+        audio_clip = AudioFileClip(audio_local_path)
 
         # 오디오 길이에 맞춰 비디오 클립 자르기 또는 반복
-        if audio_clip.duration < bg_clip.duration:
-            bg_clip = bg_clip.subclip(0, audio_clip.duration)
-            logger.info(f"Background video subclipped to audio duration: {bg_clip.duration:.2f}s")
-        elif audio_clip.duration > bg_clip.duration:
-            # 비디오가 오디오보다 짧으면, 비디오를 반복하여 오디오 길이에 맞춤
-            num_repeats = int(audio_clip.duration / bg_clip.duration) + 1
-            bg_clip = concatenate_videoclips([bg_clip] * num_repeats).subclip(0, audio_clip.duration)
-            logger.info(f"Background video repeated to match audio duration: {bg_clip.duration:.2f}s")
+        if audio_clip.duration > video_clip.duration:
+            # 오디오가 비디오보다 길면 비디오를 반복하여 늘립니다.
+            num_repeats = int(audio_clip.duration / video_clip.duration) + 1
+            video_clip = concatenate_videoclips([video_clip] * num_repeats)
+            logger.info(f"Video clip repeated to match audio duration. New video duration: {video_clip.duration:.2f}s")
         
-        # 비디오 해상도 조정 (YouTube Shorts 권장 세로 비율 9:16)
-        # 1080x1920 (FHD 세로)
-        # 현재 비디오의 종횡비를 확인하고, 필요에 따라 크기 조정 또는 크롭
-        current_aspect_ratio = bg_clip.w / bg_clip.h
-        target_aspect_ratio = target_resolution[0] / target_resolution[1] # 1080/1920 = 0.5625
+        # 비디오 클립을 오디오 길이에 맞춰 자릅니다.
+        final_video_clip = video_clip.set_audio(audio_clip).set_duration(audio_clip.duration)
+        logger.info(f"Final video duration set to audio duration: {final_video_clip.duration:.2f}s")
+        
+        # 출력 디렉토리 생성
+        output_dir = os.path.dirname(output_path)
+        if output_dir and not os.path.exists(output_dir):
+            os.makedirs(output_dir, exist_ok=True)
+            logger.info(f"Created output directory: {output_dir}")
 
-        if current_aspect_ratio != target_aspect_ratio:
-            logger.info(f"Resizing/Cropping background video from {bg_clip.size} to {target_resolution} for Shorts format.")
-            bg_clip = bg_clip.fx(vfx.resize, newsize=target_resolution) # 새 해상도로 강제 조정
-
-        # 최종 영상의 오디오 설정 (배경 영상 오디오는 제거하고 새로운 음성 클립 사용)
-        final_clip = bg_clip.set_audio(audio_clip)
-
-        # 자막 추가 (선택 사항 - 스크립트를 기반으로)
-        # 자막 생성 로직은 복잡하므로 여기서는 간단히 텍스트 오버레이 예시만
-        # 실제 자막은 스크립트의 타임스탬프를 기반으로 해야 함
-        # if script_text:
-        #     # 스크립트 텍스트를 기반으로 자막 생성 로직 필요 (예: 음성-텍스트 동기화 라이브러리 사용)
-        #     # 여기서는 간단히 영상 중앙에 고정 텍스트 오버레이 예시
-        #     text_clip = TextClip("안녕하세요! 고양이체입니다.", fontsize=70, color='white', font=font_path,
-        #                          method='caption', size=(final_clip.w*0.8, None))
-        #     text_clip = text_clip.set_duration(final_clip.duration).set_pos('center')
-        #     final_clip = CompositeVideoClip([final_clip, text_clip])
-
-        # 출력 디렉토리 확인 및 생성
-        output_dir = os.path.dirname(output_video_path)
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-
-        # 최종 영상 저장
-        final_clip.write_videofile(
-            output_video_path,
-            codec="libx264", # 비디오 코덱
-            audio_codec="aac", # 오디오 코덱
-            fps=24, # 프레임 속도 (원본 유지 또는 24, 30 등)
-            preset="medium", # 압축 설정 (파일 크기와 품질 조절)
-            threads=os.cpu_count() or 2 # 사용 가능한 CPU 코어 수 활용
+        logger.info(f"Writing final video to: {output_path}")
+        final_video_clip.write_videofile(
+            output_path,
+            codec="libx264",
+            audio_codec="aac",
+            fps=24, # 프레임 속도 설정 (원하는 값으로 조정 가능)
+            preset="fast", # 인코딩 속도 (ultrafast, superfast, fast, medium, slow, slower, veryslow)
+            threads=os.cpu_count() or 1, # 사용 가능한 CPU 코어 수 활용
+            logger=None # moviepy 로그를 직접 처리하지 않음
         )
-        logger.info(f"Video successfully created and saved to {output_video_path}")
+        logger.info(f"Video successfully created and saved to {output_path}")
+        return True
 
     except Exception as e:
-        logger.error(f"Failed to create video: {e}", exc_info=True)
-        raise
+        logger.error(f"Error creating video: {e}", exc_info=True)
+        return False
     finally:
-        if 'bg_clip' in locals() and bg_clip:
-            bg_clip.close()
-        if 'audio_clip' in locals() and audio_clip:
-            audio_clip.close()
-        if 'final_clip' in locals() and final_clip:
-            final_clip.close()
+        # 다운로드한 임시 파일 삭제
+        if os.path.exists(video_local_path):
+            os.remove(video_local_path)
+            logger.info(f"Removed temporary video file: {video_local_path}")
+        if os.path.exists(audio_local_path):
+            os.remove(audio_local_path)
+            logger.info(f"Removed temporary audio file: {audio_local_path}")
+        
+        # GCS에 업로드된 원본 파일 삭제 (무료 할당량 관리를 위해)
+        delete_gcs_file(gcp_bucket_name, video_gcs_path)
+        delete_gcs_file(gcp_bucket_name, audio_gcs_path)
+
+# 테스트용 코드
+if __name__ == "__main__":
+    from dotenv import load_dotenv
+    from src.config import setup_logging
+    from src.utils import upload_to_gcs, download_from_gcs, delete_gcs_file
+    
+    load_dotenv()
+    setup_logging()
+
+    # 이 테스트는 실제 GCS 버킷과 유효한 mp4, mp3 파일이 필요합니다.
+    # 테스트용 더미 파일 생성 (실제 파일이 아님)
+    # import tempfile
+    # temp_video_file = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False)
+    # temp_audio_file = tempfile.NamedTemporaryFile(suffix=".mp3", delete=False)
+    # print(f"Created dummy files: {temp_video_file.name}, {temp_audio_file.name}")
+    # temp_video_file.close()
+    # temp_audio_file.close()
+    
+    # 실제 테스트를 위해서는 실제 비디오/오디오 파일을 사용하거나,
+    # 테스트용 작은 비디오/오디오 파일을 만들어 GCS에 업로드해야 합니다.
+    
+    # 예시 (실제 파일을 가정):
+    # test_bucket = os.environ.get("GCP_BUCKET_NAME")
+    # if not test_bucket:
+    #     print("Set GCP_BUCKET_NAME environment variable for test.")
+    # else:
+    #     # GCS에 미리 업로드된 테스트 파일 사용 예시
+    #     test_video_gcs = "test_data/sample_video.mp4"
+    #     test_audio_gcs = "test_data/sample_audio.mp3"
+    #     test_output_path = "output/test_created_video.mp4"
+        
+    #     # 로컬에 테스트용 더미 파일 생성 및 GCS에 업로드하는 로직 (실제 테스트용)
+    #     # ... (여기서 샘플 영상과 오디오를 생성하거나 다운로드하여 GCS에 업로드)
+    #     # Example: Assume a sample.mp4 and sample.mp3 exist locally for initial upload
+    #     # upload_to_gcs(test_bucket, "sample.mp4", test_video_gcs)
+    #     # upload_to_gcs(test_bucket, "sample.mp3", test_audio_gcs)
+        
+    #     if create_video_from_frames(test_video_gcs, test_audio_gcs, test_output_path, test_bucket):
+    #         print(f"Test video created successfully at {test_output_path}")
+    #     else:
+    #         print("Test video creation failed.")
+            
+    #     # 테스트 후 GCS의 임시 파일 삭제 (선택 사항)
+    #     # delete_gcs_file(test_bucket, test_video_gcs)
+    #     # delete_gcs_file(test_bucket, test_audio_gcs)
+    
+    print("\nNote: This test requires sample video and audio files to be available/uploaded to GCS.")
+    print("Please manually provide or generate small test media files for thorough testing.")
