@@ -5,6 +5,10 @@ on:
     - cron: '0 3,7,12,18,22 * * *'  # 하루 5회 실행 (KST 기준)
   workflow_dispatch:
 
+permissions:
+  contents: 'read'
+  id-token: 'write'
+
 jobs:
   produce_shorts:
     runs-on: ubuntu-latest
