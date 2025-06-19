@@ -2,18 +2,18 @@ import logging
 import random
 import google.generativeai as genai
 from openai import OpenAI
-from src.ai_rotation import AIRotator # 수정: ai_manager 사용
+from src.ai_rotation import AIRotator # 수정: AIRotator() 사용
 from src.trend_api import get_trending_topics # 새로 추가
 
 logger = logging.getLogger(__name__)
 
 class ContentGenerator:
     def __init__(self):
-        # AI 모델은 ai_manager에서 동적으로 가져옵니다.
+        # AI 모델은 AIRotator()에서 동적으로 가져옵니다.
         pass
 
     def _generate_content_with_gemini(self, topic: str) -> dict:
-        model_name = ai_manager.get_next_gemini_model() # 수정: AI 모델 가져오기
+        model_name = AIRotator.get_next_gemini_model() # 수정: AI 모델 가져오기
         model = genai.GenerativeModel(model_name)
         
         prompt = f"""
@@ -58,7 +58,7 @@ class ContentGenerator:
             return None
 
     def _generate_content_with_openai(self, topic: str) -> dict:
-        client = ai_manager.get_next_openai_client() # 수정: AI 모델 가져오기
+        client = AIRotator.get_next_openai_client() # 수정: AI 모델 가져오기
         
         prompt = f"""
         You are a YouTube Shorts content creation expert. Generate a script, title, description, and video background keywords suitable for a 60-second Shorts video on the following topic:
@@ -122,7 +122,7 @@ class ContentGenerator:
             logger.warning(f"핫이슈 트렌드를 가져오지 못하여 대체 주제 '{topic}' 사용.")
 
         for _ in range(3): # 최대 3번 시도
-            selected_model = ai_manager.get_llm_model() # AI 모델 로테이션
+            selected_model = AIRotator.get_llm_model() # AI 모델 로테이션
             logger.info(f"콘텐츠 생성을 위해 선택된 AI 모델: {selected_model}")
 
             if selected_model == "gemini":
