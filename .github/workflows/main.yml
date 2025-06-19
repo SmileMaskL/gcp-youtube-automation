@@ -1,8 +1,12 @@
 name: YouTube Shorts Automation
 on:
   schedule:
-    - cron: '0 3,7,12,18,22 * * *'
+    - cron: '0 3,7,12,18,22 * * *'  # 매일 5회 실행
   workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
 
 jobs:
   generate-and-upload:
@@ -18,18 +22,20 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
     - name: Set up Python 3.11
       uses: actions/setup-python@v4
       with:
         python-version: '3.11'
 
-    - name: Install dependencies
+    - name: Install dependencies (캐시 무효화)
       run: |
-        pip cache purge  # 캐시 강제 삭제
+        pip cache purge  # 캐시 강제 초기화
+        pip install --upgrade pip
         pip install -r requirements.txt
-        sudo apt-get install -y ffmpeg
-        pip install -r requirements.txt
+        sudo apt-get update
         sudo apt-get install -y ffmpeg
 
     - name: Set up Google Cloud
@@ -37,6 +43,9 @@ jobs:
       with:
         workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
         service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+    - name: Set up gcloud CLI
+      uses: google-github-actions/setup-gcloud@v1
 
     - name: Run Automation
       env:
