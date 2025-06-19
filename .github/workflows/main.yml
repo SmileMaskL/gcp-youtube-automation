@@ -16,7 +16,7 @@ jobs:
     env:
       REGION: us-central1
       IMAGE_NAME: youtube-automation
-      JOB_NAME: youtube-automation-job
+      JOB_NAME: gcp-youtube-automation-job  # ✅ 이 이름으로 고정
 
     steps:
       - name: Checkout code
@@ -41,7 +41,7 @@ jobs:
           docker build -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_NAME }} .
           docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_NAME }}
 
-      - name: Deploy to Google Cloud Run Job
+      - name: Deploy to Cloud Run Job (자동화용)
         run: |
           gcloud run jobs deploy ${{ env.JOB_NAME }} \
             --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_NAME }} \
@@ -58,7 +58,7 @@ GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }},\
 GCP_BUCKET_NAME=${{ secrets.GCP_BUCKET_NAME }},\
 NEWS_API_KEY=${{ secrets.NEWS_API_KEY }}
 
-      - name: Execute Cloud Run Job
+      - name: Execute Cloud Run Job (자동 실행)
         run: |
           gcloud run jobs execute ${{ env.JOB_NAME }} \
             --region ${{ env.REGION }} \
