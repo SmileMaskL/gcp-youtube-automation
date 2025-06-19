@@ -1,7 +1,7 @@
 import logging
 from src.ai_rotation import ai_manager
 from src.content_generator import ContentGenerator
-from src.video_creator import create_video
+from src.video_creator import VideoCreator
 from src.youtube_uploader import YouTubeUploader
 from src.config import Config
 
@@ -23,7 +23,7 @@ def main():
         
         # 2. 영상 생성
         logger.info("영상 생성 중")
-        video_path = create_video(
+        creator = VideoCreator(
             script=script,
             font_path="fonts/Catfont.ttf",
             voice_id=os.getenv("ELEVENLABS_VOICE_ID", "uyVNoMrnUku1dZyVEXwD")  # 안나 킴 목소리
