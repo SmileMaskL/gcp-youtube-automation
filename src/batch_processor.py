@@ -10,6 +10,7 @@ from src.youtube_uploader import YouTubeUploader
 from src.error_handler import ErrorHandler
 from src.monitoring import log_system_health
 from src.usage_tracker import UsageTracker
+from src.ai_rotation import AIRotation  # API 키 로테이션 추가
 
 # 로깅 설정
 logging.basicConfig(
@@ -26,6 +27,7 @@ class BatchProcessor:
     def __init__(self):
         self.error_handler = ErrorHandler()
         self.usage_tracker = UsageTracker()
+        self.ai_rotation = AIRotation()  # API 키 로테이션 초기화
         self.config = self._load_config()
         
     def _load_config(self):
@@ -76,6 +78,10 @@ class BatchProcessor:
         try:
             logger.info("🎬 콘텐츠 생성 시작")
             
+            # API 키 로테이션 적용
+            current_key = self.ai_rotation.get_next_key()
+            os.environ['OPENAI_API_KEY'] = current_key
+            
             # 1. 콘텐츠 생성
             generator = ContentGenerator()
             script = generator.generate_script()
@@ -92,12 +98,15 @@ class BatchProcessor:
                 font_path=os.getenv('FONT_PATH', './fonts/Catfont.ttf')
             )
             
+            if not video_path:
+                raise ValueError("영상 생성 실패")
+                
             # 3. 유튜브 업로드
             uploader = YouTubeUploader(self.config['YOUTUBE_CREDENTIALS'])
             upload_result = uploader.upload_video(
                 video_path=video_path,
-                title=script['topic'][:100],  # 제목 100자 제한
-                description=script['script'][:5000]  # 설명 5000자 제한
+                title=script['topic'][:100],
+                description=script['script'][:5000]
             )
             
             logger.info(f"✅ 업로드 성공: {upload_result['video_id']}")
