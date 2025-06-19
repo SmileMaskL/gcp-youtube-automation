@@ -1,50 +1,40 @@
 import logging
-from datetime import datetime
-from src.ai_rotation import AIRotator
-from src.content_generator import ContentGenerator
-from src.video_creator import VideoCreator
+from src.ai_rotation import ai_manager
+from src.content_generator import generate_content
+from src.video_creator import create_video
 from src.youtube_uploader import YouTubeUploader
-from src.usage_tracker import UsageTracker
+from src.config import Config
 
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    filename='logs/youtube_automation.log'
+    filename='logs/youtube_shorts.log'
 )
+logger = logging.getLogger(__name__)
 
 def main():
     try:
-        # 1. API 키 로테이션 설정
-        ai_rotator = AIRotator()
-        api_key, ai_type = ai_rotator.get_ai_key()
+        # 1. 콘텐츠 생성
+        logger.info("Starting content generation")
+        topic, script = generate_content()
         
-        # 2. 콘텐츠 생성
-        content_gen = ContentGenerator(api_key, ai_type)
-        topic = content_gen.get_daily_topic()
-        script = content_gen.generate_script(topic)
+        # 2. 영상 생성
+        logger.info("Creating video")
+        video_path = create_video(script, "fonts/Catfont.ttf")
         
-        # 3. 영상 제작
-        video_creator = VideoCreator(
-            script=script,
-            voice_id=os.getenv('ELEVENLABS_VOICE_ID'),
-            font_path='fonts/Catfont.ttf'
-        )
-        video_path = video_creator.create_video()
-        
-        # 4. 유튜브 업로드
-        uploader = YouTubeUploader(Config.get_youtube_creds())
-        uploader.upload_video(
-            video_path,
-            title=f"{topic} 🚀 최신 트렌드",
-            description=f"{topic}에 관한 최신 정보입니다. #shorts #트렌드"
+        # 3. 유튜브 업로드
+        logger.info("Uploading to YouTube")
+        creds = Config.get_youtube_creds()
+        uploader = YouTubeUploader(creds)
+        response = uploader.upload_video(
+            file_path=video_path,
+            title=f"{topic} #shorts",
+            description=f"자동 생성된 Shorts 영상입니다. {topic}에 관한 내용입니다."
         )
         
-        # 5. 사용량 추적
-        tracker = UsageTracker(os.getenv('GCP_BUCKET_NAME'))
-        tracker.record_usage('youtube_uploads')
-        
+        logger.info(f"Upload successful! Video ID: {response.get('id')}")
     except Exception as e:
-        logging.error(f"배치 처리 실패: {str(e)}")
+        logger.error(f"Error in batch processing: {str(e)}")
         raise
 
 if __name__ == "__main__":
