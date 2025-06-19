@@ -56,3 +56,31 @@ class OpenAIClient:
         except Exception as e:
             print(f"OpenAI API error: {e}")
             return None
+
+def _handle_rate_limit(self, e):
+    """API Rate Limit 발생 시 대기 시간 계산"""
+    import time
+    wait_time = 60  # 기본 60초 대기
+    if 'rate limit' in str(e).lower():
+        print(f"Rate limit hit. Waiting for {wait_time} seconds...")
+        time.sleep(wait_time)
+        return True
+    return False
+
+def generate_content(self, prompt, model="gpt-4o", max_retries=3):
+    client = self.get_client()
+    for attempt in range(max_retries):
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=1500,
+                temperature=0.7
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            if not self._handle_rate_limit(e):
+                print(f"Attempt {attempt + 1} failed: {e}")
+                if attempt == max_retries - 1:
+                    raise
+                time.sleep(2 ** attempt)  # 지수 백오프
