@@ -1,17 +1,30 @@
-import time
 import logging
-from typing import Callable
+from google.cloud import logging as cloud_logging
 
-def retry(max_attempts=3, delay=1):
-    def decorator(func: Callable):
-        def wrapper(*args, **kwargs):
-            for attempt in range(max_attempts):
-                try:
-                    return func(*args, **kwargs)
-                except Exception as e:
-                    if attempt == max_attempts - 1:
-                        raise
-                    logging.warning(f"재시도 중... ({attempt + 1}/{max_attempts})")
-                    time.sleep(delay * (attempt + 1))
-        return wrapper
-    return decorator
+def setup_logging():
+    client = cloud_logging.Client()
+    client.setup_logging()
+    
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.INFO)
+    return logger
+
+logger = setup_logging()
+
+def log_error(error_message, context=None):
+    error_data = {
+        "message": error_message,
+        "context": context or {},
+        "timestamp": datetime.now().isoformat()
+    }
+    
+    # Cloud Logging에 기록
+    logger.error(error_message, extra=error_data)
+    
+    # Firestore에 에러 기록 (선택적)
+    try:
+        from google.cloud import firestore
+        db = firestore.Client()
+        db.collection("errors").add(error_data)
+    except:
+        pass
