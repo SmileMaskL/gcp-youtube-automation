@@ -1,7 +1,7 @@
-name: YouTube Shorts Automation
+name: YouTube Automation Pipeline
 
 on:
-  workflow_dispatch: # 수동 실행
+  workflow_dispatch:
   schedule:
     - cron: '0 3 * * *'
     - cron: '0 7 * * *'
@@ -10,63 +10,55 @@ on:
     - cron: '0 22 * * *'
 
 jobs:
-  deploy-and-run-cloud-run-job:
+  build-deploy-execute:
     runs-on: ubuntu-latest
-
-    env:
-      REGION: us-central1
-      IMAGE_NAME: youtube-automation
-      JOB_NAME: gcp-youtube-automation-job  # ✅ 이 이름으로 고정
+    permissions:
+      contents: 'read'
+      id-token: 'write'
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Authenticate with Google Cloud
-        uses: google-github-actions/auth@v2
+      - name: Setup GCP Auth
+        uses: google-github-actions/auth@v1
         with:
           credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
 
-      - name: Set up gcloud CLI
-        uses: google-github-actions/setup-gcloud@v2
-        with:
-          project_id: ${{ secrets.GCP_PROJECT_ID }}
-          install_components: 'beta'
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
 
-      - name: Configure Docker for GCR
+      - name: Configure Docker
         run: gcloud auth configure-docker
 
-      - name: Build and push Docker image to GCR
-        run: |
-          docker build -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_NAME }} .
-          docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_NAME }}
+      - name: Build Docker image
+        run: |-
+          docker build -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/youtube-automation:$GITHUB_SHA \
+          --build-arg ENVIRONMENT=production .
 
-      - name: Deploy to Cloud Run Job (자동화용)
-        run: |
-          gcloud run jobs deploy ${{ env.JOB_NAME }} \
-            --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_NAME }} \
-            --region ${{ env.REGION }} \
-            --service-account=github-actions-sa@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com \
-            --set-env-vars \
-ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }},\
-ELEVENLABS_VOICE_ID=${{ secrets.ELEVENLABS_VOICE_ID }},\
-PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }},\
-YOUTUBE_OAUTH_CREDENTIALS=${{ secrets.YOUTUBE_OAUTH_CREDENTIALS }},\
-OPENAI_KEYS_JSON=${{ secrets.OPENAI_KEYS_JSON }},\
-GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }},\
-GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }},\
-GCP_BUCKET_NAME=${{ secrets.GCP_BUCKET_NAME }},\
-NEWS_API_KEY=${{ secrets.NEWS_API_KEY }}
+      - name: Push Docker image
+        run: docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/youtube-automation:$GITHUB_SHA
 
-      - name: Execute Cloud Run Job (자동 실행)
-        run: |
-          gcloud run jobs execute ${{ env.JOB_NAME }} \
-            --region ${{ env.REGION }} \
-            --project=${{ secrets.GCP_PROJECT_ID }} \
+      - name: Deploy Cloud Run Job
+        run: |-
+          gcloud run jobs deploy youtube-automation-job \
+            --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/youtube-automation:$GITHUB_SHA \
+            --region us-central1 \
+            --set-env-vars "ENVIRONMENT=production" \
+            --set-env-vars "GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}" \
+            --set-env-vars "GCP_BUCKET_NAME=${{ secrets.GCP_BUCKET_NAME }}" \
+            --set-env-vars "ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }}" \
+            --set-env-vars "ELEVENLABS_VOICE_ID=${{ secrets.ELEVENLABS_VOICE_ID }}" \
+            --set-env-vars "PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }}" \
+            --set-env-vars "YOUTUBE_OAUTH_CREDENTIALS=${{ secrets.YOUTUBE_OAUTH_CREDENTIALS }}" \
+            --set-env-vars "OPENAI_KEYS_JSON=${{ secrets.OPENAI_KEYS_JSON }}" \
+            --set-env-vars "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" \
+            --set-env-vars "NEWS_API_KEY=${{ secrets.NEWS_API_KEY }}" \
+            --max-retries 0 \
+            --task-timeout 3600s
+
+      - name: Execute Job
+        run: |-
+          gcloud run jobs execute youtube-automation-job \
+            --region us-central1 \
             --wait
-          echo "✅ Cloud Run Job '${{ env.JOB_NAME }}' 실행 완료"
-
-      - name: Cleanup artifacts (optional)
-        run: |
-          rm -rf output/* logs/*
-          echo "🧹 로컬 임시 파일 정리 완료"
