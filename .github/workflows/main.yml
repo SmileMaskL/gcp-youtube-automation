@@ -44,7 +44,7 @@ jobs:
 
     - name: Run Production Script
       run: |
-        mkdir -p output
+        mkdir -p output logs
         python -m src.batch_processor
 
     - name: Upload Output
