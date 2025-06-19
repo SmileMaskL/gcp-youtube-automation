@@ -4,6 +4,7 @@ import logging
 from datetime import datetime
 from typing import Optional
 from src.config import Config
+import random
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +16,9 @@ class AIRotationManager:
         self.current_openai = 0
         self.usage = {'gemini': 0, 'openai': 0}
         self.last_reset = datetime.now().date()
+
+    def get_openai_key(self):
+        return random.choice(self.openai_keys)
 
     def _reset_usage(self):
         if datetime.now().date() != self.last_reset:
