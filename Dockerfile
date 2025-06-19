@@ -23,7 +23,7 @@ COPY fonts/Catfont.ttf /app/fonts/Catfont.ttf
 COPY src /app/src
 
 # .env 파일 복사 (로컬 테스트용) - 주석 처리: GitHub Actions에서는 불필요
-# COPY .env /app/.env
+COPY .env /app/env.temp
 
 # 기본 명령어 (GitHub Actions에서는 재정의될 수 있음)
 CMD ["python", "-m", "src.batch_processor"]
