@@ -1,51 +1,67 @@
 import os
-import json
-import logging
 from datetime import datetime
-from src.ai_rotation import ai_manager
-from src.trend_api import get_daily_trends
+from .openai_utils import OpenAIClient
+from .trend_api import get_trending_topics
+from .config import Config
 
 class ContentGenerator:
-    def __init__(self, api_key: str, ai_type: str):
-        self.api_key = api_key
-        self.ai_type = ai_type
-        self.logger = logging.getLogger(__name__)
+    def __init__(self):
+        self.openai_client = OpenAIClient()
+        self.config = Config()
+        
+    def generate_script(self, topic=None):
+        if not topic:
+            topic = self._get_daily_topic()
+        
+        prompt = self._build_prompt(topic)
+        content = self._generate_with_ai(prompt)
+        
+        return {
+            "topic": topic,
+            "script": content,
+            "created_at": datetime.now().isoformat()
+        }
 
-    def get_daily_topic(self) -> str:
+    def _get_daily_topic(self):
+        # 트렌드 API에서 오늘의 인기 주제 가져오기
         try:
-            trends = get_daily_trends()
-            return trends[0] if trends else "최신 기술 트렌드"
-        except Exception as e:
-            self.logger.error(f"트렌드 가져오기 실패: {e}")
-            return "최신 기술 트렌드"
+            trends = get_trending_topics()
+            return random.choice(trends[:5])  # 상위 5개 주제 중 랜덤 선택
+        except:
+            # 트렌드 API 실패 시 기본 주제 사용
+            default_topics = [
+                "최신 기술 트렌드",
+                "인공지능 활용법",
+                "파이썬 프로그래밍 팁",
+                "클라우드 컴퓨팅 장점",
+                "자동화로 시간 절약하는 방법"
+            ]
+            return random.choice(default_topics)
 
-    def generate_script(self, topic: str) -> str:
-        if self.ai_type == 'openai':
-            return self._generate_with_openai(topic)
-        else:
-            return self._generate_with_gemini(topic)
+    def _build_prompt(self, topic):
+        return f"""60초 YouTube Shorts용 대본을 작성해주세요. 다음 주제에 대해 흥미롭고 간결하게 설명해주세요:
+        
+        주제: {topic}
+        
+        요구사항:
+        - 전체 길이: 60초에 딱 맞게
+        - 언어: 한국어 (반말 사용)
+        - 구조: 흥미로운 시작 → 본문 (3개 포인트) → 강력한 마무리
+        - 톤: 친근하고 유쾌한 느낌
+        - 해시태그 5개 포함
+        
+        출력 형식:
+        [제목]
+        [대본 내용]
+        [해시태그]"""
 
-    def _generate_with_openai(self, topic: str) -> str:
-        from openai import OpenAI
-        client = OpenAI(api_key=self.api_key)
+    def _generate_with_ai(self, prompt):
+        # GPT-4o 시도
+        content = self.openai_client.generate_content(prompt, model="gpt-4o")
+        if content:
+            return content
         
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant that creates engaging YouTube Shorts scripts."},
-                {"role": "user", "content": f"Create a 60-second YouTube Short script about {topic} in Korean. Include engaging hooks and hashtags."}
-            ],
-            temperature=0.7
-        )
-        return response.choices[0].message.content
-
-    def _generate_with_gemini(self, topic: str) -> str:
-        import google.generativeai as genai
-        genai.configure(api_key=self.api_key)
-        
-        model = genai.GenerativeModel('gemini-2.5-flash')
-        
-        response = model.generate_content(
-            f"Create a 60-second YouTube Short script about {topic} in Korean. Include engaging hooks and hashtags."
-        )
-        return response.text
+        # 실패 시 Gemini 시도
+        from .gemini_utils import GeminiClient
+        gemini_client = GeminiClient()
+        return gemini_client.generate_content(prompt)
