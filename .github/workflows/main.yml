@@ -20,8 +20,15 @@ jobs:
 
     steps:
     - name: Checkout Repository
-      uses: actions/checkout@v4
-      
+    - uses: actions/checkout@v4
+   
+    - uses: google-github-actions/auth@v1
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+    - run: pip install -r requirements.txt
+    - run: python -m src.batch_processor
+
+
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
