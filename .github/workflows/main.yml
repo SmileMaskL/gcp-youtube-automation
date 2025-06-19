@@ -25,6 +25,9 @@ jobs:
       with:
         fetch-depth: 0
 
+    - name: Clear pip cache
+      run: pip cache purge
+
     - name: Set up Python 3.11
       uses: actions/setup-python@v4
       with:
@@ -32,7 +35,6 @@ jobs:
 
     - name: Install dependencies
       run: |
-        pip cache purge  # 캐시 강제 초기화
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         sudo apt-get update
