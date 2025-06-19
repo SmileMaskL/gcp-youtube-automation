@@ -1,48 +1,87 @@
+# src/config.py
 import os
-import json
-from dotenv import load_dotenv
+import logging
+from google.cloud import secretmanager
 
-class Config:
-    def __init__(self):
-        # 로컬 개발 환경에서 .env 파일 로드
-        # Cloud Run Jobs에서는 환경 변수가 자동으로 주입되므로 이 라인은 무시됩니다.
-        load_dotenv() 
+logger = logging.getLogger(__name__)
 
-        # GCP 관련 설정
-        self.GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
-        self.GCP_BUCKET_NAME = os.getenv("GCP_BUCKET_NAME")
+def setup_logging():
+    """
+    로깅 설정을 초기화합니다.
+    """
+    logging.basicConfig(level=logging.INFO,
+                        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                        handlers=[
+                            logging.StreamHandler()
+                        ])
+    # 더 자세한 로그를 원하면 로깅 레벨을 DEBUG로 변경하세요.
+    # logging.getLogger('google').setLevel(logging.WARNING)
+    # logging.getLogger('urllib3').setLevel(logging.WARNING)
 
-        # ElevenLabs API 설정
-        self.ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
-        self.ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "uyVNoMrnUku1dZyVEXwD") # 기본값: 안나 킴
+def get_secret(secret_id: str, project_id: str = None) -> str:
+    """
+    Google Secret Manager에서 시크릿 값을 가져옵니다.
+    
+    Args:
+        secret_id (str): Secret Manager에 저장된 시크릿의 ID.
+        project_id (str): GCP 프로젝트 ID. 환경 변수에 없으면 이 값을 사용합니다.
+                          Cloud Run Job 환경에서는 GCP_PROJECT_ID가 자동으로 설정됩니다.
+    
+    Returns:
+        str: 시크릿 값.
+    
+    Raises:
+        ValueError: 시크릿을 찾을 수 없거나 접근 권한이 없는 경우.
+    """
+    if project_id is None:
+        project_id = os.environ.get("GCP_PROJECT_ID")
+    
+    if not project_id:
+        logger.error("GCP_PROJECT_ID environment variable is not set. Cannot retrieve secrets.")
+        raise ValueError("GCP_PROJECT_ID is not set.")
 
-        # Pexels API 설정
-        self.PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
+    client = secretmanager.SecretManagerServiceClient()
+    name = f"projects/{project_id}/secrets/{secret_id}/versions/latest"
+    
+    try:
+        response = client.access_secret_version(request={"name": name})
+        secret_value = response.payload.data.decode("UTF-8")
+        logger.info(f"Successfully retrieved secret: {secret_id}")
+        return secret_value
+    except Exception as e:
+        logger.error(f"Failed to retrieve secret '{secret_id}' from Secret Manager: {e}", exc_info=True)
+        raise ValueError(f"Could not retrieve secret '{secret_id}'. Check if it exists and service account has access.")
 
-        # News API 설정
-        self.NEWS_API_KEY = os.getenv("NEWS_API_KEY")
+# 전역적으로 로깅 설정 적용
+setup_logging()
 
-        # YouTube OAuth 2.0 자격 증명 (JSON 문자열 형태)
-        # GitHub Secret에서 직접 주입됩니다.
-        self.YOUTUBE_OAUTH_CREDENTIALS = os.getenv("YOUTUBE_OAUTH_CREDENTIALS")
-        if not self.YOUTUBE_OAUTH_CREDENTIALS:
-            print("Error: YOUTUBE_OAUTH_CREDENTIALS environment variable not set.")
-            # 실제 배포 환경에서는 이 오류가 발생하면 안 됩니다.
+if __name__ == "__main__":
+    # 로컬 테스트를 위한 환경 변수 로드 (실제 배포에서는 필요 없음)
+    from dotenv import load_dotenv
+    load_dotenv()
 
-        # AI API 키 설정 (JSON 문자열 형태)
-        self.OPENAI_KEYS_JSON = os.getenv("OPENAI_KEYS_JSON")
-        if self.OPENAI_KEYS_JSON:
-            try:
-                self.OPENAI_API_KEYS = json.loads(self.OPENAI_KEYS_JSON)
-            except json.JSONDecodeError:
-                print("Error: OPENAI_KEYS_JSON is not a valid JSON string.")
-                self.OPENAI_API_KEYS = []
-        else:
-            self.OPENAI_API_KEYS = []
+    # GCP_PROJECT_ID는 Secrets Manager에 접근하기 위해 필요합니다.
+    # 실제 환경에서는 Cloud Run Job에 의해 자동으로 설정됩니다.
+    # 로컬 테스트 시에는 .env 파일에 GCP_PROJECT_ID를 명시해야 합니다.
+    test_project_id = os.environ.get("GCP_PROJECT_ID")
+
+    if not test_project_id:
+        print("Error: GCP_PROJECT_ID environment variable is not set for local testing.")
+        print("Please set it in your .env file or command line.")
+    else:
+        print(f"Testing secret retrieval for project: {test_project_id}")
+        try:
+            # 예시: ElevenLabs API 키 가져오기
+            eleven_key = get_secret("ELEVENLABS_API_KEY", project_id=test_project_id)
+            print(f"ElevenLabs API Key (first 5 chars): {eleven_key[:5]}*****")
             
-        self.GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-        self.GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY") # 추가적인 Google API (ex: Search API 등) 사용 시
+            # 예시: OpenAI Keys JSON 가져오기
+            openai_json = get_secret("OPENAI_KEYS_JSON", project_id=test_project_id)
+            print(f"OpenAI Keys JSON: {openai_json}")
 
-        # 로깅 및 모니터링
-        self.LOG_FILE = "youtube_automation.log"
-        self.TEMP_DIR = "output"
+            # 예시: YouTube OAuth Credentials 가져오기
+            youtube_creds = get_secret("YOUTUBE_OAUTH_CREDENTIALS", project_id=test_project_id)
+            print(f"YouTube OAuth Credentials: {youtube_creds}")
+
+        except ValueError as e:
+            print(f"Failed to retrieve secret during test: {e}")
