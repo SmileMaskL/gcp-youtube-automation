@@ -8,14 +8,21 @@ class AIRotator:
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            cls._instance.openai_keys = Config.get_openai_keys()
-            cls._instance.current_openai_index = 0
-            cls._instance.gemini_key = Config.get_gemini_key()
+            cls._instance._initialize()
         return cls._instance
+
+    def _initialize(self):
+        self.openai_keys = Config.get_openai_keys()
+        self.current_openai_index = 0
+        self.gemini_key = Config.get_gemini_key()
+        self.logger = logging.getLogger(__name__)
 
     def get_ai_key(self) -> Tuple[str, str]:
         """Returns (api_key, ai_type)"""
-        if len(self.openai_keys) > 0 and random.random() < 0.7:  # 70% 확률로 OpenAI 선택
+        if not self.openai_keys:
+            return self.gemini_key, 'gemini'
+            
+        if random.random() < 0.7:  # 70% 확률로 OpenAI 선택
             key = self.openai_keys[self.current_openai_index]
             self.current_openai_index = (self.current_openai_index + 1) % len(self.openai_keys)
             return key, 'openai'
