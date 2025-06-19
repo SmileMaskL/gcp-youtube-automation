@@ -1,20 +1,16 @@
-import os
 import logging
-from datetime import datetime
+from src.config import Config
 from src.content_rotator import ContentGenerator
 from src.tts_generator import generate_tts
 from src.bg_downloader import download_background
-from src.video_editor import create_video
-from src.youtube_uploader import upload_video
-from src.cleanup_manager import cleanup_temp_files
+from src.video_editor import create_short_video
+from src.youtube_uploader import upload_youtube_short
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def main():
+def produce_daily_shorts():
     try:
-        logger.info("🚀 자동화 시스템 시작")
-        
         # 1. 콘텐츠 생성
         generator = ContentGenerator()
         content = generator.create_content()
@@ -22,17 +18,14 @@ def main():
         # 2. 음성 생성
         audio_path = generate_tts(
             text=content['script'],
-            voice_id="uyVNoMrnUku1dZyVEXwD"  # 안나 킴 목소리
+            voice_id=Config.get_voice_id()
         )
         
         # 3. 배경 영상 다운로드
-        video_path = download_background(
-            query=content['video_query'],
-            api_key=os.getenv("PEXELS_API_KEY")
-        )
+        video_path = download_background(content['video_query'])
         
-        # 4. 영상 제작
-        output_path = create_video(
+        # 4. 쇼츠 영상 제작
+        output_path = create_short_video(
             video_path=video_path,
             audio_path=audio_path,
             text=content['title'],
@@ -40,18 +33,18 @@ def main():
         )
         
         # 5. 유튜브 업로드
-        upload_video(
+        upload_youtube_short(
             file_path=output_path,
             title=content['title'],
-            description=f"{content['script']}\n\n#Shorts #자동생성",
-            keywords=",".join(content['keywords']),
-            credentials=os.getenv("YOUTUBE_CREDENTIALS")
+            description=content['description']
         )
         
+        return True
     except Exception as e:
-        logger.error(f"❌ 심각한 오류: {str(e)}")
-    finally:
-        cleanup_temp_files()
+        logger.error(f"생성 실패: {str(e)}", exc_info=True)
+        return False
 
 if __name__ == "__main__":
-    main()
+    for i in range(5):  # 하루 5개 영상 생성
+        if produce_daily_shorts():
+            logger.info(f"{i+1}번째 쇼츠 생성 성공")
