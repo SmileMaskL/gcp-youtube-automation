@@ -12,6 +12,10 @@ on:
     - cron: '0 18,22,3,9,13 * * *' # UTC 기준
   workflow_dispatch: # 수동 실행을 위한 트리거
 
+permissions:
+  contents: 'read'
+  id-token: 'write' # Workload Identity Federation에 필수
+
 jobs:
   produce_shorts:
     runs-on: ubuntu-latest
