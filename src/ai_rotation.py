@@ -1,7 +1,7 @@
 import random
 import logging
+from typing import Tuple
 from src.config import Config
-from typing import List, Tuple
 
 class AIRotator:
     _instance = None
@@ -17,24 +17,17 @@ class AIRotator:
         self.current_openai_index = 0
         self.gemini_key = Config.get_gemini_key()
         self.logger = logging.getLogger(__name__)
-        self.logger.setLevel(logging.INFO)
 
     def get_ai_key(self) -> Tuple[str, str]:
-        """Returns (api_key, ai_type)"""
+        """API 키와 AI 타입 반환 (OpenAI/Gemini)"""
         if not self.openai_keys:
-            self.logger.info("Using Gemini as fallback")
             return self.gemini_key, 'gemini'
-            
-        if random.random() < 0.7:  # 70% OpenAI, 30% Gemini
+        
+        if random.random() < 0.7:  # 70% 확률로 OpenAI 선택
             key = self.openai_keys[self.current_openai_index]
             self.current_openai_index = (self.current_openai_index + 1) % len(self.openai_keys)
-            self.logger.info(f"Using OpenAI key (index: {self.current_openai_index})")
             return key, 'openai'
-        self.logger.info("Using Gemini key")
         return self.gemini_key, 'gemini'
 
-    def get_elevenlabs_key(self) -> str:
-        return Config.get_elevenlabs_key()
-
-# 싱글톤 인스턴스 생성
+# 싱글톤 인스턴스
 ai_manager = AIRotator()
