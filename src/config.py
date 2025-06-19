@@ -61,3 +61,11 @@ class Config:
         if not project_id:
             raise ValueError("GCP_PROJECT_ID 환경 변수 없음")
         return project_id
+
+    @classmethod
+    def get_elevenlabs_api_key(cls) -> str:
+        try:
+            return cls._get_secret_from_gcp("elevenlabs-api-key")
+        except Exception as e:
+            logger.error(f"ELEVENLABS_API_KEY 가져오기 실패: {e}")
+        return os.getenv("ELEVENLABS_API_KEY", "")
