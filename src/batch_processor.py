@@ -10,7 +10,7 @@ from src.youtube_uploader import YouTubeUploader
 from src.error_handler import ErrorHandler
 from src.monitoring import log_system_health
 from src.usage_tracker import UsageTracker
-from src.ai_rotation import AIRotation  # API 키 로테이션 추가
+from src.ai_rotation import AIRotation
 
 # 로깅 설정
 logging.basicConfig(
@@ -27,7 +27,7 @@ class BatchProcessor:
     def __init__(self):
         self.error_handler = ErrorHandler()
         self.usage_tracker = UsageTracker()
-        self.ai_rotation = AIRotation()  # API 키 로테이션 초기화
+        self.ai_rotation = AIRotation()
         self.config = self._load_config()
         
     def _load_config(self):
