@@ -1,7 +1,9 @@
 import os
 import requests
 import logging
+from pexels.client import Client
 from typing import Optional
+from pathlib import Path
 from src.config import Config # 수정
 
 logger = logging.getLogger(__name__)
