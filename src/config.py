@@ -19,7 +19,11 @@ class Config:
     @classmethod
     def get_openai_keys(cls) -> List[str]:
         keys_json = cls._get_secret("openai-api-keys")
-        return list(json.loads(keys_json).values())  # 괄호 추가
+        return json.loads(keys_json)['keys']
+
+    @classmethod
+    def get_gemini_key(cls) -> str:
+        return cls._get_secret("gemini-api-key")
 
     @classmethod
     def get_youtube_creds(cls) -> Dict:
