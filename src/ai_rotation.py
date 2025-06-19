@@ -2,6 +2,7 @@ import google.generativeai as genai
 from openai import OpenAI
 import logging
 from datetime import datetime
+from typing import Optional
 from src.config import Config
 
 logger = logging.getLogger(__name__)
@@ -37,7 +38,8 @@ class AIRotationManager:
         self.usage['openai'] += 1
         return OpenAI(api_key=key)
 
-    def select_model(self):
+    def select_model(self) -> str:
+        self._reset_usage()
         if self.usage['gemini'] < 3 and self.gemini_keys:
             return 'gemini'
         elif self.usage['openai'] < 7 and self.openai_keys:
