@@ -11,6 +11,7 @@ class Config:
             client = secretmanager.SecretManagerServiceClient()
             name = f"projects/{os.getenv('GCP_PROJECT_ID')}/secrets/{secret_name}/versions/latest"
             response = client.access_secret_version(name=name)
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "gha-creds.json"
             return response.payload.data.decode('UTF-8')
         except Exception as e:
             logging.error(f"GCP Secret 접근 오류: {str(e)}")
