@@ -16,6 +16,7 @@ jobs:
     env:
       GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
       ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
+      YOUTUBE_OAUTH_CREDENTIALS: ${{ secrets.YOUTUBE_OAUTH_CREDENTIALS }}
 
     steps:
     - name: Checkout Repository
@@ -44,8 +45,6 @@ jobs:
       uses: google-github-actions/setup-gcloud@v2
 
     - name: Run Production Script
-      env:
-        YOUTUBE_OAUTH_CREDENTIALS: ${{ secrets.YOUTUBE_OAUTH_CREDENTIALS }}
       run: |
         mkdir -p logs
         python -m src.batch_processor
