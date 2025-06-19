@@ -28,19 +28,26 @@ jobs:
         credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
         
     - name: Set up Cloud SDK
-      uses: google-github-actions/setup-gcloud@v2
+      uses: google-github-actions/setup-gcloud@v1
         
     - name: Run YouTube Automation
       env:
         GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
         ELEVENLABS_VOICE_ID: uyVNoMrnUku1dZyVEXwD
         FONT_PATH: ./fonts/Catfont.ttf
+        ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+        PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
       run: |
         mkdir -p output logs
         python -m src.batch_processor
         
+    - name: Cleanup old files
+      run: |
+        find output/ -mtime +7 -delete
+        find logs/ -mtime +30 -delete
+        
     - name: Upload artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v3
       if: always()
       with:
         name: youtube-shorts-output
