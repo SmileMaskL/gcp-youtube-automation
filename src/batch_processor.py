@@ -1,6 +1,6 @@
 import logging
 from src.ai_rotation import ai_manager
-from src.content_generator import generate_content
+from src.content_generator import ContentGenerator  # ✅ 수정
 from src.video_creator import create_video
 from src.youtube_uploader import YouTubeUploader
 from src.config import Config
@@ -16,7 +16,10 @@ def main():
     try:
         # 1. 콘텐츠 생성
         logger.info("Starting content generation")
-        topic, script = generate_content()
+        api_key, ai_type = ai_manager.get_next_key()  # ✅ 키 로테이션
+        generator = ContentGenerator(api_key=api_key, ai_type=ai_type)  # ✅ 생성자
+        topic = generator.get_daily_topic()  # ✅ 주제 선정
+        script = generator.generate_script(topic)  # ✅ 스크립트 생성
         
         # 2. 영상 생성
         logger.info("Creating video")
