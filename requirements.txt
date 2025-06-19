@@ -1,21 +1,21 @@
 # 웹 프레임워크 (선택 사항 - Cloud Run Service를 사용할 경우 필요)
-# Flask==2.3.3
-# gunicorn==21.2.0
+Flask==2.3.3
+gunicorn==21.2.0
 
 # AI/NLP
 openai==1.35.1
-google-generativeai==0.7.0 # Google Gemini API
-python-dotenv==1.0.1 # .env 파일 로드를 위함 (로컬 테스트용)
+google-generativeai==0.7.0
+python-dotenv==1.0.1
 
 # 영상/이미지 처리
-moviepy==1.0.3 # 영상 편집
-Pillow==10.3.0 # 이미지 처리 (썸네일 생성 등)
-opencv-python-headless==4.9.0.80 # OpenCV (headless 버전: GUI 불필요)
+moviepy==1.0.3
+Pillow==10.2.0             # 10.3.0에서 일부 시스템(OpenCV 등)과 충돌 보고됨 → 10.2.0이 더 안정적
+opencv-python-headless==4.8.0.76   # 4.9.0.80에서 ffmpeg/imageio 충돌 보고됨 → 4.8.x 안정
 imageio==2.34.0
-imageio-ffmpeg==0.4.9
+imageio-ffmpeg==0.4.8      # 0.4.9에서 일부 시스템 충돌 보고됨 → 0.4.8이 안정적
 
 # 음성 생성
-elevenlabs==0.4.0 # ElevenLabs API
+elevenlabs==0.4.0          # 안정적인 최신 버전
 
 # YouTube API 연동
 google-api-python-client==2.130.0
@@ -23,15 +23,14 @@ google-auth-oauthlib==1.2.0
 google-auth-httplib2==0.2.0
 
 # 클라우드 서비스 연동
-google-cloud-storage==2.16.0 # GCP Cloud Storage
-google-cloud-secret-manager==2.20.0 # GCP Secret Manager
+google-cloud-storage==2.16.0
+google-cloud-secret-manager==2.20.0
 
 # 기타 유틸리티
-requests==2.32.3 # HTTP 요청
-APScheduler==3.10.4 # 스케줄링 (선택 사항, Cloud Scheduler 사용 시 불필요)
-beautifulsoup4==4.12.3 # 웹 스크래핑 (핫이슈 수집 시 필요할 수 있음)
-lxml==5.2.2 # BeautifulSoup4의 파서
+requests==2.32.3
+APScheduler==3.10.4
+beautifulsoup4==4.12.3
+lxml==5.2.2
 
-# 로깅 및 모니터링
-# 예를 들어, loguru를 사용할 수 있지만, 표준 logging 모듈 사용을 권장합니다.
-# loguru==0.7.2
+# 로깅 (기본 logging 사용 권장)
+# loguru==0.7.2  # 미사용이면 제거해도 무방
