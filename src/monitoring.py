@@ -1,77 +1,53 @@
 import logging
-import sentry_sdk
 import os
-from google.cloud import logging as cloud_logging
-from google.cloud import storage
-from google.oauth2 import service_account
-import json
-import datetime
 
-# GCP 서비스 계정 키를 환경 변수에서 로드
-try:
-    service_account_info = json.loads(os.getenv("GCP_SERVICE_ACCOUNT_KEY"))
-    credentials = service_account.Credentials.from_service_account_info(service_account_info)
-except Exception as e:
-    print(f"Error loading GCP service account key for logging: {e}")
-    credentials = None # Fallback if key is not found or invalid
+logger = logging.getLogger(__name__)
 
-# Cloud Logging 클라이언트 초기화
-if credentials:
-    client = cloud_logging.Client(project=os.getenv("GCP_PROJECT_ID"), credentials=credentials)
-    handler = cloud_logging.handlers.CloudLoggingHandler(client)
-    logging.getLogger().setLevel(logging.INFO)
-    logging.getLogger().addHandler(handler)
-else:
-    # GCP 서비스 계정 키가 없을 경우 로컬 콘솔에만 로깅
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-# Sentry 초기화 (오류 추적)
-sentry_dsn = os.getenv("SENTRY_DSN") # GitHub Secret에 SENTRY_DSN을 추가하여 사용 가능
-if sentry_dsn:
-    sentry_sdk.init(
-        dsn=sentry_dsn,
-        traces_sample_rate=1.0,
-        profiles_sample_rate=1.0,
-    )
-
-def log_system_health(message, level="info"):
-    """시스템 상태 및 중요한 이벤트를 로깅합니다."""
+def log_system_health(message: str, level: str = "info"):
+    """
+    시스템 상태 및 중요한 이벤트를 로깅합니다.
+    Args:
+        message (str): 로그 메시지.
+        level (str): 로그 레벨 ('info', 'warning', 'error', 'critical').
+    """
     if level == "info":
-        logging.info(message)
+        logger.info(f"[HEALTH] {message}")
     elif level == "warning":
-        logging.warning(message)
+        logger.warning(f"[HEALTH] {message}")
     elif level == "error":
-        logging.error(message)
-        if sentry_dsn:
-            sentry_sdk.capture_exception()
+        logger.error(f"[HEALTH] {message}")
     elif level == "critical":
-        logging.critical(message)
-        if sentry_dsn:
-            sentry_sdk.capture_exception()
-
-def upload_log_to_gcs(log_file_path, bucket_name, destination_blob_name):
-    """로컬 로그 파일을 GCS 버킷에 업로드합니다."""
-    try:
-        if credentials:
-            storage_client = storage.Client(project=os.getenv("GCP_PROJECT_ID"), credentials=credentials)
-        else:
-            storage_client = storage.Client() # 기본 인증 시도 (Cloud Run 등)
-
-        bucket = storage_client.bucket(bucket_name)
-        blob = bucket.blob(destination_blob_name)
-        blob.upload_from_filename(log_file_path)
-        log_system_health(f"로그 파일 '{log_file_path}'이 GCS 버킷 '{bucket_name}/{destination_blob_name}'에 성공적으로 업로드되었습니다.", level="info")
-    except Exception as e:
-        log_system_health(f"로그 파일 업로드 중 오류 발생: {e}", level="error")
-
-def monitor_api_usage(api_name, usage_count, max_limit):
-    """API 사용량을 모니터링하고 임계치에 도달하면 경고를 로깅합니다."""
-    if usage_count >= max_limit:
-        log_system_health(f"경고: {api_name} API 일일 사용 한도({max_limit})에 도달했습니다.", level="warning")
-    elif usage_count >= max_limit * 0.8: # 80% 사용 시 경고
-        log_system_health(f"알림: {api_name} API 일일 사용 한도의 80%({max_limit*0.8})에 도달했습니다. 현재 사용량: {usage_count}", level="warning")
+        logger.critical(f"[HEALTH] {message}")
     else:
-        log_system_health(f"정보: {api_name} API 현재 사용량: {usage_count}/{max_limit}", level="info")
+        logger.debug(f"[HEALTH] {message}")
 
-# 예시: Cloud Logging에서 로그 확인
-# GCP 콘솔 > Logging > Logs Explorer 에서 'youtube-automation-project' 프로젝트의 로그를 확인할 수 있습니다.
+    # 실제 환경에서는 Cloud Logging과 연동하여 중앙 집중식 로그 관리가 필요
+    # 예를 들어, print() 대신 Python의 logging 모듈을 사용하면 자동으로 Cloud Logging에 수집될 수 있습니다.
+    # 이 프로젝트는 이미 logging 모듈을 사용하고 있으므로 별도 추가 필요 없음.
+
+def get_process_info():
+    """
+    현재 프로세스의 간단한 정보를 반환합니다.
+    (예: 메모리 사용량, CPU 사용량 - 실제 구현은 OS에 따라 복잡)
+    """
+    # 이 함수는 실제 시스템 모니터링 툴(Datadog, Prometheus 등)에서 데이터를 가져오거나
+    # OS별 라이브러리(psutil 등)를 사용하여 구현되어야 합니다.
+    # 간단한 예시로 더미 데이터 반환.
+    try:
+        import psutil
+        process = psutil.Process(os.getpid())
+        mem_info = process.memory_info()
+        cpu_percent = process.cpu_percent(interval=None) # 논블로킹
+        return {
+            "pid": os.getpid(),
+            "cpu_percent": cpu_percent,
+            "memory_usage_mb": mem_info.rss / (1024 * 1024)
+        }
+    except ImportError:
+        logger.warning("psutil not installed. Cannot get detailed process info.")
+        return {"pid": os.getpid(), "cpu_percent": "N/A", "memory_usage_mb": "N/A"}
+    except Exception as e:
+        logger.error(f"Error getting process info: {e}")
+        return {"pid": os.getpid(), "cpu_percent": "N/A", "memory_usage_mb": "N/A"}
+
+# 실제 사용은 batch_processor.py 등에서 import 하여 사용.
