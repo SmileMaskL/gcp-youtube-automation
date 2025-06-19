@@ -7,6 +7,12 @@ from src.config import Config
 
 logger = logging.getLogger(__name__)
 
+MAX_DAILY_USAGE = {
+    'gemini': 50,  # 무료 한도 내
+    'openai': 500,  # 10개 키 × 50회
+    'elevenlabs': 300  # 무료 10,000자 ÷ 평균 30자/문장
+}
+
 class AIRotationManager:
     def __init__(self):
         self.gemini_keys = Config.get_gemini_keys()
