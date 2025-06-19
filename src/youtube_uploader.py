@@ -1,188 +1,237 @@
 import os
-import google_auth_oauthlib.flow
-import google.auth.transport.requests
+import io
+import json
+import logging
+from google_auth_oauthlib.flow import InstalledAppFlow
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
-import json
-from src.config import YOUTUBE_OAUTH_CREDENTIALS, GCP_PROJECT_ID
-from src.monitoring import log_system_health
-from google.cloud import secretmanager
-from google.oauth2 import service_account
 
-# Secret Manager 클라이언트 초기화
-def get_secret_client_for_youtube():
-    try:
-        service_account_info = json.loads(os.getenv("GCP_SERVICE_ACCOUNT_KEY"))
-        credentials = service_account.Credentials.from_service_account_info(service_account_info)
-        return secretmanager.SecretManagerServiceClient(credentials=credentials)
-    except Exception as e:
-        log_system_health(f"Error initializing Secret Manager client for YouTube: {e}", level="error")
-        return None
+logger = logging.getLogger(__name__)
 
-SECRET_CLIENT_YOUTUBE = get_secret_client_for_youtube()
+# YouTube API 스코프
+SCOPES = [
+    "https://www.googleapis.com/auth/youtube.upload",
+    "https://www.googleapis.com/auth/youtube.force-ssl",
+    "https://www.googleapis.com/auth/youtube" # 기본 스코프 추가
+]
 
-def update_youtube_oauth_secret(new_credentials_json_string):
+def get_authenticated_service(credentials_json_str: str):
     """
-    업데이트된 YouTube OAuth 자격 증명 (리프레시 토큰 포함)을 GitHub Secret에 다시 저장합니다.
-    (이 함수는 GitHub Actions 환경에서 Secret을 업데이트하는 직접적인 방법이 없으므로,
-    실제 GitHub Actions 워크플로우에서는 Secret Manager를 통해 관리하는 것이 더 적합합니다.
-    여기서는 Secret Manager에 저장된 Secret을 업데이트하는 로직을 가정합니다.)
+    YouTube API 서비스 객체를 인증하여 반환합니다.
+    Args:
+        credentials_json_str (str): GitHub Secret에서 가져온 OAuth 2.0 클라이언트 ID JSON 문자열.
+    Returns:
+        googleapiclient.discovery.Resource: 인증된 YouTube API 서비스 객체.
     """
-    secret_id = "youtube-oauth-credentials" # Secret Manager의 Secret ID
+    creds = None
+    token_path = "token.json" # 임시 토큰 파일 경로 (Cloud Run Job이 종료되면 사라짐)
 
-    if SECRET_CLIENT_YOUTUBE and GCP_PROJECT_ID:
-        parent = f"projects/{GCP_PROJECT_ID}/secrets/{secret_id}"
+    # 이전에 저장된 토큰이 있는지 확인
+    if os.path.exists(token_path):
         try:
-            # 기존 Secret에 새 버전 추가
-            response = SECRET_CLIENT_YOUTUBE.add_secret_version(
-                request={"parent": parent, "payload": {"data": new_credentials_json_string.encode("UTF-8")}}
-            )
-            log_system_health(f"YouTube OAuth credentials in Secret Manager updated: {response.name}", level="info")
-            return True
+            creds = Credentials.from_authorized_user_file(token_path, SCOPES)
+            logger.info("Loaded credentials from token.json")
         except Exception as e:
-            log_system_health(f"Failed to update YouTube OAuth credentials in Secret Manager: {e}", level="error")
-            return False
+            logger.warning(f"Could not load credentials from token.json: {e}. Re-authenticating.")
+            creds = None
+
+    # 토큰이 유효하지 않거나 만료된 경우 새로고침
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            logger.info("Refreshing expired YouTube OAuth token...")
+            try:
+                creds.refresh(Request())
+                logger.info("YouTube OAuth token refreshed.")
+            except Exception as e:
+                logger.error(f"Failed to refresh YouTube token: {e}. Re-authenticating from scratch.")
+                creds = None
+        
+        if not creds: # 새로고침도 실패했거나 토큰이 없는 경우
+            logger.info("Performing full YouTube OAuth flow...")
+            # GitHub Secret에서 받은 JSON 문자열을 파일처럼 읽기
+            client_secrets_info = json.loads(credentials_json_str)
+            
+            # flow 생성 시 `redirect_uri`를 명시적으로 설정 (데스크톱 앱 유형에 맞게)
+            flow = InstalledAppFlow.from_client_config(client_secrets_info, SCOPES, redirect_uri='urn:ietf:wg:oauth:2.0:oob')
+            
+            # headless 환경에서는 브라우저를 열 수 없으므로 수동 인증 코드를 사용해야 합니다.
+            # 이 `run_local_server` 또는 `run_console`은 웹 브라우저를 띄웁니다.
+            # Cloud Run Job에서는 이 방식이 직접적으로 작동하지 않습니다.
+            # 따라서 'refresh_token'을 사용하여 인증을 유지하는 것이 중요합니다.
+            
+            # 초기 인증은 로컬 PC에서 한 번 수행하여 refresh_token을 얻어야 합니다.
+            # 얻은 refresh_token은 YOUTUBE_OAUTH_CREDENTIALS JSON 안에 포함되어야 합니다.
+            # 예시: {"web":{"client_id":"...","client_secret":"...","refresh_token":"..."}}
+
+            # 만약 `credentials_json_str`에 이미 `refresh_token`이 포함되어 있다면,
+            # `Credentials.from_authorized_user_info`를 사용하여 직접 생성할 수 있습니다.
+            
+            if "refresh_token" in client_secrets_info.get("installed", {}) or \
+               "refresh_token" in client_secrets_info.get("web", {}):
+                logger.info("Found refresh token in provided credentials. Using it directly.")
+                creds = Credentials.from_authorized_user_info(client_secrets_info.get("installed", {}) or client_secrets_info.get("web", {}), SCOPES)
+                creds.refresh(Request()) # refresh_token으로 토큰 새로고침 시도
+            else:
+                logger.critical("No refresh token found in YOUTUBE_OAUTH_CREDENTIALS. Initial manual authentication is required or the token is invalid.")
+                raise ValueError("YouTube OAuth requires a refresh token for non-interactive environments.")
+
+    if creds and creds.token and creds.refresh_token:
+        # 토큰을 token.json 파일에 저장 (다음 실행 시 재사용)
+        with open(token_path, 'w') as token:
+            token.write(creds.to_json())
+        logger.info(f"Credentials saved to {token_path}")
     else:
-        log_system_health("Secret Manager 클라이언트 또는 GCP Project ID가 설정되지 않아 YouTube OAuth Secret을 업데이트할 수 없습니다.", level="warning")
-        return False
+        logger.error("Failed to obtain valid YouTube credentials with refresh token.")
+        raise ValueError("Invalid YouTube credentials.")
 
+    return build('youtube', 'v3', credentials=creds)
 
-def get_authenticated_service():
+def refresh_youtube_oauth_token(credentials_json_str: str):
     """
-    YouTube Data API 서비스에 대한 인증된 객체를 반환합니다.
-    GitHub Secret에서 OAuth 자격 증명을 로드하고, 필요시 새로 인증하거나 토큰을 갱신합니다.
+    YouTube OAuth 토큰을 새로고침하고 업데이트된 자격증명 JSON을 반환합니다.
     """
-    if not YOUTUBE_OAUTH_CREDENTIALS:
-        log_system_health("YOUTUBE_OAUTH_CREDENTIALS GitHub Secret이 설정되지 않았습니다.", level="critical")
-        raise ValueError("YouTube OAuth credentials are not set.")
-
-    # 환경 변수에서 JSON 문자열로 자격 증명 로드
-    credentials_data = json.loads(YOUTUBE_OAUTH_CREDENTIALS)
-
-    # credential 객체 생성
+    creds = None
     try:
-        # 이전에 저장된 refresh_token이 있다면 자동으로 사용
-        flow = google_auth_oauthlib.flow.Flow.from_client_config(
-            client_config={
-                "installed": {
-                    "client_id": credentials_data.get("client_id", credentials_data.get("web", {}).get("client_id")),
-                    "client_secret": credentials_data.get("client_secret", credentials_data.get("web", {}).get("client_secret")),
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token",
-                    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs"
-                }
-            },
-            scopes=["https://www.googleapis.com/auth/youtube.upload", "https://www.googleapis.com/auth/youtube.force-ssl"]
-        )
+        # GitHub Secret에서 받은 JSON 문자열을 파싱
+        client_config = json.loads(credentials_json_str)
+        # 클라이언트 설정에서 credential 정보 추출 (web 또는 installed 타입)
+        auth_info = client_config.get("web", {}) or client_config.get("installed", {})
+        
+        # 'token'은 유효기간이 짧으므로, 'refresh_token'이 있다면 그것으로 인증 시도
+        if "refresh_token" not in auth_info:
+            raise ValueError("No refresh_token found in YOUTUBE_OAUTH_CREDENTIALS. Initial manual authorization is required.")
 
-        # 리프레시 토큰이 포함된 자격 증명을 직접 로드
-        if "token" in credentials_data and "refresh_token" in credentials_data:
-            credentials = google.oauth2.credentials.Credentials.from_authorized_user_info(credentials_data, flow.scopes)
-            log_system_health("Loaded existing YouTube OAuth credentials.", level="info")
+        # refresh_token으로 Credentials 객체 생성
+        creds = Credentials.from_authorized_user_info(auth_info, SCOPES)
+        creds.token = auth_info.get("token") # 기존 토큰도 있으면 설정
+        creds.refresh_token = auth_info["refresh_token"]
+        creds.client_id = auth_info["client_id"]
+        creds.client_secret = auth_info["client_secret"]
+        
+        # 토큰 새로고침
+        if creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+            logger.info("YouTube OAuth token successfully refreshed.")
+        elif not creds.valid:
+            # 유효하지 않지만 만료되지 않은 경우 (거의 없음) 또는 refresh_token으로도 안 되는 경우
+            raise ValueError("YouTube token is invalid and cannot be refreshed.")
         else:
-            log_system_health("No refresh token found. Initiating new authorization flow (might require manual step if not handled via refresh token).", level="warning")
-            # 이 부분은 GitHub Actions에서는 동작하지 않음.
-            # 로컬에서 initial authentication을 통해 refresh_token을 얻어와야 함.
-            # GitHub Actions에서는 이미 refresh_token이 포함된 credentials JSON을 기대함.
-            # (따라서 YOUTUBE_OAUTH_CREDENTIALS Secret에 refresh_token이 들어있는 JSON을 저장해야 함)
-            raise ValueError("YOUTUBE_OAUTH_CREDENTIALS must contain a valid refresh token for non-interactive environments.")
+            logger.info("YouTube OAuth token is still valid. No refresh needed.")
 
-        # 토큰 만료 시 자동 갱신
-        if credentials.expired and credentials.refresh_token:
-            log_system_health("YouTube OAuth token expired, attempting to refresh...", level="info")
-            credentials.refresh(google.auth.transport.requests.Request())
-            log_system_health("YouTube OAuth token refreshed successfully.", level="info")
-            # 갱신된 자격 증명을 Secret에 다시 저장 (중요)
-            updated_credentials_json = credentials.to_json()
-            update_youtube_oauth_secret(updated_credentials_json)
-        elif credentials.expired and not credentials.refresh_token:
-            log_system_health("YouTube OAuth token expired and no refresh token available. Manual re-authentication required.", level="critical")
-            raise ValueError("YouTube OAuth token expired and no refresh token available. Manual re-authentication required.")
+        # 업데이트된 자격증명 반환 (refresh_token이 포함된 JSON 형태)
+        updated_creds_info = {
+            "web": { # 또는 "installed"
+                "client_id": creds.client_id,
+                "client_secret": creds.client_secret,
+                "refresh_token": creds.refresh_token,
+                "token": creds.token,
+                "token_uri": creds.token_uri,
+                "scopes": creds.scopes,
+                "expiry": creds.expiry.isoformat() if creds.expiry else None
+            }
+        }
+        return json.dumps(updated_creds_info) # JSON 문자열로 반환
 
-        return build("youtube", "v3", credentials=credentials)
+    except json.JSONDecodeError as e:
+        logger.error(f"Error parsing YOUTUBE_OAUTH_CREDENTIALS JSON: {e}")
+        raise ValueError("Invalid YOUTUBE_OAUTH_CREDENTIALS format.")
     except Exception as e:
-        log_system_health(f"YouTube 인증 오류: {e}", level="critical")
-        raise ValueError(f"YouTube 인증에 실패했습니다: {e}")
+        logger.error(f"Error refreshing YouTube OAuth token: {e}", exc_info=True)
+        raise
 
-def upload_video(video_path, thumbnail_path, title, description, tags, category_id="22", privacy_status="public"):
+def upload_video(
+    file_path: str,
+    title: str,
+    description: str,
+    tags: list,
+    credentials_json_str: str,
+    thumbnail_path: str = None
+):
     """
-    YouTube에 비디오를 업로드합니다.
-    category_id 22는 'People & Blogs'입니다. Shorts는 'Entertainment' (24) 또는 'Comedy' (23) 등도 고려.
+    YouTube에 동영상을 업로드합니다.
+    Args:
+        file_path (str): 업로드할 동영상 파일 경로.
+        title (str): 동영상 제목.
+        description (str): 동영상 설명.
+        tags (list): 동영상 태그 목록.
+        credentials_json_str (str): YouTube OAuth 2.0 클라이언트 ID JSON 문자열.
+        thumbnail_path (str): 썸네일 이미지 파일 경로 (선택 사항).
+    Returns:
+        str: 업로드된 동영상의 ID, 또는 None (업로드 실패 시).
     """
-    youtube = get_authenticated_service()
+    logger.info(f"Attempting to upload video: '{title}' from {file_path}")
+
+    # 인증 서비스 가져오기
+    youtube = get_authenticated_service(credentials_json_str)
 
     body = {
-        "snippet": {
-            "title": title,
-            "description": description,
-            "tags": tags,
-            "categoryId": category_id,
-            "defaultLanguage": "ko",
-            "localized": {
-                "title": title,
-                "description": description
-            }
+        'snippet': {
+            'title': title,
+            'description': description,
+            'tags': tags,
+            ''categoryId': '22',  # 카테고리 ID (22: 코미디, 24: 엔터테인먼트, 28: 과학기술 등)
+            'defaultLanguage': 'ko'
         },
-        "status": {
-            "privacyStatus": privacy_status,
-            "selfDeclaredMadeForKids": False # 아동용 아님
+        'status': {
+            'privacyStatus': 'public' # public, private, unlisted (공개, 비공개, 미등록)
         },
-        "recordingDetails": {
-            "recordingDate": datetime.datetime.now().isoformat() + "Z"
+        'processingStatus': {
+            'uploadStatus': 'uploaded' # 업로드 상태를 명시
         }
     }
 
-    # 썸네일 업로드
-    media_body = MediaFileUpload(video_path, resumable=True)
+    # 미디어 파일 업로드 준비
+    media = MediaFileUpload(file_path, chunksize=-1, resumable=True)
 
     try:
-        insert_request = youtube.videos().insert(
-            part="snippet,status,recordingDetails",
+        # 업로드 요청
+        request = youtube.videos().insert(
+            part="snippet,status",
             body=body,
-            media_body=media_body
+            media_body=media
         )
 
         response = None
         while response is None:
-            status, response = insert_request.next_chunk()
+            status, response = request.next_chunk()
             if status:
-                log_system_health(f"YouTube 비디오 업로드 진행률: {int(status.progress() * 100)}%", level="info")
+                logger.info(f"Uploaded {int(status.progress() * 100)}% of video: {title}")
 
-        video_id = response.get("id")
-        log_system_health(f"비디오가 성공적으로 업로드되었습니다. 비디오 ID: {video_id}", level="info")
+        video_id = response.get('id')
+        logger.info(f"Video '{title}' uploaded successfully! Video ID: {video_id}")
 
-        # 썸네일 설정
+        # 썸네일 업로드
         if thumbnail_path and os.path.exists(thumbnail_path):
-            thumbnail_media = MediaFileUpload(thumbnail_path)
             try:
+                thumbnail_media = MediaFileUpload(thumbnail_path, mimetype='image/jpeg', resumable=False)
                 youtube.thumbnails().set(
                     videoId=video_id,
                     media_body=thumbnail_media
                 ).execute()
-                log_system_health(f"썸네일이 비디오 ID {video_id}에 성공적으로 설정되었습니다.", level="info")
+                logger.info(f"Thumbnail uploaded for video ID: {video_id}")
             except HttpError as e:
-                log_system_health(f"썸네일 설정 중 오류 발생: {e}", level="error")
+                logger.warning(f"Could not upload thumbnail: {e.content.decode()}")
+                if 'forbidden' in e.content.decode().lower() or 'quota' in e.content.decode().lower():
+                    logger.error("Thumbnail upload failed due to permission or quota issues. Check YouTube API settings.")
+                else:
+                    logger.error("Unknown error during thumbnail upload. See logs above.")
+            except Exception as e:
+                logger.error(f"An unexpected error occurred during thumbnail upload: {e}")
         else:
-            log_system_health("썸네일 파일이 존재하지 않거나 경로가 잘못되었습니다. 썸네일 설정을 건너뜝니다.", level="warning")
-
-        # 댓글 자동 포스팅 (임시로 여기에 포함)
-        # from src.comment_poster import post_comment
-        # generated_comments = generate_youtube_comments(title) # content_generator에서 가져옴
-        # for comment_text in generated_comments:
-        #     try:
-        #         post_comment(video_id, comment_text)
-        #     except Exception as e:
-        #         log_system_health(f"댓글 '{comment_text}' 포스팅 중 오류 발생: {e}", level="error")
-
+            logger.warning("Thumbnail path not provided or file does not exist. Skipping thumbnail upload.")
 
         return video_id
 
     except HttpError as e:
-        log_system_health(f"YouTube API 오류 발생: {e.resp.status}, {e.content.decode()}", level="error")
-        raise ValueError(f"YouTube 업로드 실패: {e.content.decode()}")
+        logger.error(f"An HTTP error occurred during video upload: {e.content.decode()}")
+        if 'quotaExceeded' in e.content.decode():
+            logger.critical("YouTube API Daily Quota Exceeded. Cannot upload more videos today.")
+        elif 'authError' in e.content.decode():
+            logger.critical("YouTube API Authentication Error. Check YOUTUBE_OAUTH_CREDENTIALS.")
+        raise # 재시도를 위해 예외 다시 발생
     except Exception as e:
-        log_system_health(f"비디오 업로드 중 예상치 못한 오류 발생: {e}", level="error")
-        raise ValueError(f"비디오 업로드 실패: {e}")
-
-# import datetime # 상단에 추가해야 함
+        logger.error(f"An unexpected error occurred during video upload: {e}", exc_info=True)
+        raise
