@@ -3,9 +3,14 @@ google-auth-oauthlib==1.2.0
 google-auth==2.29.0
 google-cloud-secret-manager==2.16.1
 google-cloud-logging==3.11.1
+
 openai==1.12.0
-elevenlabs>=1.59.0,<2.0.0
-pexels-api==1.0.1    # 또는 pexels-apis==0.0.6
+
+elevenlabs>=1.56.0,<2.0.0
+
+# Pexels 관련
+pexels-apis==0.0.6
+
 moviepy==1.0.3
 python-dotenv==1.0.0
 requests==2.31.0
@@ -17,4 +22,4 @@ google-cloud-storage==2.14.0
 youtube-search-python==1.6.6
 yt-dlp==2023.11.16
 pillow==10.3.0
-sentry_sdk==1.45.0
+psutil==5.9.8
