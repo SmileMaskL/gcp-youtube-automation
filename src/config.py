@@ -4,6 +4,8 @@ import logging
 from google.cloud import secretmanager
 from typing import List, Dict
 
+logging.basicConfig(level=logging.INFO)
+
 class Config:
     @staticmethod
     def _get_secret(secret_name: str) -> str:
@@ -20,7 +22,6 @@ class Config:
     def get_openai_keys(cls) -> List[str]:
         keys_json = cls._get_secret("openai-api-keys")
         try:
-            # JSON 배열 또는 Python 리스트 모두 처리
             keys = json.loads(keys_json)
             if isinstance(keys, dict):
                 return keys.get('keys', [])
