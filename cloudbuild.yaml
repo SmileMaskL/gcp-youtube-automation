@@ -1,4 +1,12 @@
 steps:
+  - name: 'gcr.io/cloud-builders/gcloud'
+    args: ['functions', 'deploy', 'youtube_auto', 
+           '--runtime=python311', 
+           '--trigger-http',
+           '--memory=256MB',
+           '--timeout=300s',
+           '--region=us-central1']
+  
   - name: 'gcr.io/cloud-builders/docker'
     args: ['build', '-t', '${_ARTIFACT_REGISTRY}/${PROJECT_ID}/${_SERVICE_NAME}:latest', '.']
     id: 'build'
