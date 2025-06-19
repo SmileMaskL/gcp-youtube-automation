@@ -2,7 +2,7 @@ import logging
 import random
 import google.generativeai as genai
 from openai import OpenAI
-from src.ai_rotation import ai_manager # 수정: ai_manager 사용
+from src.ai_rotation import AIRotator # 수정: ai_manager 사용
 from src.trend_api import get_trending_topics # 새로 추가
 
 logger = logging.getLogger(__name__)
