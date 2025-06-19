@@ -1,90 +1,62 @@
-from PIL import Image, ImageDraw, ImageFont
+# src/thumbnail_generator.py
 import os
 import logging
 from moviepy.editor import VideoFileClip
 
 logger = logging.getLogger(__name__)
 
-def generate_thumbnail(video_path: str, output_thumbnail_path: str, title: str, font_path: str = "/app/fonts/Catfont.ttf"):
+def generate_thumbnail(video_path: str, thumbnail_path: str, time_in_seconds: float = 2.0):
     """
-    영상에서 스크린샷을 찍고, 제목을 추가하여 썸네일을 생성합니다.
+    동영상에서 특정 시간의 프레임을 추출하여 썸네일로 저장합니다.
+
     Args:
-        video_path (str): 썸네일을 생성할 비디오 파일 경로.
-        output_thumbnail_path (str): 썸네일을 저장할 경로.
-        title (str): 썸네일에 들어갈 제목.
-        font_path (str): 사용할 폰트 파일 경로.
+        video_path (str): 썸네일을 추출할 동영상 파일의 경로.
+        thumbnail_path (str): 생성될 썸네일 이미지 파일의 경로.
+        time_in_seconds (float): 썸네일을 추출할 동영상의 시간(초).
+
+    Returns:
+        bool: 썸네일 생성 성공 시 True, 실패 시 False.
     """
-    logger.info(f"Generating thumbnail for video: {video_path} with title: '{title}'")
+    if not os.path.exists(video_path):
+        logger.error(f"Video file not found for thumbnail generation: {video_path}")
+        return False
 
     try:
-        # 1. 영상에서 프레임 추출 (썸네일 배경)
+        logger.info(f"Generating thumbnail for {video_path} at {time_in_seconds} seconds.")
         clip = VideoFileClip(video_path)
-        # 영상 중간 지점의 프레임을 추출
-        screenshot_path = "temp_screenshot.png"
-        clip.save_frame(screenshot_path, t=clip.duration / 2) # 영상 중간 프레임 저장
-        clip.close() # 클립 닫기
 
-        # 2. 이미지 로드 및 크기 조정 (YouTube 권장 썸네일 크기: 1280x720)
-        img = Image.open(screenshot_path)
-        img = img.resize((1280, 720), Image.LANCZOS) # 고품질 리사이즈
-        draw = ImageDraw.Draw(img)
+        # 영상 길이를 초과하지 않도록 시간 조정
+        if time_in_seconds >= clip.duration:
+            time_in_seconds = clip.duration / 2 # 영상 중간으로 설정
+            logger.warning(f"Thumbnail time adjusted to video's mid-point: {time_in_seconds:.2f}s")
 
-        # 3. 텍스트 추가
-        try:
-            font_size = 80
-            font = ImageFont.truetype(font_path, font_size)
-        except IOError:
-            logger.warning(f"Font not found at {font_path}. Using default font.")
-            font = ImageFont.load_default()
-            font_size = 50 # 기본 폰트는 크기가 다를 수 있음
+        # 출력 디렉토리 생성
+        output_dir = os.path.dirname(thumbnail_path)
+        if output_dir and not os.path.exists(output_dir):
+            os.makedirs(output_dir, exist_ok=True)
+            logger.info(f"Created output directory: {output_dir}")
 
-        text_color = (255, 255, 255) # 흰색
-        stroke_color = (0, 0, 0) # 검은색 테두리
-        stroke_width = 3
-
-        # 텍스트를 여러 줄로 나누기 (썸네일에 맞게)
-        # 간단한 줄 바꿈 로직
-        def wrap_text(text, font, max_width):
-            lines = []
-            words = text.split(' ')
-            current_line = []
-            for word in words:
-                test_line = ' '.join(current_line + [word])
-                text_width, _ = draw.textsize(test_line, font=font)
-                if text_width <= max_width:
-                    current_line.append(word)
-                else:
-                    lines.append(' '.join(current_line))
-                    current_line = [word]
-            lines.append(' '.join(current_line))
-            return "\n".join(lines)
-
-        wrapped_title = wrap_text(title, font, img.width - 100) # 좌우 여백 50px씩
-
-        # 텍스트 위치 계산 (중앙 정렬)
-        text_bbox = draw.textbbox((0,0), wrapped_title, font=font)
-        text_width = text_bbox[2] - text_bbox[0]
-        text_height = text_bbox[3] - text_bbox[1]
-
-        x = (img.width - text_width) / 2
-        y = (img.height - text_height) / 2 - 50 # 약간 위로 올림
-
-        # 텍스트와 테두리 그리기
-        draw.text((x, y), wrapped_title, font=font, fill=text_color,
-                  stroke_width=stroke_width, stroke_fill=stroke_color)
-
-        # 4. 썸네일 저장
-        output_dir = os.path.dirname(output_thumbnail_path)
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-            
-        img.save(output_thumbnail_path)
-        logger.info(f"Thumbnail successfully generated and saved to {output_thumbnail_path}")
-
+        clip.save_frame(thumbnail_path, t=time_in_seconds)
+        logger.info(f"Thumbnail saved to {thumbnail_path}")
+        return True
     except Exception as e:
-        logger.error(f"Failed to generate thumbnail: {e}", exc_info=True)
-        raise
-    finally:
-        # 임시 스크린샷 파일 삭제
-        if os.path.exists(screenshot_path):
-            os.remove(screenshot_path)
+        logger.error(f"Error generating thumbnail for {video_path}: {e}", exc_info=True)
+        return False
+
+if __name__ == '__main__':
+    from src.config import setup_logging
+    setup_logging()
+
+    # 테스트용 더미 영상 파일이 필요합니다.
+    # 이전에 `shorts_converter.py` 테스트 시 생성된 `output/test_shorts_output.mp4`를 사용할 수 있습니다.
+    input_test_video = "output/test_shorts_output.mp4" # 여기에 실제 테스트 영상 파일 경로를 지정하세요.
+    output_test_thumbnail = "output/test_generated_thumbnail.jpg"
+
+    if not os.path.exists(input_test_video):
+        print(f"Error: Test video file not found at '{input_test_video}'. Please ensure it exists.")
+    else:
+        print(f"Attempting to generate thumbnail for '{input_test_video}'...")
+        if generate_thumbnail(input_test_video, output_test_thumbnail, time_in_seconds=5.0):
+            print(f"Successfully generated thumbnail: {output_test_thumbnail}")
+        else:
+            print("Failed to generate thumbnail.")
