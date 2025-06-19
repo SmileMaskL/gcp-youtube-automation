@@ -1,30 +1,31 @@
 import logging
-from google.cloud import logging as cloud_logging
+import sys
+from google.cloud import logging as cloud_logging  # 수정된 임포트
 
-def setup_logging():
-    client = cloud_logging.Client()
-    client.setup_logging()
-    
-    logger = logging.getLogger(__name__)
-    logger.setLevel(logging.INFO)
-    return logger
+class ErrorHandler:
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+        
+        # GCP Cloud Logging 설정
+        try:
+            self.cloud_logger = cloud_logging.Client().logger('youtube_automation')
+        except Exception as e:
+            self.logger.error(f"Cloud Logging 초기화 실패: {e}")
+            self.cloud_logger = None
 
-logger = setup_logging()
+    def handle(self, error):
+        error_msg = f"🚨 심각한 오류 발생: {str(error)}"
+        
+        # 로컬 로깅
+        self.logger.error(error_msg)
+        
+        # GCP Cloud Logging
+        if self.cloud_logger:
+            self.cloud_logger.log_text(error_msg, severity='ERROR')
+        
+        # Slack/이메일 알림 (추가 구현)
+        self._send_alert(error_msg)
 
-def log_error(error_message, context=None):
-    error_data = {
-        "message": error_message,
-        "context": context or {},
-        "timestamp": datetime.now().isoformat()
-    }
-    
-    # Cloud Logging에 기록
-    logger.error(error_message, extra=error_data)
-    
-    # Firestore에 에러 기록 (선택적)
-    try:
-        from google.cloud import firestore
-        db = firestore.Client()
-        db.collection("errors").add(error_data)
-    except:
+    def _send_alert(self, message):
+        """추가 알림 시스템 (구현 필요)"""
         pass
