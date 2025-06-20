@@ -34,9 +34,18 @@ jobs:
       - name: Install Python dependencies
         run: |
           pip cache purge
+          rm -rf ~/.cache/pip
+          echo "::endgroup::"
           pip install google-cloud-secret-manager==2.24.0 --force-reinstall
           python -m pip install --upgrade pip setuptools wheel
+
+          pip install \
+          google-cloud-secret-manager==2.24.0 \
+          google-cloud-storage==3.1.1 \
+          google-auth==2.29.0
+
           pip install --no-cache-dir -r requirements.txt
+
           pip install "yt-dlp @ https://github.com/yt-dlp/yt-dlp/archive/master.tar.gz"
 
       - name: Run YouTube Shorts Automation
