@@ -1,28 +1,30 @@
 # ./requirements.txt
-# AI 및 핵심 라이브러리
-openai==1.78.1  # 최신 안정 버전으로 업데이트 [[5]](https://pypi.org/project/openai/)
-google-cloud-secret-manager==2.25.0  # 최신 안정 버전으로 업데이트 [[18]](https://pypi.org/project/google-cloud-secret-manager/)
-google-cloud-storage==3.1.1  # 최신 안정 버전으로 업데이트 [[2]](https://pypi.org/project/google-cloud-storage/)
-google-generativeai==0.11.0  # 최신 안정 버전으로 업데이트 [[11]](https://pypi.org/project/google-generativeai/)
-elevenlabs==1.2.0  # PyPI에서 사용 가능한 최신 버전 [[5]](https://pypi.org/project/elevenlabs/1.2.0/)
 
-# 유튜브 API 및 인증
-google-auth==2.29.0  # 최신 안정 버전으로 업데이트
-google-auth-oauthlib==1.2.0  # 최신 안정 버전 (변경 없음)
-google-api-python-client==2.136.0  # 최신 안정 버전으로 업데이트
+# ✅ AI 및 핵심 라이브러리
+openai==1.35.13
+google-cloud-secret-manager==2.24.0
+google-cloud-storage==2.16.0
+google-generativeai==0.6.0
+elevenlabs==1.0.5
 
-# 콘텐츠 생성 및 처리
-newsapi-python==0.2.7  # 최신 안정 버전 (변경 없음)
-Pillow==10.3.0  # 최신 안정 버전으로 업데이트
-requests==2.32.3  # 최신 안정 버전으로 업데이트
-beautifulsoup4==4.12.3  # 최신 안정 버전 (변경 없음)
-python-dotenv==1.0.1  # 최신 안정 버전으로 업데이트
+# ✅ 유튜브 API 및 인증
+google-auth==2.20.0
+google-auth-oauthlib==1.2.0
+google-api-python-client==2.128.0
 
-# 영상 및 음성 처리
-moviepy==1.0.3  # 최신 안정 버전 (변경 없음)
-yt-dlp==2024.07.16  # PyPI에서 사용 가능한 최신 안정 버전으로 업데이트 (이전 에러 버전보다 최신)
-ffmpeg-python==0.2.0  # 최신 안정 버전 (변경 없음)
-opencv-python==4.10.0.84  # 최신 안정 버전 (변경 없음)
+# ✅ 콘텐츠 생성 및 처리
+newsapi-python==0.2.7
+Pillow==10.0.0
+requests==2.31.0
+beautifulsoup4==4.12.3
+python-dotenv==1.0.0
 
-# 로깅 및 기타 유틸리티
-python-json-logger==2.0.7  # 최신 안정 버전 (변경 없음)
+# ✅ 영상 및 음성 처리
+moviepy==1.0.3
+imageio-ffmpeg==0.4.9  # 🎯 moviepy가 ffmpeg 찾지 못하는 문제 방지
+yt-dlp==2023.11.16
+ffmpeg-python==0.2.0
+opencv-python==4.10.0.84
+
+# ✅ 로깅 및 기타 유틸리티
+python-json-logger==2.0.7
