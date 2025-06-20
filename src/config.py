@@ -51,7 +51,9 @@ class SecretManager:
     로컬 개발과 프로덕션 환경 모두에서 작동하도록 설계되었습니다.
     """
     
-    def __init__(self, project_id: Optional[str] = None):
+    def get_secret(self, secret_name: str, version: str = "latest") -> str:
+        # secret fetch logic
+        pass
         """
         Args:
             project_id (str, optional): GCP 프로젝트 ID. None이면 환경 변수에서 읽음.
