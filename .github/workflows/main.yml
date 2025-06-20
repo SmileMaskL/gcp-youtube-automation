@@ -1,52 +1,46 @@
-name: YouTube Automation Pipeline
+name: YouTube Shorts Automation
 
 on:
-  workflow_dispatch:
   schedule:
-    - cron: '0 3,7,12,18,22 * * *'  # 하루 5회 실행
+    - cron: '0 3,7,12,18,22 * * *'
+  workflow_dispatch:
 
 jobs:
-  build-deploy-execute:
+  generate-and-upload:
     runs-on: ubuntu-latest
-    permissions:
-      contents: 'read'
-      id-token: 'write'
+    timeout-minutes: 45
+
+    env:
+      ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+      ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
+      PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+      OPENAI_KEYS_JSON: ${{ secrets.OPENAI_KEYS_JSON }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      YOUTUBE_OAUTH_CREDENTIALS: ${{ secrets.YOUTUBE_OAUTH_CREDENTIALS }}
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up GCP Auth
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip cache purge
+          pip install -r requirements.txt
+          sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Authenticate GCP
         uses: google-github-actions/auth@v1
         with:
-          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
-
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v1
-        with:
-          project_id: ${{ secrets.GCP_PROJECT_ID }}
-
-      - name: Build Docker image
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+      - name: Run Batch Processor
         run: |
-          IMAGE_TAG="gcr.io/${{ secrets.GCP_PROJECT_ID }}/youtube-automation:$GITHUB_SHA"
-          docker build -t "$IMAGE_TAG" .
-          docker push "$IMAGE_TAG"
-          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
-
-      - name: Deploy Cloud Run Job
+          mkdir -p logs output
+          python -m src.batch_processor
+      - name: Cleanup old outputs
         run: |
-          gcloud run jobs deploy youtube-automation-job \
-            --image ${{ env.IMAGE_TAG }} \
-            --region us-central1 \
-            --set-env-vars "GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}" \
-            --set-env-vars "GCP_BUCKET_NAME=${{ secrets.GCP_BUCKET_NAME }}" \
-            --set-env-vars "ELEVENLABS_VOICE_ID=${{ secrets.ELEVENLABS_VOICE_ID }}" \
-            --max-retries 1 \
-            --timeout 3600s \
-            --cpu 1 \
-            --memory 1Gi
-
-      - name: Execute Job
-        run: |
-          gcloud run jobs execute youtube-automation-job \
-            --region us-central1 \
-            --wait
+          find output -iname '*.mp4' -mtime +7 -delete
+          find logs -iname '*.log' -mtime +30 -delete
