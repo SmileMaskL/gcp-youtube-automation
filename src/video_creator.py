@@ -2,7 +2,7 @@ import logging
 import os
 from moviepy.editor import AudioFileClip, ColorClip
 from elevenlabs.client import ElevenLabs
-from elevenlabs import Voice, VoiceSettings
+from elevenlabs.types import Voice, VoiceSettings
 
 # ✅ 로깅 설정
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
