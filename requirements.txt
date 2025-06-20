@@ -22,7 +22,7 @@ python-dotenv==1.0.1
 # ✅ 영상 및 음성 처리
 moviepy==1.0.3
 imageio-ffmpeg==0.4.9
-yt-dlp==2023.11.16  # ✅ PyPI 기준 최신 안정 버전
+yt-dlp  # ✅ PyPI 기준 최신 안정 버전
 ffmpeg-python==0.2.0
 opencv-python==4.10.0.84
 
