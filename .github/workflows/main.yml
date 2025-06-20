@@ -33,20 +33,25 @@ jobs:
 
       - name: Install Python dependencies
         run: |
+          # 1. 캐시 완전 삭제
           pip cache purge
           rm -rf ~/.cache/pip
-          echo "::endgroup::"
-          pip install google-cloud-secret-manager==2.24.0 --force-reinstall
+    
+          # 2. pip 업그레이드
           python -m pip install --upgrade pip setuptools wheel
-
+    
+          # 3. 문제 패키지 먼저 설치 (강제 재설치)
           pip install \
           google-cloud-secret-manager==2.24.0 \
-          google-cloud-storage==3.1.1 \
-          google-auth==2.29.0
-
+          google-auth==2.29.0 \
+          google-api-python-client==2.136.0 \
+          --force-reinstall
+    
+          # 4. 나머지 패키지 설치
           pip install --no-cache-dir -r requirements.txt
-
-          pip install "yt-dlp @ https://github.com/yt-dlp/yt-dlp/archive/master.tar.gz"
+    
+          # 5. yt-dlp 별도 설치
+          pip install "yt-dlp @ https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.tar.gz"
 
       - name: Run YouTube Shorts Automation
         run: python -m src.main
