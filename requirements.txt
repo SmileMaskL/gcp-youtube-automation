@@ -1,17 +1,26 @@
-google-cloud-storage==2.16.0
-google-api-python-client==2.128.0
-google-auth-oauthlib==1.2.0
-google-auth-httplib2==0.2.0
-google-generativeai==0.7.0 # Gemini API
+# ./requirements.txt
+# AI 및 핵심 라이브러리
+openai==1.35.1
 google-cloud-secret-manager==2.24.0
-elevenlabs==1.0.5
-openai==1.35.13
-python-dotenv==1.0.1
-Pillow==10.3.0
-moviepy==1.0.3
-requests==2.32.3
-beautifulsoup4==4.12.3
-# youtube-dl==2021.12.17 은 더 이상 업데이트되지 않으므로 yt-dlp 사용을 고려할 수 있지만, 여기서는 기존 설정 유지
-yt-dlp==2024.04.09 # youtube-dl 대신 yt-dlp 권장
-newsapi-python==0.2.7
-pexels-api==1.0.1
+google-cloud-storage==2.16.0
+google-generativeai==0.6.0 # Gemini API 사용
+elevenlabs==1.2.0 # ElevenLabs API 사용
+
+# 유튜브 API 및 인증
+google-auth-oauthlib==1.2.0
+google-api-python-client==2.136.0
+
+# 콘텐츠 생성 및 처리
+newsapi-python==0.2.7 # 뉴스 API 연동
+Pillow==10.3.0 # 이미지 처리
+requests==2.32.3 # HTTP 요청
+beautifulsoup4==4.12.3 # 웹 스크래핑 (핫이슈 주제 선정 시 활용 가능)
+
+# 영상 및 음성 처리
+moviepy==1.0.3 # 영상 편집
+yt-dlp==2024.07.15 # 영상 다운로드 (선택 사항, 필요 시 사용)
+ffmpeg-python==0.2.0 # FFmpeg 제어
+opencv-python==4.10.0.84 # 비디오 및 이미지 처리
+
+# 로깅 및 기타 유틸리티
+python-json-logger==2.0.7 # JSON 로깅
