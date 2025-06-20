@@ -1,3 +1,4 @@
+from src.config import get_secret
 import os
 import json
 import logging
