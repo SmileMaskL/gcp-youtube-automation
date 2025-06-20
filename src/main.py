@@ -1,16 +1,14 @@
-import os
-import sys
+# main.py (기존 batch_runner 역할을 대체)
+from fastapi import FastAPI, BackgroundTasks
+from src.batch_processor import BatchProcessor
 
-# src 디렉토리를 Python 경로에 추가 (Github Actions 환경에서 모듈 import 문제 방지)
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+app = FastAPI()
 
-from batch_processor import main as batch_main
-from monitoring import log_system_health
+@app.get("/run")
+def trigger_run(background_tasks: BackgroundTasks):
+    background_tasks.add_task(BatchProcessor().process)
+    return {"status": "배치 작업이 백그라운드로 시작되었습니다."}
 
 if __name__ == "__main__":
-    log_system_health("main.py 시작.", level="info")
-    try:
-        batch_main()
-    except Exception as e:
-        log_system_health(f"main.py 실행 중 예기치 않은 오류 발생: {e}", level="critical")
-    log_system_health("main.py 종료.", level="info")
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8080)))
