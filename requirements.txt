@@ -1,27 +1,18 @@
-# ./requirements.txt
-# AI 및 핵심 라이브러리
+google-cloud-secret-manager==2.24.0
 openai==1.78.1
 google-cloud-storage==3.1.1
 google-generativeai==0.11.0
-elevenlabs==1.2.0
-
-# 유튜브 API 및 인증
+elevenlabs==0.2.27
 google-auth==2.29.0
 google-auth-oauthlib==1.2.0
 google-api-python-client==2.136.0
-
-# 콘텐츠 생성 및 처리
 newsapi-python==0.2.7
 Pillow==10.3.0
 requests==2.32.3
 beautifulsoup4==4.12.3
 python-dotenv==1.0.1
-
-# 영상 및 음성 처리
 moviepy==1.0.3
 imageio-ffmpeg==0.4.9
 ffmpeg-python==0.2.0
 opencv-python==4.10.0.84
-
-# 로깅 및 기타 유틸리티
 python-json-logger==2.0.7
