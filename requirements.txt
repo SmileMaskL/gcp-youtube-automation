@@ -18,7 +18,7 @@ beautifulsoup4==4.12.3 # 웹 스크래핑 (핫이슈 주제 선정 시 활용 �
 
 # 영상 및 음성 처리
 moviepy==1.0.3 # 영상 편집
-yt-dlp
+yt-dlp==2023.11.16
 ffmpeg-python==0.2.0 # FFmpeg 제어
 opencv-python==4.10.0.84 # 비디오 및 이미지 처리
 
