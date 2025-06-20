@@ -44,13 +44,13 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          python -m pip install --upgrade pip
           pip cache purge # Clear pip cache to ensure fresh installation
+          python -m pip install --upgrade pip setuptools wheel
           pip install --no-cache-dir -r requirements.txt # Force reinstall from requirements.txt
 
       - name: Configure GCP Service Account Key
         # This step securely decodes and stores the GCP Service Account Key
-        # so that google-cloud-secret-manager can authenticate.
+        # so that google-cloud-secret-manage can authenticate.
         run: |
           echo "${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}" > gcp_key.json
           echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp_key.json" >> $GITHUB_ENV
