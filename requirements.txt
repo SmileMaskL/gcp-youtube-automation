@@ -14,5 +14,5 @@ youtube-dl==2021.12.17
 # youtube-dl은 더 이상 업데이트되지 않으므로 yt-dlp 사용을 고려할 수 있지만, 여기서는 기존 설정 유지
 yt-dlp==2024.04.09 # youtube-dl 대신 yt-dlp 권장
 newsapi-python==0.2.7
-PexelsApi==0.0.6
+pexels-api==1.0.1
 
