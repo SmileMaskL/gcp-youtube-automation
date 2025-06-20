@@ -27,31 +27,28 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg
 
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Test ADC authentication
+        run: |
+          gcloud auth list
+          gcloud projects list
+
       - name: Install Python dependencies
         run: |
           pip cache purge
           python -m pip install --upgrade pip setuptools wheel
           pip install --no-cache-dir -r requirements.txt
 
-      - name: Create GCP credentials file
-        run: |
-          echo "$GCP_SERVICE_ACCOUNT_KEY" > gcp_key.json
-          python -c "import json; json.load(open('gcp_key.json'))" || {
-            echo '❌ GCP_SERVICE_ACCOUNT_KEY is not valid JSON';
-            head -c 200 gcp_key.json;
-            exit 1;
-          }
-          echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp_key.json" >> $GITHUB_ENV
-        env:
-          GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
-
       - name: Run YouTube Automation
         run: |
           python -m src.main
         env:
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ env.GOOGLE_APPLICATION_CREDENTIALS }}
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-          GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
           OPENAI_KEYS_JSON: ${{ secrets.OPENAI_KEYS_JSON }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
@@ -61,7 +58,3 @@ jobs:
           NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-
-      - name: Clean up sensitive files
-        if: always()
-        run: rm -f gcp_key.json
