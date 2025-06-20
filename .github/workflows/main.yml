@@ -33,6 +33,8 @@ jobs:
 
       - name: Install Python dependencies
         run: |
+          pip cache purge
+          pip install google-cloud-secret-manager==2.24.0 --force-reinstall
           python -m pip install --upgrade pip setuptools wheel
           pip install --no-cache-dir -r requirements.txt
           pip install "yt-dlp @ https://github.com/yt-dlp/yt-dlp/archive/master.tar.gz"
