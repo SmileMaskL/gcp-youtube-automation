@@ -22,27 +22,35 @@ jobs:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       YOUTUBE_OAUTH_CREDENTIALS: ${{ secrets.YOUTUBE_OAUTH_CREDENTIALS }}
       GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
           python-version: '3.11'
+
       - name: Install dependencies
         run: |
-          pip install --upgrade pip
+          python -m pip install --upgrade pip
           pip cache purge
           pip install -r requirements.txt
           sudo apt-get update && sudo apt-get install -y ffmpeg
+
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v1
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
       - name: Run Batch Processor
         run: |
           mkdir -p logs output
           python -m src.batch_processor
+
       - name: Cleanup old outputs
         run: |
           find output -iname '*.mp4' -mtime +7 -delete
