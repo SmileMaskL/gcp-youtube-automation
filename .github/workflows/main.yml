@@ -10,6 +10,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
+    permissions:
+      id-token: write
+      contents: read
+
     env:
       ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
       ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
