@@ -5,6 +5,15 @@ from typing import Optional, Union, Dict, List
 from google.cloud import secretmanager
 from google.api_core.exceptions import NotFound, PermissionDenied
 
+def get_secret(secret_name: str, version: str = "latest") -> str:
+    project_id = os.getenv("GCP_PROJECT_ID")
+    if not project_id:
+        raise ValueError("GCP_PROJECT_ID 환경 변수가 설정되지 않았습니다.")
+    client = secretmanager.SecretManagerServiceClient()
+    name = f"projects/{project_id}/secrets/{secret_name}/versions/{version}"
+    response = client.access_secret_version(request={"name": name})
+    return response.payload.data.decode("UTF-8")
+
 # 로거 설정
 logger = logging.getLogger(__name__)
 
