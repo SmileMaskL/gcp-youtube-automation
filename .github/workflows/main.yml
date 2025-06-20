@@ -45,8 +45,7 @@ jobs:
           pip install --no-cache-dir -r requirements.txt
 
       - name: Run YouTube Automation
-        run: |
-          python -m src.main
+        run: python -m src.main
         env:
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
           OPENAI_KEYS_JSON: ${{ secrets.OPENAI_KEYS_JSON }}
