@@ -3,7 +3,7 @@ google-api-python-client==2.128.0
 google-auth-oauthlib==1.2.0
 google-auth-httplib2==0.2.0
 google-generativeai==0.7.0 # Gemini API
-elevenlabs==2.3.0
+elevenlabs==1.0.5
 openai==1.35.13
 python-dotenv==1.0.1
 Pillow==10.3.0
