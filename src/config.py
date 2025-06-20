@@ -1,4 +1,3 @@
-from src.config import get_secret
 import os
 import json
 import logging
@@ -6,7 +5,9 @@ from typing import Optional, Union, Dict, List
 from google.cloud import secretmanager
 from google.api_core.exceptions import NotFound, PermissionDenied
 
+# get_secret 함수 추가 (최상위 레벨)
 def get_secret(secret_name: str, version: str = "latest") -> str:
+    """Secret Manager에서 시크릿 값을 가져오는 함수"""
     project_id = os.getenv("GCP_PROJECT_ID")
     if not project_id:
         raise ValueError("GCP_PROJECT_ID 환경 변수가 설정되지 않았습니다.")
