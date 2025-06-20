@@ -20,7 +20,7 @@ python-dotenv==1.0.0  # 환경 변수 관리
 
 # 영상 및 음성 처리
 moviepy==1.0.3  # 영상 편집
-yt-dlp==2023.11.16  # 안정적인 YouTube 다운로더 버전
+yt-dlp==2023.11.16  # PyPI에서 사용 가능한 최신 안정 버전
 ffmpeg-python==0.2.0  # FFmpeg 제어
 opencv-python==4.10.0.84  # 비디오 및 이미지 처리
 
