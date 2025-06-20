@@ -1,186 +1,178 @@
+# src/config.py
 import os
 import json
 import logging
-from typing import Optional, Union, Dict, List
-from google.cloud import secretmanager
-from google.api_core.exceptions import NotFound, PermissionDenied
+from google.cloud import secretmanager_v1 # Correct import for secretmanager client
 
-# get_secret 함수 추가 (최상위 레벨)
-def get_secret(secret_name: str, version: str = "latest") -> str:
-    """Secret Manager에서 시크릿 값을 가져오는 함수"""
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Initialize Secret Manager client globally
+secret_client = None
+
+def _initialize_secret_client():
+    """Initializes the Google Secret Manager client."""
+    global secret_client
+    if secret_client is None:
+        try:
+            # Authenticate using GOOGLE_APPLICATION_CREDENTIALS environment variable
+            # which is set by GitHub Actions in the workflow.
+            secret_client = secretmanager_v1.SecretManagerServiceClient()
+            logging.info("Google Secret Manager client initialized successfully.")
+        except Exception as e:
+            logging.error(f"Failed to initialize Google Secret Manager client: {e}")
+            # Depending on strictness, you might want to raise an exception here
+            # to halt execution if secret manager is critical.
+
+def get_secret(secret_name):
+    """
+    Retrieves a secret from GitHub Actions environment variables or GCP Secret Manager.
+    Prioritizes environment variables.
+    """
+    # 1. Try to get from GitHub Actions environment variables
+    env_value = os.getenv(secret_name.upper()) # GitHub secrets are usually uppercase
+    if env_value:
+        logging.info(f"Secret '{secret_name}' loaded from environment variable.")
+        return env_value
+
+    # 2. If not found in environment, try GCP Secret Manager
+    _initialize_secret_client() # Ensure client is initialized
+    if secret_client is None:
+        logging.error(f"Secret Manager client not initialized. Cannot retrieve secret '{secret_name}'.")
+        return None
+
     project_id = os.getenv("GCP_PROJECT_ID")
     if not project_id:
-        raise ValueError("GCP_PROJECT_ID 환경 변수가 설정되지 않았습니다.")
-    client = secretmanager.SecretManagerServiceClient()
-    name = f"projects/{project_id}/secrets/{secret_name}/versions/{version}"
-    response = client.access_secret_version(request={"name": name})
-    return response.payload.data.decode("UTF-8")
+        logging.error("GCP_PROJECT_ID environment variable not set. Cannot retrieve secrets from GCP Secret Manager.")
+        return None
 
-# 로거 설정
-logger = logging.getLogger(__name__)
+    try:
+        # GCP Secret Manager secret names are typically lowercase and hyphenated.
+        # However, for consistency with GitHub Secrets, we will try the exact secret_name first,
+        # and then a converted version (e.g., OPENAI_KEYS_JSON -> openai-keys-json) if needed.
+        # For simplicity, let's assume direct mapping or you standardize naming.
+        # Given your `OPENAI_KEYS_JSON` vs `openai-api-keys` example, we need to handle this.
+        # Let's standardize on the GitHub Secrets names for GCP Secret Manager as well as per your request (2단계: 키 이름 통일).
+        # So, the secret name in GCP should ideally be "OPENAI_KEYS_JSON" not "openai-api-keys".
+        # If not, you'll need to map them explicitly here.
+        name = f"projects/{project_id}/secrets/{secret_name}/versions/latest"
+        response = secret_client.access_secret_version(request={"name": name})
+        secret_value = response.payload.data.decode("UTF-8")
+        logging.info(f"Secret '{secret_name}' loaded from GCP Secret Manager.")
+        return secret_value
+    except Exception as e:
+        logging.warning(f"Could not retrieve secret '{secret_name}' from GCP Secret Manager: {e}")
+        return None
 
-def setup_logging(log_file: Optional[str] = None, debug: bool = False) -> None:
-    """
-    로깅 설정을 초기화합니다. Cloud Run 환경과 로컬 개발 환경 모두에서 작동하도록 설계되었습니다.
-    
-    Args:
-        log_file (str, optional): 로그를 저장할 파일 경로. None이면 콘솔에만 출력.
-        debug (bool): True로 설정하면 DEBUG 레벨 로깅을 활성화합니다.
-    """
-    log_level = logging.DEBUG if debug else logging.INFO
-    handlers = [logging.StreamHandler()]
-    
-    if log_file:
-        os.makedirs(os.path.dirname(log_file), exist_ok=True)
-        handlers.append(logging.FileHandler(log_file))
-    
-    logging.basicConfig(
-        level=log_level,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=handlers
-    )
-    
-    # GCP 관련 로그는 WARNING 레벨 이상만 출력
-    logging.getLogger('google').setLevel(logging.WARNING)
-    logging.getLogger('urllib3').setLevel(logging.WARNING)
-    logging.getLogger('requests').setLevel(logging.WARNING)
-
-class SecretManager:
-    """
-    Google Secret Manager와 상호작용을 위한 래퍼 클래스.
-    로컬 개발과 프로덕션 환경 모두에서 작동하도록 설계되었습니다.
-    """
-    
-    def get_secret(self, secret_name: str, version: str = "latest") -> str:
-        # secret fetch logic
-        pass
-        """
-        Args:
-            project_id (str, optional): GCP 프로젝트 ID. None이면 환경 변수에서 읽음.
-        """
-        self.project_id = project_id or os.getenv("GCP_PROJECT_ID")
-        if not self.project_id:
-            raise ValueError("GCP_PROJECT_ID 환경 변수가 설정되지 않았습니다.")
-        
-        self.client = secretmanager.SecretManagerServiceClient()
-        logger.info(f"SecretManager initialized for project: {self.project_id}")
-
-    def get_secret(self, secret_name: str, version: str = "latest") -> str:
-        """
-        Secret Manager에서 시크릿 값을 가져옵니다.
-        
-        Args:
-            secret_name (str): Secret Manager에 저장된 시크릿의 ID
-            version (str): 시크릿 버전 (기본값: "latest")
-            
-        Returns:
-            str: 시크릿 값
-            
-        Raises:
-            ValueError: 시크릿을 찾을 수 없거나 접근 권한이 없는 경우
-            RuntimeError: 기타 오류 발생 시
-        """
-        name = f"projects/{self.project_id}/secrets/{secret_name}/versions/{version}"
-        
-        try:
-            response = self.client.access_secret_version(request={"name": name})
-            secret_value = response.payload.data.decode("UTF-8")
-            logger.info(f"Successfully retrieved secret: {secret_name}")
-            return secret_value
-        except NotFound:
-            error_msg = f"시크릿을 찾을 수 없습니다: {secret_name}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
-        except PermissionDenied:
-            error_msg = f"시크릿에 접근할 권한이 없습니다: {secret_name}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
-        except Exception as e:
-            error_msg = f"시크릿을 가져오는 중 오류 발생: {str(e)}"
-            logger.error(error_msg, exc_info=True)
-            raise RuntimeError(error_msg)
-
-    def get_json_secret(self, secret_name: str) -> Union[Dict, List]:
-        """
-        JSON 형식으로 저장된 시크릿을 파싱하여 가져옵니다.
-        
-        Args:
-            secret_name (str): Secret Manager에 저장된 시크릿의 ID
-            
-        Returns:
-            Union[Dict, List]: 파싱된 JSON 데이터
-            
-        Raises:
-            ValueError: JSON 파싱 실패 시
-        """
-        secret_value = self.get_secret(secret_name)
+def get_json_secret(secret_name):
+    """Retrieves a secret and parses it as JSON."""
+    secret_value = get_secret(secret_name)
+    if secret_value:
         try:
             return json.loads(secret_value)
         except json.JSONDecodeError as e:
-            error_msg = f"시크릿 JSON 파싱 실패: {secret_name} - {str(e)}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            logging.error(f"Failed to parse secret '{secret_name}' as JSON: {e}")
+            return None
+    return None
 
-def load_config() -> Dict:
+class AppConfig:
     """
-    애플리케이션 구성을 로드합니다. 환경 변수와 Secret Manager를 모두 확인합니다.
-    
-    Returns:
-        Dict: 로드된 구성 딕셔너리
-        
-    Raises:
-        ValueError: 필수 구성이 누락된 경우
+    Manages application configuration, including API keys and settings.
+    Handles API key rotation for OpenAI and Gemini.
     """
-    config = {}
-    secret_manager = SecretManager()
-    
-    try:
-        # 필수 시크릿 로드
-        config["ELEVENLABS_API_KEY"] = secret_manager.get_secret("ELEVENLABS_API_KEY")
-        config["ELEVENLABS_VOICE_ID"] = os.getenv("ELEVENLABS_VOICE_ID", "uyVNoMrnUku1dZyVEXwD")
-        config["OPENAI_KEYS"] = secret_manager.get_json_secret("openai-api-keys")
-        config["GEMINI_API_KEY"] = secret_manager.get_secret("gemini-api-key")
-        config["YOUTUBE_OAUTH_CREDENTIALS"] = secret_manager.get_secret("YOUTUBE_OAUTH_CREDENTIALS")
-        config["PEXELS_API_KEY"] = secret_manager.get_secret("pexels-api-key")
-        
-        # 선택적 환경 변수
-        config["FONT_PATH"] = os.getenv("FONT_PATH", "./fonts/Catfont.ttf")
-        config["OUTPUT_DIR"] = os.getenv("OUTPUT_DIR", "./output")
-        config["LOG_DIR"] = os.getenv("LOG_DIR", "./logs")
-        config["MAX_RETRIES"] = int(os.getenv("MAX_RETRIES", "3"))
-        
-        logger.info("성공적으로 모든 구성을 로드했습니다.")
-        return config
-        
-    except Exception as e:
-        logger.error(f"구성 로드 중 오류 발생: {str(e)}", exc_info=True)
-        raise ValueError(f"구성 로드 실패: {str(e)}")
+    _instance = None
 
-# 전역 로깅 설정 (기본값)
-setup_logging()
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(AppConfig, cls).__new__(cls)
+            cls._instance._load_config_data()
+        return cls._instance
 
-if __name__ == "__main__":
-    # 로컬 테스트를 위한 환경 변수 로드
-    from dotenv import load_dotenv
-    load_dotenv()
-    
-    # 테스트 실행
-    try:
-        print("=== 시크릿 매니저 테스트 시작 ===")
-        
-        # 테스트용 구성 로드
-        test_config = load_config()
-        print(f"로드된 구성 키: {list(test_config.keys())}")
-        
-        # 민감한 정보는 일부만 표시
-        print(f"ElevenLabs API Key (첫 5자): {test_config['ELEVENLABS_API_KEY'][:5]}*****")
-        print(f"OpenAI Keys 개수: {len(test_config['OPENAI_KEYS']) if isinstance(test_config['OPENAI_KEYS'], list) else 1}")
-        print(f"Gemini API Key (첫 5자): {test_config['GEMINI_API_KEY'][:5]}*****")
-        print(f"폰트 경로: {test_config['FONT_PATH']}")
-        print(f"출력 디렉토리: {test_config['OUTPUT_DIR']}")
-        
-        print("=== 테스트 성공 ===")
-        
-    except Exception as e:
-        print(f"!!! 테스트 실패: {str(e)}")
-        logger.exception("테스트 중 예외 발생")
+    def _load_config_data(self):
+        self.config = {}
+
+        # Load OpenAI Keys
+        openai_keys_json = get_json_secret("OPENAI_KEYS_JSON")
+        if openai_keys_json and isinstance(openai_keys_json, list):
+            self.config["OPENAI_KEYS"] = [key for key in openai_keys_json if key] # Filter out empty keys
+            self.openai_key_index = 0
+            logging.info(f"Loaded {len(self.config['OPENAI_KEYS'])} OpenAI API keys.")
+        else:
+            self.config["OPENAI_KEYS"] = []
+            logging.warning("No valid OpenAI API keys loaded.")
+
+        # Load Gemini API Key
+        gemini_api_key = get_secret("GEMINI_API_KEY")
+        if gemini_api_key:
+            self.config["GEMINI_API_KEY"] = [gemini_api_key] # Store as list for rotation
+            self.gemini_key_index = 0
+            logging.info("Loaded Gemini API key.")
+        else:
+            self.config["GEMINI_API_KEY"] = []
+            logging.warning("No valid Gemini API key loaded.")
+
+        # Load other API keys
+        self.config["ELEVENLABS_API_KEY"] = get_secret("ELEVENLABS_API_KEY")
+        self.config["ELEVENLABS_VOICE_ID"] = os.getenv("ELEVENLABS_VOICE_ID", "uyVNoMrnUku1dZyVEXwD") # Default to Anna Kim
+        self.config["YOUTUBE_OAUTH_CREDENTIALS"] = get_json_secret("YOUTUBE_OAUTH_CREDENTIALS")
+        self.config["NEWS_API_KEY"] = get_secret("NEWS_API_KEY")
+        self.config["PEXELS_API_KEY"] = get_secret("PEXELS_API_KEY")
+        self.config["GOOGLE_API_KEY"] = get_secret("GOOGLE_API_KEY") # For other Google APIs if needed
+
+        # Load GCP settings
+        self.config["GCP_PROJECT_ID"] = os.getenv("GCP_PROJECT_ID")
+        self.config["GCP_BUCKET_NAME"] = os.getenv("GCP_BUCKET_NAME")
+
+        # Set font path
+        self.config["FONT_PATH"] = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'fonts', 'Catfont.ttf')
+        if not os.path.exists(self.config["FONT_PATH"]):
+            logging.error(f"Font file not found at {self.config['FONT_PATH']}. Please ensure Catfont.ttf is in the fonts directory.")
+
+        # API usage tracking (simplified for demonstration, could use a database for persistence)
+        self.api_usage = {
+            "openai": 0,
+            "gemini": 0
+        }
+        self.api_limits = { # Example limits, adjust based on actual free tier quotas
+            "openai": {"daily": 500000, "monthly": 5000000}, # Example tokens/requests
+            "gemini": {"daily": 1000, "monthly": 20000} # Example requests
+        }
+
+    def get_next_openai_key(self):
+        """Returns the next OpenAI API key in a round-robin fashion."""
+        if not self.config["OPENAI_KEYS"]:
+            logging.error("No OpenAI API keys available.")
+            return None
+        key = self.config["OPENAI_KEYS"][self.openai_key_index]
+        self.openai_key_index = (self.openai_key_index + 1) % len(self.config["OPENAI_KEYS"])
+        logging.info(f"Using OpenAI API key: {self.openai_key_index} (rotated)")
+        return key
+
+    def get_next_gemini_key(self):
+        """Returns the next Gemini API key in a round-robin fashion."""
+        if not self.config["GEMINI_API_KEY"]:
+            logging.error("No Gemini API keys available.")
+            return None
+        key = self.config["GEMINI_API_KEY"][self.gemini_key_index]
+        self.gemini_key_index = (self.gemini_key_index + 1) % len(self.config["GEMINI_API_KEY"])
+        logging.info(f"Using Gemini API key: {self.gemini_key_index} (rotated)")
+        return key
+
+    def get(self, key, default=None):
+        """Retrieves a configuration value."""
+        return self.config.get(key, default)
+
+    def update_api_usage(self, api_name, usage_amount):
+        """Updates API usage count and checks against limits."""
+        if api_name in self.api_usage:
+            self.api_usage[api_name] += usage_amount
+            logging.info(f"API usage for {api_name}: {self.api_usage[api_name]}")
+            # Basic limit check (daily/monthly tracking would require persistent storage)
+            if self.api_usage[api_name] > self.api_limits.get(api_name, {}).get("daily", float('inf')):
+                logging.warning(f"Daily API limit for {api_name} potentially exceeded!")
+
+def load_config():
+    """Returns the singleton AppConfig instance."""
+    return AppConfig()
+
+# Initialize secret client when module is loaded to catch potential issues early
+_initialize_secret_client()
