@@ -12,6 +12,11 @@ from src.shorts_converter import convert_to_shorts
 from src.youtube_utils import YouTubeUploader
 from src.error_handler import log_error_and_notify
 from src.utils import upload_to_gcs, cleanup_old_files
+복사
+from src.batch_processor import main
+
+if __name__ == "__main__":
+    main()
 
 setup_logging()
 logger = logging.getLogger(__name__)
