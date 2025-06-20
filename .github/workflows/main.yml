@@ -5,59 +5,78 @@ permissions:
   contents: read
 
 on:
+  workflow_dispatch: # Manual trigger
   schedule:
-    - cron: '0 3,7,12,18,22 * * *'  # 하루 5회 실행 (UTC 기준)
-  workflow_dispatch:
+    # Run at 03:00, 07:00, 12:00, 18:00, 22:00 UTC daily
+    # Adjust to KST: Add 9 hours
+    # KST 00:00 (next day) = UTC 15:00 (previous day)
+    # KST 03:00 = UTC 18:00 (previous day)
+    # KST 07:00 = UTC 22:00 (previous day)
+    # KST 12:00 = UTC 03:00
+    # KST 18:00 = UTC 09:00
+    # KST 22:00 = UTC 13:00
+    # So, for KST 03:00, 07:00, 12:00, 18:00, 22:00, use UTC times below
+    # cron: '0 18,22,3,9,13 * * *' # UTC times
+    # Your specified schedule (0 3,7,12,18,22 * * *) aligns with UTC 03:00, 07:00, 12:00, 18:00, 22:00.
+    # If this is intended to be KST, you need to adjust it by subtracting 9 hours.
+    # Let's assume the provided schedule '0 3,7,12,18,22 * * *' is already the desired UTC time for KST.
+    - cron: '0 3,7,12,18,22 * * *'
+
 
 jobs:
-  generate-and-upload:
+  build-and-run:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-
-    env:
-      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-      ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
-      FONT_PATH: "./fonts/Catfont.ttf"
-      OUTPUT_DIR: "./output"
-      LOG_DIR: "./logs"
-      MAX_RETRIES: "3"
+    timeout-minutes: 60 # Set a timeout for the job to prevent infinite runs
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
-      - name: Install dependencies
+      - name: Install system dependencies (ffmpeg)
         run: |
-          pip install --upgrade pip
-          pip cache purge
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Install Python dependencies
+        run: |
           python -m pip install --upgrade pip
-          sudo apt-get update && sudo apt-get install -y ffmpeg
-          pip install -r requirements.txt
+          pip cache purge # Clear pip cache to ensure fresh installation
+          pip install --no-cache-dir -r requirements.txt # Force reinstall from requirements.txt
 
-      - name: Authenticate to GCP
-        uses: google-github-actions/auth@v1
-        with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
-
-      - name: Run Batch Processor
+      - name: Configure GCP Service Account Key
+        # This step securely decodes and stores the GCP Service Account Key
+        # so that google-cloud-secret-manager can authenticate.
+        run: |
+          echo "${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}" > gcp_key.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp_key.json" >> $GITHUB_ENV
         env:
-          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
-          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+
+      - name: Run YouTube Automation
+        run: |
+          python -m src.main
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
           OPENAI_KEYS_JSON: ${{ secrets.OPENAI_KEYS_JSON }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
           YOUTUBE_OAUTH_CREDENTIALS: ${{ secrets.YOUTUBE_OAUTH_CREDENTIALS }}
+          GCP_BUCKET_NAME: ${{ secrets.GCP_BUCKET_NAME }}
           NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
-        run: |
-          mkdir -p logs output
-          python -m src.batch_processor
-
-      - name: Cleanup old outputs
-        run: |
-          find output -iname '*.mp4' -mtime +7 -delete
-          find logs -iname '*.log' -mtime +30 -delete
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }} # Added GOOGLE_API_KEY
+          # Note: WIF_PROVIDER, WIF_SERVICE_ACCOUNT, GCP_PROJECT_NUMBER are typically
+          # used for Workload Identity Federation in GCP, which is a more advanced
+          # authentication method. For simplicity and direct secret access,
+          # GCP_SERVICE_ACCOUNT_KEY is used here.
+          # If Workload Identity Federation is a strict requirement,
+          # additional setup in GCP and changes to config.py for authentication
+          # will be needed. For now, let's stick to service account key for direct access.
