@@ -33,10 +33,11 @@ jobs:
 
       - name: Install dependencies
         run: |
+          pip install --upgrade pip
           pip cache purge
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
           sudo apt-get update && sudo apt-get install -y ffmpeg
+          pip install -r requirements.txt
 
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v1
