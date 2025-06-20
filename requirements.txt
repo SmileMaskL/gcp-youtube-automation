@@ -4,7 +4,7 @@ openai==1.35.1
 google-cloud-secret-manager==2.24.0
 google-cloud-storage==2.16.0
 google-generativeai==0.6.0 # Gemini API 사용
-elevenlabs==0.2.27 # ElevenLabs API 사용 (generate 함수 호환 버전)
+elevenlabs==1.0.5 #
 
 # 유튜브 API 및 인증
 google-auth-oauthlib==1.2.0
