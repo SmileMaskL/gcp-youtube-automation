@@ -28,7 +28,13 @@ jobs:
           # 캐시 제거
           pip cache purge
           rm -rf ~/.cache/pip
-          rm -rf ~/.local/lib/python3.11/site-packages
+          rm -rf ~/.local/lib/python*/site-packages
+
+          # 최신 pip 도구 설치
+          python -m pip install --upgrade pip setuptools wheel
+
+          # ✅ 핵심 GCP 패키지 명시적으로 설치
+          pip install google-cloud-secret-manager==2.24.0 --no-cache-dir --force-reinstall
 
           # pip/tools 업그레이드
           python -m pip install --upgrade pip==24.0 setuptools==68.2.2 wheel==0.43.0
@@ -37,7 +43,6 @@ jobs:
 
           # 핵심 GCP 패키지 먼저 설치
           pip install \
-            google-cloud-secret-manager==2.24.0 \
             google-auth==2.29.0 \
             google-api-python-client==2.136.0 \
             --force-reinstall --no-cache-dir
