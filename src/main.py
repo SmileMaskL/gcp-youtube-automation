@@ -1,14 +1,17 @@
-# main.py (기존 batch_runner 역할을 대체)
-from fastapi import FastAPI, BackgroundTasks
-from src.batch_processor import BatchProcessor
+from src.content_generator import generate_content
+from src.video_creator import create_video
+from src.youtube_uploader import upload_video
+from src.config import load_config
+import logging
 
-app = FastAPI()
-
-@app.get("/run")
-def trigger_run(background_tasks: BackgroundTasks):
-    background_tasks.add_task(BatchProcessor().process)
-    return {"status": "배치 작업이 백그라운드로 시작되었습니다."}
+def main():
+    config = load_config()
+    logging.info("콘텐츠 생성 시작")
+    content = generate_content(config)
+    logging.info("영상 제작 시작")
+    video_path = create_video(content, config)
+    logging.info("유튜브 업로드 시작")
+    upload_video(video_path, config)
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8080)))
+    main()
