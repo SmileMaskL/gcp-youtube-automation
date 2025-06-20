@@ -1,8 +1,11 @@
 import logging
 import json
-from src.config import get_secret
+from src.config import SecretManager
 import openai
 import google.generativeai as genai
+
+secret_manager = SecretManager()
+openai_api_key = secret_manager.get_secret("OPENAI_API_KEYS")
 
 logger = logging.getLogger(__name__)
 
