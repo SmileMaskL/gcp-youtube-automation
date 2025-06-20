@@ -38,6 +38,7 @@ jobs:
           pip cache purge
           python -m pip install --upgrade pip setuptools wheel
           pip install --no-cache-dir -r requirements.txt
+          pip install "yt-dlp @ https://github.com/yt-dlp/yt-dlp/archive/master.tar.gz"
 
       - name: Run YouTube Shorts Automation
         run: python -m src.main
