@@ -15,35 +15,36 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-      
+          python-version: '3.11'  # ⚠️ 반드시 3.11 사용
+
       - name: Install ffmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Install Python dependencies
         run: |
-          # 1. 캐시 완전 초기화
+          # 캐시 제거
           pip cache purge
           rm -rf ~/.cache/pip
           rm -rf ~/.local/lib/python3.11/site-packages
-    
-          # 2. pip 및 기본 도구 업그레이드
+
+          # pip/tools 업그레이드
           python -m pip install --upgrade pip==24.0 setuptools==68.2.2 wheel==0.43.0
-    
-          # 3. 핵심 GCP 패키지 먼저 설치 (강제 재설치)
+
+          # 핵심 GCP 패키지 먼저 설치
           pip install \
-          google-cloud-secret-manager==2.24.0 \
-          google-auth==2.29.0 \
-          google-api-python-client==2.136.0 \
-          --force-reinstall --no-cache-dir
-    
-           # 4. 나머지 패키지 설치
-           pip install --no-cache-dir -r requirements.txt
-    
-           # 5. yt-dlp 별도 설치
-           pip install "yt-dlp @ https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.tar.gz"
+            google-cloud-secret-manager==2.24.0 \
+            google-auth==2.29.0 \
+            google-api-python-client==2.136.0 \
+            --force-reinstall --no-cache-dir
+
+          # 나머지 패키지 설치
+          pip install --no-cache-dir -r requirements.txt
+
+          # yt-dlp 직접 GitHub에서 설치
+          pip install "yt-dlp @ https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.tar.gz"
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
