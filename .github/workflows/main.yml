@@ -1,13 +1,12 @@
 name: YouTube Shorts Automation
-
 permissions:
   id-token: write
   contents: read
 
 on:
-  workflow_dispatch:   # 수동 실행
+  workflow_dispatch:
   schedule:
-    - cron: '0 3,7,12,18,22 * * *'  # 하루 5회 자동 실행 (KST 기준: UTC+9)
+    - cron: '0 3,7,12,18,22 * * *'
 
 jobs:
   build-and-run:
@@ -15,41 +14,34 @@ jobs:
     timeout-minutes: 60
 
     steps:
-      - name: ✅ Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: ✅ Setup Python 3.12
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
-      - name: ✅ Install system dependencies (ffmpeg)
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
-
-      - name: ✅ Authenticate to Google Cloud
+      - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
-      - name: ✅ Test GCP ADC authentication (optional, can remove in prod)
+      - name: Test ADC authentication
         run: |
           gcloud auth list
           gcloud projects list
 
-      - name: ✅ Install Python dependencies (with yt-dlp from GitHub)
+      - name: Install Python dependencies
         run: |
-          pip cache purge || true
           python -m pip install --upgrade pip setuptools wheel
           pip install --no-cache-dir -r requirements.txt
-          pip install --no-cache-dir "yt-dlp @ https://github.com/yt-dlp/yt-dlp/archive/master.tar.gz"
+          pip install "yt-dlp @ https://github.com/yt-dlp/yt-dlp/archive/master.tar.gz"
 
-      - name: ✅ Run YouTube Shorts Automation
+      - name: Run YouTube Shorts Automation
         run: python -m src.main
         env:
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
           OPENAI_KEYS_JSON: ${{ secrets.OPENAI_KEYS_JSON }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
           ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
           YOUTUBE_OAUTH_CREDENTIALS: ${{ secrets.YOUTUBE_OAUTH_CREDENTIALS }}
