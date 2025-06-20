@@ -22,7 +22,6 @@ python-dotenv==1.0.1
 # ✅ 영상 및 음성 처리
 moviepy==1.0.3
 imageio-ffmpeg==0.4.9
-yt-dlp @ https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.tar.gz  # PyPI 대신 Gi
 ffmpeg-python==0.2.0
 opencv-python==4.10.0.84
 
