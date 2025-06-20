@@ -1,89 +1,52 @@
-# .github/workflows/main.yml
 name: YouTube Automation Pipeline
 
 on:
-  workflow_dispatch: # 수동 실행 트리거
+  workflow_dispatch:
   schedule:
-    # 매일 UTC 3, 7, 12, 18, 22시에 실행 (한국 시간으로 오전 12시, 오전 4시, 오전 9시, 오후 3시, 오후 7시)
-    # Cloud Run Jobs의 무료 할당량 및 YouTube API 쿼터를 고려한 스케줄입니다.
-    # 하루 5회 실행은 무료 할당량 범위 내에서 충분히 가능합니다.
-    - cron: '0 3,7,12,18,22 * * *'
+    - cron: '0 3,7,12,18,22 * * *'  # 하루 5회 실행
 
 jobs:
   build-deploy-execute:
     runs-on: ubuntu-latest
     permissions:
       contents: 'read'
-      id-token: 'write' # GCP 인증을 위해 필요
+      id-token: 'write'
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup GCP Auth
-        id: auth
+      - name: Set up GCP Auth
         uses: google-github-actions/auth@v1
         with:
-          # GitHub Secrets에 저장된 서비스 계정 키 사용
           credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
         with:
-          project_id: ${{ secrets.GCP_PROJECT_ID }} # GCloud SDK 설정에 프로젝트 ID 명시
-
-      - name: Configure Docker
-        run: gcloud auth configure-docker
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
 
       - name: Build Docker image
         run: |
-          # GCR (Google Container Registry)에 푸시할 이미지 태그 생성
           IMAGE_TAG="gcr.io/${{ secrets.GCP_PROJECT_ID }}/youtube-automation:$GITHUB_SHA"
-          echo "Building Docker image: $IMAGE_TAG"
           docker build -t "$IMAGE_TAG" .
-          echo "DOCKER_IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV # 다음 단계에서 사용할 수 있도록 환경 변수로 저장
-
-      - name: Push Docker image
-        run: |
-          echo "Pushing Docker image: ${{ env.DOCKER_IMAGE_TAG }}"
-          docker push ${{ env.DOCKER_IMAGE_TAG }}
+          docker push "$IMAGE_TAG"
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
 
       - name: Deploy Cloud Run Job
         run: |
-          # Cloud Run Job 배포. --set-env-vars는 한 줄에 하나의 변수만 명시
-          # YOUTUBE_OAUTH_CREDENTIALS와 OPENAI_KEYS_JSON은 JSON 문자열이므로 Secret Manager에서 직접 가져옵니다.
-          # GitHub Actions는 긴 JSON 문자열을 --set-env-vars에 직접 전달하는 것을 권장하지 않으므로,
-          # Python 코드 내에서 GCP Secret Manager에서 직접 읽어오도록 변경합니다.
-          # 여기서는 일반적인 환경 변수만 전달합니다.
-          echo "Deploying Cloud Run Job 'youtube-automation-job' with image ${{ env.DOCKER_IMAGE_TAG }}"
           gcloud run jobs deploy youtube-automation-job \
-            --image ${{ env.DOCKER_IMAGE_TAG }} \
+            --image ${{ env.IMAGE_TAG }} \
             --region us-central1 \
             --set-env-vars "GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}" \
             --set-env-vars "GCP_BUCKET_NAME=${{ secrets.GCP_BUCKET_NAME }}" \
             --set-env-vars "ELEVENLABS_VOICE_ID=${{ secrets.ELEVENLABS_VOICE_ID }}" \
             --max-retries 1 \
-            --timeout 3600s # 작업 최대 실행 시간 1시간 설정
+            --timeout 3600s \
+            --cpu 1 \
+            --memory 1Gi
 
-      - name: Execute Cloud Run Job
-        # Cloud Run Job을 실행하고 완료될 때까지 기다립니다.
+      - name: Execute Job
         run: |
-          echo "Executing Cloud Run Job 'youtube-automation-job' in region us-central1"
           gcloud run jobs execute youtube-automation-job \
             --region us-central1 \
-            --wait # 작업이 완료될 때까지 기다림
-        env:
-          # 중요한 API 키들은 Secret Manager에서 직접 가져오도록 Python 코드 내에서 처리합니다.
-          # GitHub Actions에서 직접 --set-env-vars로 전달하는 대신,
-          # Python 스크립트가 실행될 때 GCP Secret Manager에서 동적으로 가져오도록 구현합니다.
-          # 하지만 테스트 목적으로나, Secret Manager를 사용하지 않는 경우에는 직접 전달할 수 있습니다.
-          # 여기서는 Secret Manager를 권장하므로 주석 처리합니다.
-          # ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
-          # PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-          # NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
-          # OPENAI_KEYS_JSON: ${{ secrets.OPENAI_KEYS_JSON }}
-          # GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          # YOUTUBE_OAUTH_CREDENTIALS: ${{ secrets.YOUTUBE_OAUTH_CREDENTIALS }}
-          # SECRET_MANAGER_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }} # Secret Manager에서 키를 가져올 때 사용
-          # Python 코드에서 환경변수를 통해 프로젝트 ID를 얻어 Secret Manager 접근
-          # 이미 Cloud Run Job에 GCP_PROJECT_ID가 설정되어 있으므로 별도 전달 불필요
+            --wait
