@@ -1,8 +1,10 @@
+@@ -10,6 +10,7 @@ other-dependencies==x.y.z
 google-cloud-storage==2.16.0
 google-api-python-client==2.128.0
 google-auth-oauthlib==1.2.0
 google-auth-httplib2==0.2.0
 google-generativeai==0.7.0 # Gemini API
+ google-cloud-secret-manager>=2.0.0
 elevenlabs==1.0.5
 openai==1.35.13
 python-dotenv==1.0.1
@@ -10,9 +12,7 @@ Pillow==10.3.0
 moviepy==1.0.3
 requests==2.32.3
 beautifulsoup4==4.12.3
-youtube-dl==2021.12.17
-# youtube-dl은 더 이상 업데이트되지 않으므로 yt-dlp 사용을 고려할 수 있지만, 여기서는 기존 설정 유지
+# youtube-dl==2021.12.17 은 더 이상 업데이트되지 않으므로 yt-dlp 사용을 고려할 수 있지만, 여기서는 기존 설정 유지
 yt-dlp==2024.04.09 # youtube-dl 대신 yt-dlp 권장
 newsapi-python==0.2.7
 pexels-api==1.0.1
-
