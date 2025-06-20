@@ -1,4 +1,48 @@
-# src/cleanup_manager.py
+import logging
+from google.cloud import storage
+from datetime import datetime, timedelta
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def cleanup_old_data(config, days_to_retain=7):
+    """
+    Cleans up old files from Google Cloud Storage to manage storage limits.
+    Files older than `days_to_retain` will be deleted.
+    Assumes files are stored with a timestamp or date in their name/prefix.
+    """
+    bucket_name = config.get("GCP_BUCKET_NAME")
+    project_id = config.get("GCP_PROJECT_ID")
+
+    if not bucket_name or not project_id:
+        logging.warning("GCP_BUCKET_NAME or GCP_PROJECT_ID not configured. Skipping GCS cleanup.")
+        return
+
+    try:
+        storage_client = storage.Client(project=project_id)
+        bucket = storage_client.bucket(bucket_name)
+
+        logging.info(f"Starting cleanup for bucket '{bucket_name}' older than {days_to_retain} days.")
+        
+        # Calculate the threshold date
+        threshold_date = datetime.utcnow() - timedelta(days=days_to_retain)
+
+        deleted_count = 0
+        for blob in bucket.list_blobs():
+            # Assuming file names or prefixes contain creation date in a parsable format (e.g., YYYY-MM-DD)
+            # You might need to adjust this logic based on your actual file naming convention.
+            # For simplicity, let's assume blob.time_created is reliable for this purpose.
+            if blob.time_created and blob.time_created.replace(tzinfo=None) < threshold_date:
+                try:
+                    blob.delete()
+                    logging.info(f"Deleted old file: {blob.name} (Created: {blob.time_created})")
+                    deleted_count += 1
+                except Exception as e:
+                    logging.error(f"Failed to delete blob {blob.name}: {e}")
+        
+        logging.info(f"Finished cleanup. Total {deleted_count} old files deleted from bucket '{bucket_name}'.")
+
+    except Exception as e:
+        logging.error(f"Error during Google Cloud Storage cleanup: {e}")# src/cleanup_manager.py
 import os
 import logging
 from datetime import datetime, timedelta, timezone
