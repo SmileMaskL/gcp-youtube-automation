@@ -1,106 +1,72 @@
-import logging
+# src/main.py (또는 Secret Manager를 초기화하는 파일)
+
 import os
-import time
-from datetime import datetime
-
-# Import modules from src
-from src.config import load_config
-from src.content_generator import generate_content # Assumes this handles topic selection (hot issues)
+import json
+import logging
+from google.cloud import secretmanager # google-cloud-secret-manager 라이브러리 사용
 from src.video_creator import create_video # Assumes this handles video creation, shorts conversion, thumbnail generation
-from src.youtube_uploader import upload_video # Assumes this handles YouTube upload and comment posting
-from src.cleanup_manager import cleanup_old_data # For data retention and free tier limits
 
-# Configure logging for better visibility in GitHub Actions logs
-logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s',
-                    handlers=[logging.StreamHandler()])
+# 로깅 설정 (기존 코드에 이미 있을 수 있습니다)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def run_automation_cycle(config):
-    """
-    Executes a single cycle of content generation, video creation, and YouTube upload.
-    This function will be called multiple times a day based on the GitHub Actions schedule.
-    """
+# --- Google Secret Manager 클라이언트 초기화 수정 ---
+def initialize_secret_manager_client():
     try:
-        logging.info(f"--- Starting new automation cycle at {datetime.now()} ---")
+        # GCP_SERVICE_ACCOUNT_KEY 환경 변수에서 서비스 계정 키 JSON 문자열을 읽어옴
+        # 이 환경 변수는 GitHub Actions Secrets에서 주입됩니다.
+        gcp_service_account_info = os.getenv("GCP_SERVICE_ACCOUNT_KEY")
 
-        # Step 1: Generate Content (incorporating hot issues, API key rotation)
-        logging.info("Step 1: Content generation started.")
-        # Pass config to content_generator to manage API keys and news API access
-        content = generate_content(config)
-        if not content:
-            logging.error("Content generation failed. Skipping video creation and upload.")
-            return
+        if not gcp_service_account_info:
+            logging.error("Environment variable 'GCP_SERVICE_ACCOUNT_KEY' not found.")
+            raise ValueError("GCP_SERVICE_ACCOUNT_KEY environment variable is not set.")
 
-        logging.info("Step 1: Content generation completed.")
+        # JSON 문자열을 파싱하여 클라이언트 초기화에 사용
+        # credential 정보를 직접 전달하는 방식
+        credentials_info = json.loads(gcp_service_account_info)
 
-        # Step 2: Create Video (incorporating ElevenLabs for voice, custom font, thumbnail, shorts conversion)
-        logging.info("Step 2: Video creation started.")
-        # Pass config to video_creator to access ElevenLabs key, voice ID, font path
-        video_path = create_video(content, config)
-        if not video_path or not os.path.exists(video_path):
-            logging.error("Video creation failed or video file not found. Skipping YouTube upload.")
-            return
-        logging.info(f"Step 2: Video creation completed. Video path: {video_path}")
+        # secretmanager.SecretManagerServiceClient는 credentials 매개변수를 받지 않습니다.
+        # 대신, GOOGLE_APPLICATION_CREDENTIALS 환경 변수를 사용하거나
+        # default credentials가 자동으로 로드되도록 해야 합니다.
 
-        # Step 3: Upload Video to YouTube (incorporating YouTube OAuth, comment posting)
-        logging.info("Step 3: YouTube upload started.")
-        # Pass config to youtube_uploader to access YouTube OAuth credentials
-        upload_successful = upload_video(video_path, content, config) # content might contain title/description etc.
-        if not upload_successful:
-            logging.error("YouTube upload failed.")
-            return
-        logging.info("Step 3: YouTube upload completed.")
+        # 가장 좋은 방법은 환경 변수를 통해 credential을 설정하는 것입니다.
+        # GitHub Actions 워크플로우에서 이 작업을 수행합니다.
+        # secrets.GCP_SERVICE_ACCOUNT_KEY 내용을 임시 파일로 만들고
+        # GOOGLE_APPLICATION_CREDENTIALS 환경 변수를 해당 파일 경로로 설정합니다.
 
-        # Step 4: Cleanup generated video file to save storage space
-        try:
-            os.remove(video_path)
-            logging.info(f"Cleaned up video file: {video_path}")
-        except OSError as e:
-            logging.warning(f"Error cleaning up video file {video_path}: {e}")
-
-        logging.info(f"--- Automation cycle completed successfully at {datetime.now()} ---")
-
+        # 여기서는 Secret Manager 클라이언트 자체는 인증 정보를 명시적으로 받지 않고,
+        # GOOGLE_APPLICATION_CREDENTIALS 환경 변수 (GitHub Actions에서 설정)를 통해 인증됩니다.
+        client = secretmanager.SecretManagerServiceClient()
+        logging.info("Google Secret Manager client initialized successfully.")
+        return client
+    except json.JSONDecodeError as e:
+        logging.error(f"Failed to decode GCP_SERVICE_ACCOUNT_KEY JSON: {e}")
+        raise ValueError(f"Invalid JSON in GCP_SERVICE_ACCOUNT_KEY environment variable: {e}")
     except Exception as e:
-        logging.exception(f"An unhandled error occurred during automation cycle: {e}")
-        # Send error notification (e.g., to Sentry, Slack, or log to a specific file in storage)
-        # For this setup, logging to stream and GitHub Actions will capture it.
+        logging.error(f"Failed to initialize Google Secret Manager client: {e}")
+        raise
 
-def main():
-    """
-    Main entry point for the YouTube automation script.
-    Loads configuration and runs the automation cycle.
-    """
-    config = load_config()
-
-    if not config.get("GCP_PROJECT_ID"):
-        logging.critical("GCP_PROJECT_ID is not set in environment variables. Exiting.")
-        return
-    if not config.get("OPENAI_KEYS") and not config.get("GEMINI_API_KEY"):
-        logging.critical("No OpenAI or Gemini API keys loaded. Cannot proceed with content generation. Exiting.")
-        return
-    if not config.get("ELEVENLABS_API_KEY"):
-        logging.critical("ElevenLabs API key not loaded. Cannot proceed with voice generation. Exiting.")
-        return
-    if not config.get("YOUTUBE_OAUTH_CREDENTIALS"):
-        logging.critical("YouTube OAuth credentials not loaded. Cannot upload video. Exiting.")
-        return
-    if not config.get("FONT_PATH") or not os.path.exists(config.get("FONT_PATH")):
-         logging.critical(f"Font file not found at {config.get('FONT_PATH')}. Exiting.")
-         return
-
-    # Run the automation cycle
-    run_automation_cycle(config)
-
-    # Clean up old data from persistent storage (e.g., GCP Cloud Storage if used for logs/intermediate files)
-    # This ensures that free tier limits for storage are not exceeded.
-    # The cleanup_old_data function would need to interact with GCP Cloud Storage.
-    logging.info("Running daily data cleanup for older generated files...")
-    try:
-        cleanup_old_data(config, days_to_retain=7) # Retain data for 7 days
-        logging.info("Data cleanup completed.")
-    except Exception as e:
-        logging.error(f"Error during data cleanup: {e}")
-
-
+# --- 사용 예시 ---
 if __name__ == "__main__":
-    main()
+    try:
+        # GitHub Actions workflow에서 gcp_key.json 파일을 생성하고
+        # GOOGLE_APPLICATION_CREDENTIALS 환경 변수를 설정한다고 가정합니다.
+        # 따라서 여기서 Secret Manager 클라이언트 초기화는 별도의 credentials 파싱 없이 진행됩니다.
+        sm_client = initialize_secret_manager_client()
+
+        # 예시: Secret Manager에서 'my-secret'이라는 비밀을 가져오는 방법
+        # project_id = os.getenv("GCP_PROJECT_ID") # GitHub Actions에서 project_id도 환경변수로 주입한다고 가정
+        # if project_id:
+        #     secret_name = f"projects/{project_id}/secrets/my-secret/versions/latest"
+        #     response = sm_client.access_secret_version(request={"name": secret_name})
+        #     secret_payload = response.payload.data.decode("UTF-8")
+        #     logging.info(f"Successfully retrieved secret: {secret_payload[:20]}...") # 일부만 출력
+        # else:
+        #     logging.warning("GCP_PROJECT_ID environment variable not set. Cannot access secrets.")
+
+        # 비디오 생성 로직 호출
+        create_video()
+
+    except Exception as e:
+        logging.error(f"Application terminated with an error: {e}")
+        # 오류 발생 시 GitHub Actions가 실패하도록 exit code 1 반환
+        exit(1)
