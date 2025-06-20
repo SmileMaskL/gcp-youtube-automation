@@ -1,27 +1,26 @@
 import logging
 import json
-from src.config import SecretManager
+from src.config import SecretManager  # 수정: get_secret 대신 SecretManager 임포트
 import openai
 import google.generativeai as genai
-
-secret_manager = SecretManager()
-openai_api_key = secret_manager.get_secret("OPENAI_API_KEYS")
 
 logger = logging.getLogger(__name__)
 
 class AIManager:
     def __init__(self):
-        self.openai_keys = self._load_openai_keys()
-        self.gemini_key = get_secret("GEMINI_API_KEY")
+        # SecretManager 인스턴스 생성
+        secret_manager = SecretManager()
+        self.openai_keys = self._load_openai_keys(secret_manager)  # secret_manager 전달
+        self.gemini_key = secret_manager.get_secret("GEMINI_API_KEY")  # 직접 접근
         self.current_key_index = 0
-        self.model_rotation = ["openai", "gemini"]  # 모델 로테이션 순서
+        self.model_rotation = ["openai", "gemini"]
         
         if self.gemini_key:
             genai.configure(api_key=self.gemini_key)
 
-    def _load_openai_keys(self):
+    def _load_openai_keys(self, secret_manager):  # secret_manager 매개변수 추가
         try:
-            keys_json = get_secret("OPENAI_KEYS_JSON")
+            keys_json = secret_manager.get_secret("OPENAI_KEYS_JSON")  # SecretManager 사용
             return json.loads(keys_json)
         except Exception as e:
             logger.error(f"OpenAI keys load failed: {str(e)}")
