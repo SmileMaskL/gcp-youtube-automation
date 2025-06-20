@@ -138,10 +138,10 @@ def load_config() -> Dict:
         # 필수 시크릿 로드
         config["ELEVENLABS_API_KEY"] = secret_manager.get_secret("ELEVENLABS_API_KEY")
         config["ELEVENLABS_VOICE_ID"] = os.getenv("ELEVENLABS_VOICE_ID", "uyVNoMrnUku1dZyVEXwD")
-        config["OPENAI_KEYS"] = secret_manager.get_json_secret("OPENAI_KEYS_JSON")
-        config["GEMINI_API_KEY"] = secret_manager.get_secret("GEMINI_API_KEY")
+        config["OPENAI_KEYS"] = secret_manager.get_json_secret("openai-api-keys")
+        config["GEMINI_API_KEY"] = secret_manager.get_secret("gemini-api-key")
         config["YOUTUBE_OAUTH_CREDENTIALS"] = secret_manager.get_secret("YOUTUBE_OAUTH_CREDENTIALS")
-        config["PEXELS_API_KEY"] = secret_manager.get_secret("PEXELS_API_KEY")
+        config["PEXELS_API_KEY"] = secret_manager.get_secret("pexels-api-key")
         
         # 선택적 환경 변수
         config["FONT_PATH"] = os.getenv("FONT_PATH", "./fonts/Catfont.ttf")
