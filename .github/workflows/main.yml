@@ -32,6 +32,8 @@ jobs:
 
           # pip/tools 업그레이드
           python -m pip install --upgrade pip==24.0 setuptools==68.2.2 wheel==0.43.0
+          pip install google-cloud-secret-manager==2.24.0 --no-cache-dir --force-reinstall
+          pip install -r requirements.txt --no-cache-dir
 
           # 핵심 GCP 패키지 먼저 설치
           pip install \
