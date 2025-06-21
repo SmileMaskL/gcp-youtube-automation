@@ -55,7 +55,7 @@ class YouTubeUploader:
                 "categoryId": "22" # 예시 카테고리
             },
             "status": {
-                "privacyStatus": "private" # 예시 프라이버시 상태
+                "privacyStatus": "public" # 예시 프라이버시 상태
             }
         }
         
@@ -89,7 +89,7 @@ class YouTubeUploader:
                     'categoryId': '22' # config.youtube_category_id 사용 고려
                 },
                 'status': {
-                    'privacyStatus': 'private' # config.youtube_privacy_status 사용 고려
+                    'privacyStatus': 'public' # config.youtube_privacy_status 사용 고려
                 }
             }
 
