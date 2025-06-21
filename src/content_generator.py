@@ -1,66 +1,70 @@
+# src/content_generator.py
 import logging
-from newsapi import NewsApiClient # For fetching hot topics
-from src.ai_manager import AIManager
-from src.config import load_config # Ensure config is accessible
+from typing import List
+from src.config import config
+from src.content_rotator import ApiKeyRotator, AIModelSelector
+import google.generativeai as genai
+from openai import OpenAI
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
-def get_hot_topic(news_api_key):
-    """Fetches a hot topic from a news API."""
-    if not news_api_key:
-        logging.warning("News API key not provided. Cannot fetch hot topics.")
-        return "today's interesting facts" # Fallback topic
+class ContentGenerator:
+    def __init__(self):
+        self.openai_rotator = ApiKeyRotator(config.openai_api_keys)
+        self.ai_model_selector = AIModelSelector(use_gemini=True, use_openai=True)
+        
+        # Gemini API 키 설정 (config에서 로드)
+        genai.configure(api_key=config.gemini_api_key)
+        self.gemini_client = genai.GenerativeModel('gemini-pro') # 또는 'gemini-1.5-flash' 등 최신 모델
 
-    newsapi = NewsApiClient(api_key=news_api_key)
-    try:
-        # Fetch top headlines, focusing on a general category or trending
-        top_headlines = newsapi.get_top_headlines(language='en', page_size=5)
-        if top_headlines and top_headlines['articles']:
-            # Pick a random article title or combine a few
-            article_titles = [article['title'] for article in top_headlines['articles'] if article['title']]
-            if article_titles:
-                topic = article_titles[0] # Just take the first one for simplicity
-                logging.info(f"Fetched hot topic: {topic}")
-                return topic
-        logging.warning("Could not fetch hot topics from News API. Using a generic topic.")
-        return "today's trending topics"
-    except Exception as e:
-        logging.error(f"Error fetching hot topics from News API: {e}")
-        return "current events" # Fallback
+    def generate_script(self, topic: str, video_length_seconds: int = 60) -> str:
+        """
+        주제를 바탕으로 비디오 스크립트를 생성합니다.
+        AI 모델 (Gemini 또는 OpenAI)을 로테이션하여 사용합니다.
+        """
+        selected_model = self.ai_model_selector.get_next_model()
+        script = ""
 
-def generate_content(config):
-    """
-    Generates content (script, title, description) for a video.
-    Utilizes AI for script generation and News API for topic selection.
-    """
-    ai_manager = AIManager()
-    news_api_key = config.get("NEWS_API_KEY")
-
-    topic = get_hot_topic(news_api_key)
-    
-    # Example prompt for AI. Refine this for better content.
-    prompt = (f"Generate a captivating and short video script for a 60-second YouTube Shorts video "
-              f"about '{topic}'. The script should be engaging, informative, and suitable for all ages. "
-              f"Include a catchy title and a brief description. The script should be in Korean. "
-              f"Format: {{'title': 'Video Title', 'script': 'Video Script', 'description': 'Video Description'}}")
-
-    logging.info(f"Generating content with AI for topic: {topic}")
-    content_json_str = ai_manager.generate_content_with_rotation(prompt, preferred_model="gpt-4o")
-
-    if content_json_str:
-        try:
-            content_data = json.loads(content_json_str)
-            if "title" not in content_data or "script" not in content_data or "description" not in content_data:
-                raise ValueError("AI response missing required fields (title, script, description).")
+        if selected_model == "openai":
+            api_key = self.openai_rotator.get_next_key()
+            openai_client = OpenAI(api_key=api_key)
+            logger.info(f"Generating script using OpenAI model with key: {api_key[:5]}...")
+            try:
+                response = openai_client.chat.completions.create(
+                    model="gpt-4o", # 또는 "gpt-3.5-turbo" 등
+                    messages=[
+                        {"role": "system", "content": f"You are a helpful assistant specialized in creating engaging 60-second YouTube Shorts scripts based on trending topics. Ensure the script is concise, captivating, and suitable for a broad audience. Focus on a factual, informative, and entertaining tone. Avoid copyrighted material. Generate a script that is approximately {video_length_seconds} seconds long when read naturally."},
+                        {"role": "user", "content": f"Generate a short video script about the following topic: {topic}"}
+                    ],
+                    max_tokens=500 # 스크립트 길이에 따라 조정
+                )
+                script = response.choices[0].message.content.strip()
+                logger.info(f"OpenAI script generated successfully for topic: {topic}")
+            except Exception as e:
+                logger.error(f"OpenAI script generation failed: {e}")
+                # OpenAI 실패 시 Gemini로 폴백하거나 오류 처리
+                script = self._generate_script_with_gemini(topic, video_length_seconds) # 실패 시 Gemini 시도
+        
+        elif selected_model == "gemini":
+            logger.info(f"Generating script using Google Gemini model.")
+            script = self._generate_script_with_gemini(topic, video_length_seconds)
             
-            logging.info("Content generated successfully.")
-            return content_data
-        except json.JSONDecodeError as e:
-            logging.error(f"Failed to parse AI-generated content JSON: {e}. Raw content: {content_json_str}")
-            return None
-        except ValueError as e:
-            logging.error(f"Invalid AI-generated content format: {e}. Raw content: {content_json_str}")
-            return None
-    else:
-        logging.error("Failed to generate content from AI.")
-        return None
+        if not script:
+            logger.error(f"Failed to generate script for topic: {topic} using any available AI model.")
+            raise Exception("Script generation failed.")
+        
+        return script
+
+    def _generate_script_with_gemini(self, topic: str, video_length_seconds: int) -> str:
+        """Gemini 모델을 사용하여 스크립트를 생성하는 내부 함수"""
+        try:
+            response = self.gemini_client.generate_content(
+                f"You are a helpful assistant specialized in creating engaging 60-second YouTube Shorts scripts based on trending topics. Ensure the script is concise, captivating, and suitable for a broad audience. Focus on a factual, informative, and entertaining tone. Avoid copyrighted material. Generate a script that is approximately {video_length_seconds} seconds long when read naturally. Generate a short video script about the following topic: {topic}",
+                generation_config=genai.types.GenerationConfig(max_output_tokens=500) # 스크립트 길이에 따라 조정
+            )
+            script = response.text.strip()
+            logger.info(f"Gemini script generated successfully for topic: {topic}")
+            return script
+        except Exception as e:
+            logger.error(f"Google Gemini script generation failed: {e}")
+            return "" # 실패 시 빈 문자열 반환
