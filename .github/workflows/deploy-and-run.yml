@@ -52,17 +52,18 @@ jobs:
             --allow-unauthenticated \
             --memory=2048MB \
             --timeout=540s \
-            --set-env-vars="GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }}" \
-            --set-env-vars="GCP_BUCKET_NAME=${{ env.GCP_BUCKET_NAME }}" \
-            --set-env-vars="ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }}" \
-            --set-env-vars="ELEVENLABS_VOICE_ID=uyVNoMrnUku1dZyVEXwD" \
-            --set-env-vars="NEWS_API_KEY=${{ secrets.NEWS_API_KEY }}" \
-            --set-env-vars="PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }}" \
-            --set-env-vars="OPENAI_KEYS_JSON=${{ secrets.OPENAI_KEYS_JSON }}" \
-            --set-env-vars="GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" \
-            --set-env-vars="YOUTUBE_CLIENT_ID=${{ secrets.YOUTUBE_CLIENT_ID }}" \
-            --set-env-vars="YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }}" \
-            --set-env-vars="YOUTUBE_REFRESH_TOKEN=${{ secrets.YOUTUBE_REFRESH_TOKEN }}"
+            --set-env-vars="\
+            GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }},\
+            GCP_BUCKET_NAME=${{ env.GCP_BUCKET_NAME }},\
+            ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }},\
+            ELEVENLABS_VOICE_ID=uyVNoMrnUku1dZyVEXwD,\
+            NEWS_API_KEY=${{ secrets.NEWS_API_KEY }},\
+            PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }},\
+            OPENAI_KEYS_JSON=${{ secrets.OPENAI_KEYS_JSON }},\
+            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }},\
+            YOUTUBE_CLIENT_ID=${{ secrets.YOUTUBE_CLIENT_ID }},\
+            YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }},\
+            YOUTUBE_REFRESH_TOKEN=${{ secrets.YOUTUBE_REFRESH_TOKEN }}"
 
       - name: Run Cloud Function
         run: |
