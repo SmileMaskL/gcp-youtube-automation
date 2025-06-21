@@ -27,7 +27,7 @@ def generate_audio(text: str, output_path: str, api_key: str, voice_id: str = "u
     
     try:
         logger.info(f"Generating audio for text (first 50 chars): '{text[:50]}...' with voice_id: {voice_id}")
-        audio = generate(
+        audio_stream = generate(  # audio_stream은 제너레이터 객체입니다.
             text=text,
             voice=Voice(
                 voice_id=voice_id,
@@ -42,8 +42,11 @@ def generate_audio(text: str, output_path: str, api_key: str, voice_id: str = "u
             os.makedirs(output_dir, exist_ok=True)
             logger.info(f"Created output directory: {output_dir}")
         
+        # 제너레이터에서 데이터를 읽어와 파일에 쓰기
         with open(output_path, "wb") as f:
-            f.write(audio)
+            for chunk in audio_stream: # 제너레이터에서 청크(데이터 조각)를 반복적으로 읽어옵니다.
+                if chunk:
+                    f.write(chunk) # 각 청크를 파일에 씁니다.
         
         logger.info(f"Audio successfully saved to {output_path}")
         return True
