@@ -19,27 +19,35 @@ from src.thumbnail_generator import ThumbnailGenerator
 from src.youtube_uploader import YouTubeUploader
 from src.comment_poster import CommentPoster
 from src.cleanup_manager import cleanup_old_files
-from google.cloud import storage
+from src.openai_utils import api_key_manager # API 키 관리자 임포트
 
-# Cloud Storage 클라이언트 초기화
+from google.cloud import storage
+from flask import Request # Flask의 Request 객체를 타입 힌트로 사용
+
+# Cloud Storage 클라이언트 초기화 (config에서 project_id, bucket_name 가져옴)
 storage_client = storage.Client(project=config.project_id)
 bucket = storage_client.bucket(config.bucket_name)
 
 def download_font_from_gcs(font_name: str = "Catfont.ttf"):
     """Cloud Storage에서 폰트 파일을 다운로드합니다."""
-    font_local_path = os.path.join("fonts", font_name)
-    if not os.path.exists(os.path.dirname(font_local_path)):
-        os.makedirs(os.path.dirname(font_local_path), exist_ok=True)
+    # /tmp 디렉토리는 Cloud Functions의 유일하게 쓰기 가능한 디렉토리입니다.
+    font_dir = os.path.join("/tmp", "fonts") 
+    font_local_path = os.path.join(font_dir, font_name)
+    
+    if not os.path.exists(font_dir):
+        os.makedirs(font_dir, exist_ok=True)
     
     try:
         blob = bucket.blob(f"fonts/{font_name}") # 버킷 내 폰트 경로
+        if not blob.exists(): # 폰트 파일이 버킷에 없으면 에러
+            raise FileNotFoundError(f"Font file '{font_name}' not found in GCS bucket '{config.bucket_name}/fonts'.")
+            
         blob.download_to_filename(font_local_path)
         logger.info(f"Font '{font_name}' downloaded to {font_local_path}")
         return font_local_path
     except Exception as e:
         logger.error(f"Failed to download font '{font_name}' from GCS: {e}")
-        # 로컬에 폰트가 없으면 에러 발생하므로, 대체 폰트 경로 등을 고려하거나 에러 처리 필요
-        raise
+        raise # 폰트 다운로드 실패는 치명적이므로 예외 발생
 
 def upload_to_gcs(source_file_name: str, destination_blob_name: str):
     """로컬 파일을 Cloud Storage에 업로드합니다."""
@@ -52,18 +60,18 @@ def upload_to_gcs(source_file_name: str, destination_blob_name: str):
         logger.error(f"Failed to upload {source_file_name} to GCS: {e}")
         return False
 
-def youtube_automation_main(request):
+def youtube_automation_main(request: Request):
     """
     HTTP 요청을 받아 YouTube Shorts 자동화 프로세스를 시작하는 Cloud Function의 진입점.
     """
     logger.info("🚀 YouTube Shorts Automation Process Started!")
     
-    # 요청 본문 파싱 (스케줄링된 작업의 경우 비어있을 수 있음)
+    # HTTP 요청의 body에서 JSON 데이터를 파싱합니다.
     request_json = request.get_json(silent=True)
     if request_json and 'daily_run' in request_json:
         logger.info("Triggered by daily scheduled run.")
     
-    # 폰트 다운로드 (Cloud Functions는 ephemeral filesystem이므로 매 실행마다 다운로드)
+    # 폰트 다운로드 (Cloud Functions는 ephemeral filesystem이므로 매 실행마다 /tmp에 다운로드)
     try:
         font_local_path = download_font_from_gcs()
     except Exception as e:
@@ -73,6 +81,15 @@ def youtube_automation_main(request):
     # 하루에 5개 영상 제작 루프
     for i in range(config.daily_video_count):
         logger.info(f"🎬 Starting video creation process #{i+1}/{config.daily_video_count}")
+        
+        # 0. API 키 및 모델 선택 (로테이션 적용)
+        ai_model_info = api_key_manager.get_ai_model_for_task()
+        if not ai_model_info[0]: # 모델 또는 키를 가져오지 못하면 스킵
+            logger.error("No AI model or key available for content generation. Skipping video creation.")
+            continue
+        
+        selected_ai_model, selected_api_key = ai_model_info
+        
         try:
             # 1. 최신 트렌드 토픽 가져오기
             news_api = NewsAPI(api_key=config.news_api_key)
@@ -84,7 +101,11 @@ def youtube_automation_main(request):
             logger.info(f"🔍 Selected topic: {topic}")
 
             # 2. 스크립트 생성 (AI 로테이션 적용)
-            content_generator = ContentGenerator()
+            content_generator = ContentGenerator(
+                openai_api_key=selected_api_key if selected_ai_model == 'openai' else None,
+                gemini_api_key=selected_api_key if selected_ai_model == 'gemini' else None,
+                ai_model=selected_ai_model # ContentGenerator에게 어떤 AI 모델을 사용할지 알려줌
+            )
             script_text = content_generator.generate_script(topic)
             if not script_text:
                 logger.error(f"Script generation failed for topic: {topic}. Skipping.")
@@ -110,7 +131,7 @@ def youtube_automation_main(request):
             video_filename = f"shorts_{uuid.uuid4().hex}.mp4"
             video_output_path = os.path.join("/tmp", video_filename) # Cloud Functions는 /tmp에만 쓰기 가능
             
-            video_creator = VideoCreator(font_path=font_local_path)
+            video_creator = VideoCreator(font_path=font_local_path, pexels_api_key=config.pexels_api_key) # Pexels API 키 전달
             video_success = video_creator.create_video(
                 audio_path=audio_output_path,
                 text_content=script_text,
@@ -194,34 +215,29 @@ def youtube_automation_main(request):
             logger.error(f"An error occurred during video creation process #{i+1}: {e}", exc_info=True)
         finally:
             # 임시 파일 정리 (Cloud Functions 환경에서는 /tmp 폴더가 재사용되므로 정리 필요)
-            if os.path.exists(audio_output_path):
-                os.remove(audio_output_path)
-                logger.info(f"Cleaned up {audio_output_path}")
-            if os.path.exists(video_output_path):
-                os.remove(video_output_path)
-                logger.info(f"Cleaned up {video_output_path}")
-            if thumbnail_output_path and os.path.exists(thumbnail_output_path):
-                os.remove(thumbnail_output_path)
-                logger.info(f"Cleaned up {thumbnail_output_path}")
+            # 파일이 존재하고 있는지 확인 후 삭제
+            for path in [audio_output_path, video_output_path, thumbnail_output_path]:
+                if path and os.path.exists(path):
+                    os.remove(path)
+                    logger.info(f"Cleaned up {path}")
 
-    # 모든 프로세스 완료 후 오래된 GCS 파일 정리
+    # 모든 프로세스 완료 후 오래된 GCS 파일 정리 (매일 실행되므로 너무 자주 하지 않도록 주의)
+    # 프리 티어 용량 관리를 위해 7일 이상된 파일은 자동 삭제
     try:
-        cleanup_old_files(bucket, retention_days=7) # 7일 이상된 파일 삭제
+        cleanup_old_files(bucket, retention_days=7) 
+        logger.info("🗑️ Old GCS files cleaned up successfully.")
     except Exception as e:
         logger.error(f"Error during GCS cleanup: {e}", exc_info=True)
 
     logger.info("🎉 YouTube Shorts Automation Process Finished!")
     return "YouTube Shorts Automation Process Finished Successfully!", 200
 
-# 로컬 테스트를 위한 실행 코드 (Cloud Functions 배포 시에는 이 부분이 직접 실행되지 않음)
-if __name__ == "__main__":
-    # 이 부분은 로컬에서 Cloud Function처럼 테스트하기 위한 더미 요청 객체입니다.
-    # 실제 Cloud Function 환경에서는 HTTP 요청이 들어옵니다.
-    class MockRequest:
-        def get_json(self, silent=True):
-            return {"daily_run": True} # 스케줄 트리거를 흉내
-    
-    print("--- Running local test of youtube_automation_main ---")
-    response, status_code = youtube_automation_main(MockRequest())
-    print(f"Response: {response}, Status: {status_code}")
-    print("--- Local test finished ---")
+# Cloud Function 배포 시에는 이 부분이 직접 실행되지 않습니다.
+# Flask 앱으로 감싸지 않고, Cloud Function의 기본 HTTP 트리거 방식으로 동작합니다.
+# 하지만 로컬 테스트를 위해 Flask 앱처럼 테스트 환경을 모방할 수 있습니다.
+# Flask app = Flask(__name__) 형태로 감싸는 것은 Cloud Run (컨테이너) 배포 시 적합하며,
+# 현재 Cloud Functions 2세대가 내부적으로 Cloud Run을 사용하므로 main.py는 HTTP request를 처리하는
+# `def youtube_automation_main(request):` 함수만 명시하면 됩니다.
+# Google Cloud Functions는 Flask 앱 인스턴스 없이도 request 객체를 직접 주입합니다.
+# 기존 Flask 앱 코드들은 Cloud Run 직접 배포 시 필요했지만, Cloud Functions 2세대는 
+# entry_point 함수만 있으면 됩니다.
