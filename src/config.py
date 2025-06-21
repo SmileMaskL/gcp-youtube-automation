@@ -4,8 +4,6 @@ import json
 import logging
 from google.cloud import secretmanager
 
-logger = logging.getLogger(__name__)
-
 # 로깅 설정: 이 줄을 파일 상단에 추가하여 logger가 정의되도록 합니다.
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
