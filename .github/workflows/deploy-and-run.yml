@@ -1,7 +1,5 @@
 # .github/workflows/deploy-and-run.yml
-
 name: Deploy and Run Cloud Function
-
 on:
   push:
     branches:
@@ -11,32 +9,26 @@ on:
     # 매일 03시, 07시, 12시, 18시, 22시에 실행 (UTC 기준)
     # 한국 시간은 UTC +9 이므로, 12시, 16시, 21시, 익일 03시, 07시
     - cron: '0 3,7,12,18,22 * * *'
-
 env:
   GCP_PROJECT_ID: youtube-fully-automated # 본인의 GCP 프로젝트 ID로 변경
   GCP_BUCKET_NAME: youtube-fully-automated_cloudbuilde # 본인의 GCP 버킷 이름으로 변경
   FUNCTION_NAME: youtube-shorts-automation
   REGION: us-central1 # Cloud Function 배포 리전
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
     permissions:
       contents: 'read'
       id-token: 'write'
-
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11' # Cloud Function 런타임과 동일하게 3.11로 설정
-
       - name: Install dependencies
         run: pip install -r src/requirements.txt
-
       - name: Authorize GCP Service Account
         id: 'auth'
         uses: 'google-github-actions/auth@v2'
@@ -44,10 +36,8 @@ jobs:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
           # credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }} # Workload Identity Federation 사용 시 주석 처리
-
       - name: Set up gcloud CLI
         uses: google-github-actions/setup-gcloud@v2
-
       - name: Deploy Cloud Function
         run: |
           gcloud functions deploy ${{ env.FUNCTION_NAME }} \
@@ -62,11 +52,7 @@ jobs:
             --gen2 \
             --service-account=${{ secrets.WIF_SERVICE_ACCOUNT }} \
             --set-env-vars="GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }},GCP_BUCKET_NAME=${{ env.GCP_BUCKET_NAME }},ELEVENLABS_VOICE_ID=${{ secrets.ELEVENLABS_VOICE_ID }}"
-          # Secret Manager에서 가져오는 API 키들은 Cloud Function 코드 내부에서 Secret Manager API를 통해 가져옵니다.
-
       - name: Invoke Cloud Function (Scheduled Run)
-        # 스케줄된 실행인 경우에만 Cloud Function을 호출합니다.
-        # push 또는 workflow_dispatch로 수동 트리거된 경우에는 직접 호출하지 않습니다.
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         run: |
           FUNCTION_URL=$(gcloud functions describe ${{ env.FUNCTION_NAME }} \
@@ -77,8 +63,6 @@ jobs:
                -H "Content-Type: application/json" \
                -d '{"daily_run": true}' \
                "${FUNCTION_URL}"
-          # curl 명령어 다음에 있던 불필요한 주석 처리된 'env:' 블록은 제거되었습니다.
-          # 이는 쉘 스크립트 파싱 오류의 원인이었습니다.
-
+      
       - name: Debug: List src directory contents
         run: ls -l src/
