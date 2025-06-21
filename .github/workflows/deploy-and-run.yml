@@ -35,7 +35,7 @@ jobs:
           python-version: '3.11' # Cloud Function 런타임과 동일하게 3.11로 설정
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r src/requirements.txt
 
       - name: Authorize GCP Service Account
         id: 'auth'
