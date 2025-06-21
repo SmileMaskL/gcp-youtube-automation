@@ -1,4 +1,4 @@
-# .github/workflows/deploy-and-run.yml (전체 코드 - YAML 구문 오류 수정 버전)
+# .github/workflows/deploy-and-run.yml (전체 코드)
 
 name: Deploy and Run Cloud Function
 
@@ -76,11 +76,10 @@ jobs:
           curl -X POST -H "Content-Type: application/json" \
                -d '{"daily_run": true}' \
                "${FUNCTION_URL}"
-        # --- 중요: 이 env 블록의 들여쓰기를 확인하세요! ---
-        env:
-          GCP_PROJECT_ID: ${{ env.GCP_PROJECT_ID }} # 함수 호출 시에도 프로젝트 ID 전달
-          GCP_BUCKET_NAME: ${{ env.GCP_BUCKET_NAME }} # 함수 호출 시에도 버킷 이름 전달
+          env:
+            GCP_PROJECT_ID: ${{ env.GCP_PROJECT_ID }} # 함수 호출 시에도 프로젝트 ID 전달
+            GCP_BUCKET_NAME: ${{ env.GCP_BUCKET_NAME }} # 함수 호출 시에도 버킷 이름 전달
 
-      - name: Debug: List src directory contents
-        run: ls -l src/
-        # 디버깅을 위해 src 디렉토리의 내용을 나열합니다.
+          - name: Debug: List src directory contents
+            run: ls -l src/
+            # 디버깅을 위해 src 디렉토리의 내용을 나열합니다.5h1a2a3a4a
