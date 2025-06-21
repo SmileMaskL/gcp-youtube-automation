@@ -63,8 +63,8 @@ jobs:
           gcloud functions deploy ${{ env.FUNCTION_NAME }} \
             --runtime=python311 \
             --region=us-central1 \
-            --source=./src \
-            --entry-point=youtube_automation_main \
+            --source=./src \ # <-- **이전 답변에서 이 부분으로 변경하라고 말씀드렸습니다!**
+            --entry-point=youtube_automation_main \ # <-- **이 부분도 이전에 변경하라고 말씀드렸습니다!**
             --trigger-http \
             --allow-unauthenticated \
             --memory=2048MB \
