@@ -1,44 +1,57 @@
 # .github/workflows/deploy-and-run.yml
+
 name: Deploy and Run Cloud Function
+
 on:
   push:
     branches:
       - main
-  workflow_dispatch: # GitHub UI에서 수동 실행 가능하도록 설정
+  workflow_dispatch:
   schedule:
-    # 매일 03시, 07시, 12시, 18시, 22시에 실행 (UTC 기준)
-    # 한국 시간은 UTC +9 이므로, 12시, 16시, 21시, 익일 03시, 07시
-    - cron: '0 3,7,12,18,22 * * *'
+    - cron: '0 3,7,12,18,22 * * *' # 매일 5회 실행 (KST 기준 12시, 16시, 21시, 익일 03시, 07시)
+
 env:
-  GCP_PROJECT_ID: youtube-fully-automated # 본인의 GCP 프로젝트 ID로 변경
-  GCP_BUCKET_NAME: youtube-fully-automated_cloudbuilde # 본인의 GCP 버킷 이름으로 변경
+  GCP_PROJECT_ID: youtube-fully-automated
+  GCP_BUCKET_NAME: youtube-fully-automated_cloudbuilde
   FUNCTION_NAME: youtube-shorts-automation
-  REGION: us-central1 # Cloud Function 배포 리전
+  REGION: us-central1
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     permissions:
-      contents: 'read'
-      id-token: 'write'
+      contents: read
+      id-token: write
+
     steps:
-      - name: Checkout Repository
+      - name: ✅ Checkout Repository
         uses: actions/checkout@v4
-      - name: Set up Python
+
+      - name: 🐍 Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11' # Cloud Function 런타임과 동일하게 3.11로 설정
-      - name: Install dependencies
-        run: pip install -r src/requirements.txt
-      - name: Authorize GCP Service Account
-        id: 'auth'
-        uses: 'google-github-actions/auth@v2'
+          python-version: '3.11'
+
+      - name: 📦 Install dependencies
+        run: |
+          if [ -f src/requirements.txt ]; then
+            pip install -r src/requirements.txt
+          else
+            echo "❌ requirements.txt not found in src/"
+            exit 1
+          fi
+
+      - name: 🔐 Authorize GCP Service Account
+        id: auth
+        uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
-          # credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }} # Workload Identity Federation 사용 시 주석 처리
-      - name: Set up gcloud CLI
+
+      - name: ☁️ Set up gcloud CLI
         uses: google-github-actions/setup-gcloud@v2
-      - name: Deploy Cloud Function
+
+      - name: 🚀 Deploy Cloud Function
         run: |
           gcloud functions deploy ${{ env.FUNCTION_NAME }} \
             --runtime=python311 \
@@ -52,16 +65,18 @@ jobs:
             --gen2 \
             --service-account=${{ secrets.WIF_SERVICE_ACCOUNT }} \
             --set-env-vars="GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }},GCP_BUCKET_NAME=${{ env.GCP_BUCKET_NAME }},ELEVENLABS_VOICE_ID=${{ secrets.ELEVENLABS_VOICE_ID }}"
-      - name: Invoke Cloud Function (Scheduled Run)
+
+      - name: 🌐 Invoke Cloud Function (Scheduled Run)
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         run: |
           FUNCTION_URL=$(gcloud functions describe ${{ env.FUNCTION_NAME }} \
             --region=${{ env.REGION }} \
             --format="value(serviceConfig.uri)")
-          echo "Cloud Function URL: $FUNCTION_URL"
+          echo "✅ Cloud Function URL: $FUNCTION_URL"
           curl -X POST \
-               -H "Content-Type: application/json" \
-               -d '{"daily_run": true}' \
-               "${FUNCTION_URL}"
-      - name: Debug: List src directory contents
+            -H "Content-Type: application/json" \
+            -d '{"daily_run": true}' \
+              "${FUNCTION_URL}"
+
+      - name: List src directory contents
         run: ls -l src/
