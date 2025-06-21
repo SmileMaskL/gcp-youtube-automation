@@ -1,9 +1,9 @@
 name: Deploy and Run YouTube Shorts Automation
 
 on:
-  workflow_dispatch: # 수동 실행 활성화
+  workflow_dispatch:  # 수동 실행 활성화
   schedule:
-    - cron: '0 3,7,12,18,22 * * *' # 하루 5회 실행 (UTC 기준)
+    - cron: '0 3,7,12,18,22 * * *'  # 한국 시간 기준 12PM, 4PM, 9PM, 4AM, 7AM
 
 env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: 'read'
-      id-token: 'write'
+      id-token: 'write'  # OIDC 토큰 발급 필수
 
     steps:
       - name: Checkout code
@@ -35,7 +35,11 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }} # JSON 키 직접 사용
+          # ✅ 1. Workload Identity 사용 (권장)
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+          # 또는 ✅ 2. 서비스 계정 키 사용 (대체方案)
+          # credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
 
       - name: Deploy Cloud Function
         run: |
@@ -51,7 +55,7 @@ jobs:
             --set-env-vars="GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }}" \
             --set-env-vars="GCP_BUCKET_NAME=${{ env.GCP_BUCKET_NAME }}" \
             --set-env-vars="ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }}" \
-            --set-env-vars="ELEVENLABS_VOICE_ID=${{ secrets.ELEVENLABS_VOICE_ID }}" \
+            --set-env-vars="ELEVENLABS_VOICE_ID=uyVNoMrnUku1dZyVEXwD" \
             --set-env-vars="NEWS_API_KEY=${{ secrets.NEWS_API_KEY }}" \
             --set-env-vars="PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }}" \
             --set-env-vars="OPENAI_KEYS_JSON=${{ secrets.OPENAI_KEYS_JSON }}" \
