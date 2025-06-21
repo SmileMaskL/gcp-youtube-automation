@@ -1,13 +1,12 @@
-name: Deploy and Run YouTube Shorts Automation on GCP
-
+name: Deploy and Run YouTube Shorts Automation
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 0 * * *'  # 매일 자정 (UTC)에 실행
+    - cron: '0 3,7,12,18,22 * * *'  # 하루 5회 실행 (UTC 기준)
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  FUNCTION_NAME: youtube-shorts-automation-function
+  FUNCTION_NAME: youtube-shorts-automation
   REGION: us-central1
   BUCKET_NAME: ${{ secrets.GCP_BUCKET_NAME }}
 
@@ -15,13 +14,12 @@ jobs:
   deploy_and_run:
     runs-on: ubuntu-latest
     environment: production
-
     permissions:
       contents: 'read'
       id-token: 'write'
 
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -32,19 +30,12 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: '${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}'
-          project_id: ${{ env.PROJECT_ID }}
-
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-        with:
-          project_id: ${{ env.PROJECT_ID }}
+          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
 
       - name: Deploy Cloud Function
         run: |
@@ -69,18 +60,9 @@ jobs:
             --set-env-vars="YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }}" \
             --set-env-vars="YOUTUBE_REFRESH_TOKEN=${{ secrets.YOUTUBE_REFRESH_TOKEN }}"
 
-      - name: Get Cloud Function URL
-        id: get_url
+      - name: Invoke Cloud Function
         run: |
           FUNCTION_URL=$(gcloud functions describe ${{ env.FUNCTION_NAME }} \
             --region=${{ env.REGION }} \
             --format='value(httpsTrigger.url)')
-          echo "FUNCTION_URL=${FUNCTION_URL}" >> $GITHUB_ENV
-
-      - name: Call Cloud Function
-        run: |
-          curl -X POST \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
-            "${{ env.FUNCTION_URL }}" \
-            -d '{"daily_run": true}'
+          curl -X POST $FUNCTION_URL
