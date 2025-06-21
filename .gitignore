@@ -1,47 +1,37 @@
+# .gitignore
 # Python
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
+*.pyc
+*.pyo
+*.pyd
 .Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdk/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-
-# 환경 파일
-.env
+env/
+venv/
 *.env
-.env/
-
-# IDE
 .vscode/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IDEs
 .idea/
-*.swp
-*.swo
+.project
+.classpath
+.settings/
 
-# 로그 및 출력
-logs/
-temp/
-output/
-
-# 시스템
+# OS generated files
 .DS_Store
+.Trashes
+ehthumbs.db
 Thumbs.db
 
-# 예외 (필요한 파일만 포함)
-!assets/default_bg.mp4
-!fonts/Catfont.ttf
-credentials.json
+# Logs and Output
+*.log
+logs/
+output/
+
+# Cloud Function temporary files
+/tmp/*
+
+# Environment variables
+.env
