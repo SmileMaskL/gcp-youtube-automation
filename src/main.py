@@ -1,4 +1,4 @@
-# src/main.py (전체 코드)
+# src/main.py (수정 제안)
 
 import os
 import json
@@ -23,15 +23,12 @@ from src.shorts_converter import ShortsConverter
 from src.thumbnail_generator import ThumbnailGenerator
 from src.error_handler import ErrorHandler
 from src.utils import Utils
-# 필요한 경우 다른 모듈도 여기에 임포트합니다.
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 # 스레드 풀 초기화 (비동기 작업을 위해)
-# Cloud Functions 환경에서는 필요에 따라 조절하거나 제거할 수 있습니다.
-# 여기서는 병렬 작업을 위해 유지합니다.
 executor = ThreadPoolExecutor(max_workers=os.cpu_count() or 1)
 
 async def youtube_automation_main_logic():
@@ -40,34 +37,44 @@ async def youtube_automation_main_logic():
     """
     logger.info("YouTube 자동화 프로세스 시작.")
 
+    # --- 중요: Secret Manager에서 시크릿을 로드하는 단계 추가 ---
+    try:
+        config.load_secrets_into_config()
+        logger.info("All secrets loaded into config object.")
+    except Exception as e:
+        logger.critical(f"FATAL: Failed to load secrets from Secret Manager: {e}", exc_info=True)
+        # 시크릿 로드 실패 시, 함수 실행을 중단합니다.
+        return {"status": "failed", "reason": "secret_load_failure"}
+    # -----------------------------------------------------------
+
     error_handler = ErrorHandler(config) # 에러 핸들러 초기화
 
     try:
         # 모니터링 객체 초기화 (Cloud Logging에 정보 전송)
+        # config.gcp_project_id와 config.gcp_bucket_name 사용
         monitoring = Monitoring(config.gcp_project_id, config.gcp_bucket_name, 'youtube-shorts-automation')
 
         # API 키 로테이션 및 사용량 관리 (중요!)
-        # Secret Manager에서 가져온 키는 config 객체에 이미 설정되어 있어야 합니다.
         ai_rotation = AIRotation(
             openai_keys_json_path=config.openai_keys_json_path,
             gemini_api_key_secret_name=config.gemini_api_key_secret_name,
-            google_api_key_secret_name=config.google_api_key_secret_name,
+            google_api_key_secret_name=config.google_api_key_secret_name, # config.py에서 정의된 이름 사용
             news_api_key_secret_name=config.news_api_key_secret_name,
-            pexel_api_key_secret_name=config.pexel_api_key_secret_name,
-            project_id=config.gcp_project_id,
-            quota_limit_per_day=config.api_quota_per_day, # 일일 API 사용량 한도
-            quota_limit_per_month=config.api_quota_per_month # 월간 API 사용량 한도
+            pexels_api_key_secret_name=config.pexels_api_key_secret_name,
+            project_id=config.gcp_project_id, # gcp_project_id 사용
+            quota_limit_per_day=config.api_quota_per_day,
+            quota_limit_per_month=config.api_quota_per_month
         )
-        await ai_rotation.initialize_api_keys() # Secret Manager에서 키 로드 및 초기화
+        await ai_rotation.initialize_api_keys() # Secret Manager에서 키 로드 및 초기화 (여기서 실제 값들이 config에 할당됨)
+        
         # 현재 활성화된 API 키를 config 객체에 반영
         config.openai_api_key = ai_rotation.get_current_openai_key()
         config.gemini_api_key = ai_rotation.get_current_gemini_key()
-        config.google_api_key = ai_rotation.get_current_google_key()
+        config.google_api_key = ai_rotation.get_current_google_key() # Google API 키 반영
         config.news_api_key = ai_rotation.get_current_news_key()
         config.pexels_api_key = ai_rotation.get_current_pexels_key()
-        # ElevenLabs는 현재 env var로 직접 설정하므로 따로 로테이션하지 않음.
-        # 필요시 ElevenLabs API 키도 Secret Manager에서 관리하도록 변경 가능.
-        
+        # ElevenLabs API 키는 config.py에서 직접 로드되었으므로 여기서는 건드릴 필요 없음.
+
         # 일일 및 월간 쿼터 체크
         if not await ai_rotation.can_proceed_with_daily_quota():
             logger.warning("일일 API 쿼터 초과. 다음 실행을 기다립니다.")
@@ -79,19 +86,28 @@ async def youtube_automation_main_logic():
             monitoring.log_info("Monthly API quota exceeded. Skipping execution.", {'status': 'skipped', 'reason': 'monthly_quota'})
             return {"status": "skipped", "reason": "monthly_quota_exceeded"}
 
-        # 주요 구성 요소 초기화
+        # 주요 구성 요소 초기화 (업데이트된 config 객체의 값 사용)
         content_generator = ContentGenerator(config.gemini_api_key, config.google_api_key, config.news_api_key)
         tts_generator = TTSGenerator(config.elevenlabs_api_key, config.elevenlabs_voice_id)
         video_creator = VideoCreator(config.gcp_bucket_name, config.pexels_api_key)
         youtube_uploader = YouTubeUploader(
             config.gcp_project_id,
             config.gcp_bucket_name,
-            config.youtube_oauth_credentials_secret_name
+            # 아래는 config.py에서 직접 로드한 값들을 전달합니다.
+            client_id=config.youtube_client_id,
+            client_secret=config.youtube_client_secret,
+            refresh_token=config.youtube_refresh_token
         )
-        comment_poster = CommentPoster(config.youtube_oauth_credentials_secret_name)
+        # CommentPoster도 마찬가지로 직접 로드한 값들을 전달합니다.
+        comment_poster = CommentPoster(
+            client_id=config.youtube_client_id,
+            client_secret=config.youtube_client_secret,
+            refresh_token=config.youtube_refresh_token
+        )
         shorts_converter = ShortsConverter()
-        thumbnail_generator = ThumbnailGenerator(config.gemini_api_key) # 썸네일 생성기 초기화
+        thumbnail_generator = ThumbnailGenerator(config.gemini_api_key)
 
+        # ... (이하 로직은 거의 동일, 필요시 config 객체 변수명 일치 확인) ...
         # 1. 컨텐츠 생성 (AI 로테이션 적용)
         topic = await content_generator.generate_topic()
         logger.info(f"선택된 토픽: {topic}")
@@ -99,7 +115,6 @@ async def youtube_automation_main_logic():
         logger.info("스크립트 생성 완료.")
 
         # API 사용량 트래킹 (실제 사용량에 따라 cost 조절 필요)
-        # content_generator에서 사용된 API 비용을 추적
         ai_rotation.track_api_usage("gemini", cost=0.01) # 예시 비용, 실제 API 사용량에 따라 정확히 계산 필요
 
         # 2. 음성 생성
@@ -166,8 +181,6 @@ def youtube_automation_main(request):
     """
     logger.info("Cloud Function (youtube_automation_main) 호출됨.")
 
-    # 요청 본문에서 'daily_run' 플래그를 확인하여 수동 실행/스케줄 실행 구분
-    # 이 부분은 스케줄러 (Cloud Scheduler)나 외부에서 호출할 때 사용될 수 있습니다.
     request_json = request.get_json(silent=True)
     is_scheduled_run = request_json and isinstance(request_json, dict) and request_json.get('daily_run')
 
@@ -177,10 +190,6 @@ def youtube_automation_main(request):
         logger.info("일반 HTTP 요청. 함수 로직 실행 대기.")
 
     try:
-        # 비동기 로직 실행 및 완료 대기
-        # Cloud Functions는 비동기 함수를 지원하지만, HTTP 트리거는 동기 응답을 기대합니다.
-        # 따라서 asyncio.run을 사용하여 비동기 함수를 동기적으로 실행합니다.
-        # 단, Flask request context 밖에서 실행되도록 주의해야 합니다.
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         result = loop.run_until_complete(youtube_automation_main_logic())
