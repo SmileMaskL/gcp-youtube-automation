@@ -4,56 +4,58 @@ import json
 import logging
 from google.cloud import secretmanager
 
-# 로깅 설정: 이 줄을 파일 상단에 추가하여 logger가 정의되도록 합니다.
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 class Config:
     def __init__(self):
+        # GCP_PROJECT_ID 환경 변수를 확실히 가져오고, 없으면 오류 발생
         self.project_id = os.getenv("GCP_PROJECT_ID")
+        if not self.project_id:
+            logger.critical("FATAL: GCP_PROJECT_ID environment variable is not set. Cannot proceed.")
+            raise ValueError("GCP_PROJECT_ID environment variable is required.")
+
         self.bucket_name = os.getenv("GCP_BUCKET_NAME")
-        self.region = os.getenv("REGION", "us-central1") # Cloud Function 배포 리전
+        self.region = os.getenv("REGION", "us-central1")
 
         try:
             self.secret_client = secretmanager.SecretManagerServiceClient()
             logger.info("Secret Manager client initialized.")
         except Exception as e:
             logger.error(f"Failed to initialize Secret Manager client: {e}", exc_info=True)
-            raise
+            raise # 클라이언트 초기화 실패는 치명적이므로 예외 발생
 
-        self.secret_prefix = f"projects/{self.project_id}/secrets" if self.project_id else "projects/YOUR_PROJECT_ID/secrets"
+        # secret_prefix를 project_id를 사용하여 정확하게 설정
+        self.secret_prefix = f"projects/{self.project_id}/secrets"
+        logger.info(f"Secret prefix set to: {self.secret_prefix}")
 
-        # Secret Manager에서 API 키 로드
-        # GCP Secret Manager에 저장된 정확한 이름(대문자 언더스코어)으로 변경합니다.
-        self.elevenlabs_api_key = self._get_secret("ELEVENLABS_API_KEY") # <-- 이 부분 수정
-        self.elevenlabs_voice_id = self._get_secret("ELEVENLABS_VOICE_ID") # <-- 이 부분 수정 (새로 추가)
-        self.news_api_key = self._get_secret("NEWS_API_KEY") # <-- 이 부분 수정
-        self.pexels_api_key = self._get_secret("PEXELS_API_KEY") # <-- 이 부분 수정
-        self.youtube_client_id = self._get_secret("YOUTUBE_CLIENT_ID") # <-- 이 부분 수정
-        self.youtube_client_secret = self._get_secret("YOUTUBE_CLIENT_SECRET") # <-- 이 부분 수정
-        self.youtube_refresh_token = self._get_secret("YOUTUBE_REFRESH_TOKEN") # <-- 이 부분 수정
+        # Secret Manager에서 API 키 로드 (이전 답변에서 수정 제안했던 내용 유지)
+        self.elevenlabs_api_key = self._get_secret("ELEVENLABS_API_KEY")
+        self.elevenlabs_voice_id = self._get_secret("ELEVENLABS_VOICE_ID")
+        self.news_api_key = self._get_secret("NEWS_API_KEY")
+        self.pexels_api_key = self._get_secret("PEXELS_API_KEY")
+        self.youtube_client_id = self._get_secret("YOUTUBE_CLIENT_ID")
+        self.youtube_client_secret = self._get_secret("YOUTUBE_CLIENT_SECRET")
+        self.youtube_refresh_token = self._get_secret("YOUTUBE_REFRESH_TOKEN")
 
-        # OpenAI 및 Gemini API 키 로드 (이름 일치 확인)
-        self.openai_keys_json = json.loads(self._get_secret("OPENAI_KEYS_JSON", is_json=True)) # <-- 이 부분 수정
-        self.gemini_api_key = self._get_secret("GEMINI_API_KEY") # <-- 이 부분 수정
+        self.openai_keys_json = json.loads(self._get_secret("OPENAI_KEYS_JSON", is_json=True))
+        self.gemini_api_key = self._get_secret("GEMINI_API_KEY")
 
-        # 비디오 생성 관련 설정
         self.daily_video_count = int(os.getenv("DAILY_VIDEO_COUNT", 5))
         self.target_video_duration_seconds = int(os.getenv("TARGET_VIDEO_DURATION_SECONDS", 50))
 
-    # _get_secret 함수는 변경할 필요 없음
     def _get_secret(self, secret_name: str, is_json: bool = False):
         name = f"{self.secret_prefix}/{secret_name}/versions/latest"
+        logger.debug(f"Attempting to access secret: {name}") # 디버그 로그 추가
         try:
             response = self.secret_client.access_secret_version(request={"name": name})
             secret_value = response.payload.data.decode("UTF-8")
-            logger.info(f"Secret '{secret_name}' successfully loaded from Secret Manager.")
+            logger.info(f"Secret '{secret_name}' successfully loaded.")
             if is_json:
                 return json.loads(secret_value)
             return secret_value
         except Exception as e:
-            logger.error(f"Secret '{secret_name}' 가져오기 실패: {e}", exc_info=True)
+            logger.error(f"Failed to fetch secret '{secret_name}' from '{name}': {e}", exc_info=True) # 경로 포함
             raise ValueError(f"Secret '{secret_name}' could not be loaded. Please check Secret Manager and IAM permissions.")
 
-# 전역 Config 인스턴스 생성
 config = Config()
