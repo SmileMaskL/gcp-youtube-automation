@@ -6,6 +6,9 @@ import logging
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 
+# Cloud Functions HTTP 트리거를 위해 반드시 필요
+import functions_framework
+
 # src 폴더 내부의 다른 모듈 임포트
 from src.config import config # config.py에서 config 객체를 임포트합니다.
 from src.content_generator import ContentGenerator
@@ -27,6 +30,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # 스레드 풀 초기화 (비동기 작업을 위해)
+# Cloud Functions 환경에서는 필요에 따라 조절하거나 제거할 수 있습니다.
+# 여기서는 병렬 작업을 위해 유지합니다.
 executor = ThreadPoolExecutor(max_workers=os.cpu_count() or 1)
 
 async def youtube_automation_main_logic():
@@ -42,6 +47,7 @@ async def youtube_automation_main_logic():
         monitoring = Monitoring(config.gcp_project_id, config.gcp_bucket_name, 'youtube-shorts-automation')
 
         # API 키 로테이션 및 사용량 관리 (중요!)
+        # Secret Manager에서 가져온 키는 config 객체에 이미 설정되어 있어야 합니다.
         ai_rotation = AIRotation(
             openai_keys_json_path=config.openai_keys_json_path,
             gemini_api_key_secret_name=config.gemini_api_key_secret_name,
@@ -63,12 +69,12 @@ async def youtube_automation_main_logic():
         # 필요시 ElevenLabs API 키도 Secret Manager에서 관리하도록 변경 가능.
         
         # 일일 및 월간 쿼터 체크
-        if not ai_rotation.can_proceed_with_daily_quota():
+        if not await ai_rotation.can_proceed_with_daily_quota():
             logger.warning("일일 API 쿼터 초과. 다음 실행을 기다립니다.")
             monitoring.log_info("Daily API quota exceeded. Skipping execution.", {'status': 'skipped', 'reason': 'daily_quota'})
             return {"status": "skipped", "reason": "daily_quota_exceeded"}
 
-        if not ai_rotation.can_proceed_with_monthly_quota():
+        if not await ai_rotation.can_proceed_with_monthly_quota():
             logger.warning("월간 API 쿼터 초과. 다음 달까지 기다립니다.")
             monitoring.log_info("Monthly API quota exceeded. Skipping execution.", {'status': 'skipped', 'reason': 'monthly_quota'})
             return {"status": "skipped", "reason": "monthly_quota_exceeded"}
@@ -92,8 +98,9 @@ async def youtube_automation_main_logic():
         script = await content_generator.generate_script(topic)
         logger.info("스크립트 생성 완료.")
 
-        # API 사용량 트래킹
-        ai_rotation.track_api_usage("gemini", cost=0.01) # 예시 비용
+        # API 사용량 트래킹 (실제 사용량에 따라 cost 조절 필요)
+        # content_generator에서 사용된 API 비용을 추적
+        ai_rotation.track_api_usage("gemini", cost=0.01) # 예시 비용, 실제 API 사용량에 따라 정확히 계산 필요
 
         # 2. 음성 생성
         audio_path = await tts_generator.generate_tts(script, "temp_audio.mp3")
@@ -128,12 +135,12 @@ async def youtube_automation_main_logic():
             logger.info("댓글 작성 완료.")
 
         # 7. 사용량 및 쿼터 업데이트
-        ai_rotation.increment_daily_usage()
-        ai_rotation.increment_monthly_usage()
+        await ai_rotation.increment_daily_usage()
+        await ai_rotation.increment_monthly_usage()
         await ai_rotation.save_usage_data() # 사용량 데이터 저장
 
         monitoring.log_info(f"YouTube 자동화 프로세스 성공적으로 완료. 비디오 ID: {video_id}",
-                            {'status': 'success', 'video_id': video_id, 'topic': topic})
+                             {'status': 'success', 'video_id': video_id, 'topic': topic})
 
         # 임시 파일 정리 (중요!)
         cleanup_manager = CleanupManager()
@@ -147,13 +154,9 @@ async def youtube_automation_main_logic():
 
     except Exception as e:
         error_info = error_handler.handle_error(e)
-        logger.error(f"YouTube 자동화 프로세스 중 오류 발생: {error_info}")
+        logger.error(f"YouTube 자동화 프로세스 중 오류 발생: {error_info}", exc_info=True)
         monitoring.log_error(f"YouTube 자동화 프로세스 중 오류 발생: {e}", {'error_type': type(e).__name__, 'error_message': str(e)})
         raise # Cloud Function 오류로 전파
-
-# src/main.py (위에 붙여넣은 코드 아래에 이어서 추가)
-
-import functions_framework
 
 @functions_framework.http
 def youtube_automation_main(request):
@@ -163,38 +166,26 @@ def youtube_automation_main(request):
     """
     logger.info("Cloud Function (youtube_automation_main) 호출됨.")
 
-    # 기본적으로 비동기 함수를 실행하고 결과를 기다립니다.
-    # Cloud Functions는 비동기 함수를 지원하지만, HTTP 트리거는 동기 응답을 기대합니다.
-    # 따라서 asyncio.run을 사용하여 비동기 함수를 동기적으로 실행합니다.
-    # 단, Flask request context 밖에서 실행되도록 주의해야 합니다.
-
     # 요청 본문에서 'daily_run' 플래그를 확인하여 수동 실행/스케줄 실행 구분
+    # 이 부분은 스케줄러 (Cloud Scheduler)나 외부에서 호출할 때 사용될 수 있습니다.
     request_json = request.get_json(silent=True)
-    if request_json and isinstance(request_json, dict) and request_json.get('daily_run'):
+    is_scheduled_run = request_json and isinstance(request_json, dict) and request_json.get('daily_run')
+
+    if is_scheduled_run:
         logger.info("일일 자동 실행 요청 감지. 로직 실행 시작.")
-        try:
-            # 비동기 로직 실행 및 완료 대기
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            result = loop.run_until_complete(youtube_automation_main_logic())
-            loop.close()
-            return {"message": "YouTube automation initiated successfully", "result": result}, 200
-        except Exception as e:
-            logger.error(f"YouTube 자동화 로직 실행 중 오류 발생: {e}", exc_info=True)
-            return {"error": f"YouTube automation failed: {str(e)}"}, 500
     else:
         logger.info("일반 HTTP 요청. 함수 로직 실행 대기.")
-        # Cloud Functions는 HTTP 요청을 받으면 이 함수를 실행하지만,
-        # 실제 장시간 실행되는 작업은 백그라운드에서 비동기적으로 처리하고
-        # 빠른 응답을 주는 것이 좋습니다.
-        # 여기서는 요청을 받으면 바로 핵심 로직을 실행하도록 합니다.
-        try:
-            # 비동기 로직 실행 및 완료 대기
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            result = loop.run_until_complete(youtube_automation_main_logic())
-            loop.close()
-            return {"message": "YouTube automation completed via HTTP trigger", "result": result}, 200
-        except Exception as e:
-            logger.error(f"YouTube 자동화 로직 실행 중 오류 발생: {e}", exc_info=True)
-            return {"error": f"YouTube automation failed: {str(e)}"}, 500
+
+    try:
+        # 비동기 로직 실행 및 완료 대기
+        # Cloud Functions는 비동기 함수를 지원하지만, HTTP 트리거는 동기 응답을 기대합니다.
+        # 따라서 asyncio.run을 사용하여 비동기 함수를 동기적으로 실행합니다.
+        # 단, Flask request context 밖에서 실행되도록 주의해야 합니다.
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        result = loop.run_until_complete(youtube_automation_main_logic())
+        loop.close()
+        return {"message": "YouTube automation initiated successfully", "result": result}, 200
+    except Exception as e:
+        logger.error(f"YouTube 자동화 로직 실행 중 오류 발생: {e}", exc_info=True)
+        return {"error": f"YouTube automation failed: {str(e)}"}, 500
