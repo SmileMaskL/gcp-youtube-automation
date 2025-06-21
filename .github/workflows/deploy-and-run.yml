@@ -40,6 +40,9 @@ jobs:
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
           # 또는 ✅ 2. 서비스 계정 키 사용 (대체方案)
           # credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+          token_format: "access_token"
+          access_token_lifetime: "3600s"
+          access_token_scopes: "https://www.googleapis.com/auth/cloud-platform"
 
       - name: Deploy Cloud Function
         run: |
