@@ -20,9 +20,9 @@ class Config:
         
         # OpenAI 키는 로테이션을 위해 리스트로 로드
         openai_keys_json_str = self._get_secret("OPENAI_KEYS_B64s")
-        self.openai_api_keys = json.loads(openai_keys_json_str) if openai_keys_json_str else []
+        self.openai_api_keys = json.loads(OPENAI_KEYS_B64s_str) if openai_keys_json_str else []
         
-        self.gemini_api_key = self._get_secret("gemini-api-key")
+        self.gemini_api_key = self._get_secret("GEMINI_API_KEYy")
         
         self.youtube_client_id = self._get_secret("YOUTUBE_CLIENT_ID")
         self.youtube_client_secret = self._get_secret("YOUTUBE_CLIENT_SECRET")
