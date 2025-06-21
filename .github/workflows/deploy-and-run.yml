@@ -1,68 +1,107 @@
+# .github/workflows/deploy-and-run.yml
+
 name: Deploy and Run YouTube Shorts Automation
+
 on:
-  workflow_dispatch:
+  workflow_dispatch: # 수동 실행을 허용합니다.
   schedule:
-    - cron: '0 3,7,12,18,22 * * *'  # 하루 5회 실행 (UTC 기준)
+    - cron: '0 0 * * *' # UTC 기준으로 매일 자정 00:00에 실행 (한국 시간 오전 9시)
 
 env:
-  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  FUNCTION_NAME: youtube-shorts-automation
-  REGION: us-central1
-  BUCKET_NAME: ${{ secrets.GCP_BUCKET_NAME }}
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GCP_BUCKET_NAME: ${{ secrets.GCP_BUCKET_NAME }}
+  FUNCTION_NAME: youtube-shorts-automation-function
+  REGION: us-central1 # Cloud Functions 배포 리전
+  
+  # API 키를 GitHub Secrets에서 직접 전달 (Cloud Functions 내부에서는 Secret Manager 사용)
+  ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+  ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
+  NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
+  PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+  OPENAI_KEYS_JSON: ${{ secrets.OPENAI_KEYS_JSON }} # JSON 문자열 형태로 전달
+  GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+  YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+  YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+  YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
 
 jobs:
   deploy_and_run:
     runs-on: ubuntu-latest
-    environment: production
     permissions:
       contents: 'read'
-      id-token: 'write'
+      id-token: 'write' # OIDC 토큰을 발행하기 위해 필요합니다.
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.11' # Cloud Functions 런타임 버전과 일치시키세요.
 
       - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-          sudo apt-get update && sudo apt-get install -y ffmpeg
+        run: pip install -r requirements.txt
 
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
+      - name: Create fonts directory
+        run: mkdir -p fonts
+
+      - name: Authenticate to GCP
+        id: 'auth'
+        uses: 'google-github-actions/auth@v2'
         with:
-          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          # 🚨🚨🚨 이 부분이 중요합니다! credentials_json 대신 workload_identity_provider를 사용합니다. 🚨🚨🚨
+          workload_identity_provider: 'projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider'
+          service_account: 'github-actions-user@${{ env.GCP_PROJECT_ID }}.iam.gserviceaccount.com' # 위에서 생성한 서비스 계정 이메일
+          # 나머지 설정은 필요에 따라 유지하거나 제거합니다.
+          # create_credentials_file: true
+          # export_environment_variables: true
+          # universe: googleapis.com
+          # cleanup_credentials: true
+          # access_token_lifetime: 3600s
+          # access_token_scopes: https://www.googleapis.com/auth/cloud-platform
+          # id_token_include_email: false
 
-      - name: Deploy Cloud Function
-        run: |
-          gcloud functions deploy ${{ env.FUNCTION_NAME }} \
-            --runtime=python311 \
-            --region=${{ env.REGION }} \
-            --source=. \
-            --entry-point=youtube_automation_main \
-            --trigger-http \
-            --allow-unauthenticated \
-            --memory=2048MB \
-            --timeout=540s \
-            --set-env-vars="GCP_PROJECT_ID=${{ env.PROJECT_ID }}" \
-            --set-env-vars="GCP_BUCKET_NAME=${{ env.BUCKET_NAME }}" \
-            --set-env-vars="ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }}" \
-            --set-env-vars="ELEVENLABS_VOICE_ID=${{ secrets.ELEVENLABS_VOICE_ID }}" \
-            --set-env-vars="NEWS_API_KEY=${{ secrets.NEWS_API_KEY }}" \
-            --set-env-vars="PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }}" \
-            --set-env-vars="OPENAI_KEYS_JSON=${{ secrets.OPENAI_KEYS_JSON }}" \
-            --set-env-vars="GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" \
-            --set-env-vars="YOUTUBE_CLIENT_ID=${{ secrets.YOUTUBE_CLIENT_ID }}" \
-            --set-env-vars="YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }}" \
-            --set-env-vars="YOUTUBE_REFRESH_TOKEN=${{ secrets.YOUTUBE_REFRESH_TOKEN }}"
+      - name: Deploy Cloud Function (Optional: Deploy only when code changes)
+        id: deploy
+        uses: 'google-github-actions/deploy-cloudfunctions@v2'
+        with:
+          name: ${{ env.FUNCTION_NAME }}
+          runtime: python311 # Python 런타임 버전
+          entry_point: youtube_automation_main # main.py에 정의된 함수 이름
+          source: src # Cloud Function 코드가 있는 디렉토리
+          region: ${{ env.REGION }}
+          memory: 1024MB # 함수 메모리 설정 (필요에 따라 조정)
+          timeout: 540s # 함수 타임아웃 (최대 540초 = 9분)
+          # 환경 변수를 Cloud Function으로 전달
+          env_vars: |
+            GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }}
+            GCP_BUCKET_NAME=${{ env.GCP_BUCKET_NAME }}
+            ELEVENLABS_API_KEY=${{ env.ELEVENLABS_API_KEY }}
+            ELEVENLABS_VOICE_ID=${{ env.ELEVENLABS_VOICE_ID }}
+            NEWS_API_KEY=${{ env.NEWS_API_KEY }}
+            PEXELS_API_KEY=${{ env.PEXELS_API_KEY }}
+            OPENAI_KEYS_JSON=${{ env.OPENAI_KEYS_JSON }}
+            GEMINI_API_KEY=${{ env.GEMINI_API_KEY }}
+            YOUTUBE_CLIENT_ID=${{ env.YOUTUBE_CLIENT_ID }}
+            YOUTUBE_CLIENT_SECRET=${{ env.YOUTUBE_CLIENT_SECRET }}
+            YOUTUBE_REFRESH_TOKEN=${{ env.YOUTUBE_REFRESH_TOKEN }}
+          # Cloud Functions에서 Secret Manager에 접근할 권한이 있는 서비스 계정 지정
+          service_account_email: 'github-actions-user@${{ env.GCP_PROJECT_ID }}.iam.gserviceaccount.com' # Cloud Function이 사용할 서비스 계정
+        # Cloud Function이 성공적으로 배포되었을 때만 다음 단계 진행
+        if: success() || github.event_name == 'workflow_dispatch' # 수동 실행 시 항상 배포
 
       - name: Invoke Cloud Function
+        id: invoke
+        uses: 'google-github-actions/cloudfunctions-invoke@v2'
+        with:
+          name: ${{ env.FUNCTION_NAME }}
+          region: ${{ env.REGION }}
+          data: '{"daily_run": true}' # Cloud Function에 전달할 데이터
+        if: always() # 배포가 실패해도 호출 시도 (디버깅 목적)
+
+      - name: Monitor Cloud Function Logs
         run: |
-          FUNCTION_URL=$(gcloud functions describe ${{ env.FUNCTION_NAME }} \
-            --region=${{ env.REGION }} \
-            --format='value(httpsTrigger.url)')
-          curl -X POST $FUNCTION_URL
+          gcloud functions logs read ${{ env.FUNCTION_NAME }} --region=${{ env.REGION }} --limit=50 --format=json
+        if: always() # 항상 로그를 확인하도록 설정 (디버깅에 유용)
