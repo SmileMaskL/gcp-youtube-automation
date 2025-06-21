@@ -131,76 +131,97 @@ def youtube_automation_main(request):
                 output_path=thumbnail_output_path
             )
             if not thumbnail_success:
-                logger.warning(f"⚠️ Thumbnail generation failed for topic: {topic}. Proceeding without custom thumbnail.")
-                thumbnail_output_path = None # 썸네일 생성 실패 시 None으로 설정
+                logger.warning(f"⚠️ Thumbnail generation failed for topic: {topic}. Proceeding without thumbnail.")
+                thumbnail_output_path = None
+            else:
+                logger.info(f"🖼️ Thumbnail created at {thumbnail_output_path}")
 
             # 6. Cloud Storage에 영상 및 썸네일 업로드
-            gcs_video_path = f"shorts/{datetime.now().strftime('%Y/%m/%d')}/{video_filename}"
-            upload_success = upload_to_gcs(video_output_path, gcs_video_path)
-            if not upload_success:
-                logger.error(f"❌ Failed to upload video to GCS for topic: {topic}. Skipping YouTube upload.")
+            gcs_video_path = f"videos/{video_filename}"
+            gcs_thumbnail_path = f"thumbnails/{thumbnail_filename}" if thumbnail_output_path else None
+
+            video_uploaded = upload_to_gcs(video_output_path, gcs_video_path)
+            if not video_uploaded:
+                logger.error(f"❌ Failed to upload video to GCS: {video_output_path}. Skipping YouTube upload.")
                 continue
             
-            gcs_thumbnail_path = None
-            if thumbnail_output_path:
-                gcs_thumbnail_path = f"thumbnails/{datetime.now().strftime('%Y/%m/%d')}/{thumbnail_filename}"
-                thumbnail_upload_success = upload_to_gcs(thumbnail_output_path, gcs_thumbnail_path)
-                if not thumbnail_upload_success:
-                    logger.warning(f"⚠️ Failed to upload thumbnail to GCS. YouTube upload will proceed without custom thumbnail.")
+            if gcs_thumbnail_path:
+                thumbnail_uploaded = upload_to_gcs(thumbnail_output_path, gcs_thumbnail_path)
+                if not thumbnail_uploaded:
+                    logger.warning(f"⚠️ Failed to upload thumbnail to GCS: {thumbnail_output_path}. Proceeding without thumbnail.")
                     gcs_thumbnail_path = None
+            
+            logger.info(f"⬆️ Video and thumbnail uploaded to GCS.")
 
-            # 7. YouTube에 영상 업로드
+            # 7. YouTube에 업로드
             youtube_uploader = YouTubeUploader(
                 client_id=config.youtube_client_id,
                 client_secret=config.youtube_client_secret,
                 refresh_token=config.youtube_refresh_token
             )
+            
+            video_title = f"🔥 최신 이슈: {topic} #shorts #뉴스 #이슈"
+            video_description = f"오늘의 핫이슈, '{topic}'에 대한 짧은 요약 영상입니다.\n\n#shorts #news #trending #youtube"
+            video_tags = ["shorts", "news", "trending", "issue", topic.replace(" ", "")]
+
             youtube_video_id = youtube_uploader.upload_video(
-                video_file_path=video_output_path, # 로컬 경로 사용, Uploader 내부에서 Stream으로 처리
-                title=f"[쇼츠] {topic} - 오늘 뭐볼까?",
-                description=f"오늘의 핫이슈 {topic}에 대한 짧은 영상입니다. #Shorts #핫이슈 #{topic.replace(' ', '')}",
-                tags=[topic, "쇼츠", "핫이슈", "AI생성"],
+                video_file_path=video_output_path,
+                title=video_title,
+                description=video_description,
+                tags=video_tags,
                 privacy_status="public", # 테스트 시에는 "private"으로 설정 권장
                 thumbnail_file_path=thumbnail_output_path
             )
-            if not youtube_video_id:
-                logger.error(f"❌ YouTube upload failed for topic: {topic}.")
-                continue
-            logger.info(f"🎥 Video uploaded to YouTube! Video ID: {youtube_video_id}")
 
-            # 8. YouTube 댓글 자동 작성
-            comment_poster = CommentPoster(
-                client_id=config.youtube_client_id,
-                client_secret=config.youtube_client_secret,
-                refresh_token=config.youtube_refresh_token
-            )
-            comment_success = comment_poster.post_comment(
-                video_id=youtube_video_id,
-                comment_text=f"이 영상이 좋으셨다면 구독과 좋아요 부탁드립니다! #{topic.replace(' ', '')} #자동생성"
-            )
-            if not comment_success:
-                logger.warning(f"⚠️ Failed to post comment for video ID: {youtube_video_id}")
+            if youtube_video_id:
+                logger.info(f"✅ Video successfully uploaded to YouTube! Video ID: {youtube_video_id}")
+                # 8. 댓글 자동 작성 (업로드된 영상에)
+                comment_poster = CommentPoster(
+                    client_id=config.youtube_client_id,
+                    client_secret=config.youtube_client_secret,
+                    refresh_token=config.youtube_refresh_token
+                )
+                comment_text = "이 영상이 유익하셨다면 구독과 좋아요 부탁드립니다! 😊"
+                comment_success = comment_poster.post_comment(youtube_video_id, comment_text)
+                if comment_success:
+                    logger.info(f"💬 Comment posted successfully on video {youtube_video_id}")
+                else:
+                    logger.warning(f"❌ Failed to post comment on video {youtube_video_id}")
             else:
-                logger.info(f"💬 Comment posted for video ID: {youtube_video_id}")
-
-            # 9. 임시 파일 정리 (Cloud Functions는 함수 실행 후 자동 삭제되지만, 명시적 정리)
-            os.remove(audio_output_path)
-            os.remove(video_output_path)
+                logger.error(f"❌ Failed to upload video to YouTube for topic: {topic}.")
+        
+        except Exception as e:
+            logger.error(f"An error occurred during video creation process #{i+1}: {e}", exc_info=True)
+        finally:
+            # 임시 파일 정리 (Cloud Functions 환경에서는 /tmp 폴더가 재사용되므로 정리 필요)
+            if os.path.exists(audio_output_path):
+                os.remove(audio_output_path)
+                logger.info(f"Cleaned up {audio_output_path}")
+            if os.path.exists(video_output_path):
+                os.remove(video_output_path)
+                logger.info(f"Cleaned up {video_output_path}")
             if thumbnail_output_path and os.path.exists(thumbnail_output_path):
                 os.remove(thumbnail_output_path)
-            logger.info(f"🗑️ Cleaned up temporary files for video #{i+1}.")
+                logger.info(f"Cleaned up {thumbnail_output_path}")
 
-        except Exception as e:
-            logger.error(f"❌ Error during video creation process #{i+1}: {e}", exc_info=True)
-            # 개별 영상 생성 실패 시에도 다음 영상 생성을 시도하도록 continue
+    # 모든 프로세스 완료 후 오래된 GCS 파일 정리
+    try:
+        cleanup_old_files(bucket, retention_days=7) # 7일 이상된 파일 삭제
+    except Exception as e:
+        logger.error(f"Error during GCS cleanup: {e}", exc_info=True)
 
-    logger.info("✅ Overall YouTube Shorts Automation Process Completed.")
+    logger.info("🎉 YouTube Shorts Automation Process Finished!")
+    return "YouTube Shorts Automation Process Finished Successfully!", 200
 
-    # 오래된 Cloud Storage 파일 정리 (매일 한 번만 실행되도록 스케줄링)
-    # Cloud Functions는 매번 실행되므로, 이 클린업 로직은 스케줄러에서 적절히 호출되도록 해야 함
-    # 현재는 매번 실행될 때마다 지난 7일치 데이터를 정리하도록 설정
-    cleanup_date = datetime.now() - timedelta(days=7)
-    cleanup_manager = cleanup_old_files(bucket=bucket, days_old=7)
-    logger.info(f"🗑️ Running Cloud Storage cleanup for files older than {cleanup_date.strftime('%Y-%m-%d')}")
+# 로컬 테스트를 위한 실행 코드 (Cloud Functions 배포 시에는 이 부분이 직접 실행되지 않음)
+if __name__ == "__main__":
+    # 이 부분은 로컬에서 Cloud Function처럼 테스트하기 위한 더미 요청 객체입니다.
+    # 실제 Cloud Function 환경에서는 HTTP 요청이 들어옵니다.
+    class MockRequest:
+        def get_json(self, silent=True):
+            return {"daily_run": True} # 스케줄 트리거를 흉내
     
-    return "YouTube Shorts automation process finished.", 200
+    print("--- Running local test of youtube_automation_main ---")
+    response, status_code = youtube_automation_main(MockRequest())
+    print(f"Response: {response}, Status: {status_code}")
+    print("--- Local test finished ---")
