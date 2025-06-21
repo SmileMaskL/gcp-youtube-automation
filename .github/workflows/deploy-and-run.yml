@@ -52,8 +52,8 @@ jobs:
         with:
           project_id: ${{ env.GCP_PROJECT_ID }}
           # 🚨🚨🚨 이 부분이 중요합니다! credentials_json 대신 workload_identity_provider를 사용합니다. 🚨🚨🚨
-          workload_identity_provider: 'projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider'
-          service_account: 'github-actions-user@${{ env.GCP_PROJECT_ID }}.iam.gserviceaccount.com' # 위에서 생성한 서비스 계정 이메일
+          workload_identity_provider: 'projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providersgithub-provider-v1'
+          service_account: 'github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com' # 위에서 생성한 서비스 계정 이메일
           # 나머지 설정은 필요에 따라 유지하거나 제거합니다.
           # create_credentials_file: true
           # export_environment_variables: true
