@@ -36,3 +36,6 @@ setuptools==68.0.0  # 80.0.0 대신 더 안정적인 버전 (pkg_resources 경�
 Pexels==0.0.11
 numpy==1.26.4
 pandas==2.2.2
+httplib2==0.22.0
+yt-dlp
+pydub
