@@ -73,7 +73,9 @@ jobs:
             --region=${{ env.REGION }} \
             --format="value(serviceConfig.uri)")
           echo "Cloud Function URL: $FUNCTION_URL"
-          curl -X POST -H "Content-Type: application/json" \
+          # curl 명령어 부분을 명확하게 수정
+          curl -X POST \
+               -H "Content-Type: application/json" \
                -d '{"daily_run": true}' \
                "${FUNCTION_URL}"
           # env:
