@@ -1,4 +1,4 @@
-# .github/workflows/deploy-and-run.yml (수정된 전체 코드)
+# .github/workflows/deploy-and-run.yml
 
 name: Deploy and Run Cloud Function
 
@@ -80,5 +80,5 @@ jobs:
           # curl 명령어 다음에 있던 불필요한 주석 처리된 'env:' 블록은 제거되었습니다.
           # 이는 쉘 스크립트 파싱 오류의 원인이었습니다.
 
-      - name: Debug: List src directory contents # 이 스텝은 이전 'Invoke Cloud Function' 스텝과 동일한 들여쓰기를 가집니다.
+      - name: Debug: List src directory contents
         run: ls -l src/
