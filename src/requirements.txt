@@ -31,6 +31,6 @@ python-json-logger==2.0.7  # 최신 안정 버전
 setuptools==68.0.0  # 80.0.0 대신 더 안정적인 버전 (pkg_resources 경고 해결)
 
 # 추가 설치
-Pexels==0.0.1
+Pexels==0.0.11
 numpy==1.26.4
 pandas==2.2.2
