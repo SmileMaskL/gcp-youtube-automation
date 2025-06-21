@@ -1,9 +1,10 @@
 # 핵심 라이브러리
 google-cloud-secret-manager==2.24.0  # 최신 안정 버전
-openai==1.12.0  # 1.78.1 대신 안정적인 버전으로 다운그레이드
+openai==1.35.13  # 1.78.1 대신 안정적인 버전으로 다운그레이드
 google-cloud-storage==3.1.1  # 최신 안정 버전
 google-generativeai==0.8.5  # 최신 버전 유지
-elevenlabs==1.0.0b0  # 필수 버전 유지
+Flask==2.3.3
+elevenlabs==1.2.0  # 필수 버전 유지
 
 # Google 관련
 google-auth==2.29.0  # 최신 안정 버전
@@ -28,3 +29,8 @@ beautifulsoup4==4.12.3  # 최신 안정 버전
 python-dotenv==1.0.1  # 최신 안정 버전
 python-json-logger==2.0.7  # 최신 안정 버전
 setuptools==68.0.0  # 80.0.0 대신 더 안정적인 버전 (pkg_resources 경고 해결)
+
+# 추가 설치
+Pexels==0.0.1
+numpy==1.26.4
+pandas==2.2.2
