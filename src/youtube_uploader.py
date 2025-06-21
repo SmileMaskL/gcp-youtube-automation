@@ -1,205 +1,174 @@
 # src/youtube_uploader.py
 import os
-import io
 import logging
-import google.auth
+import httplib2
+from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
 
 logger = logging.getLogger(__name__)
 
-# 승인된 범위 정의
-SCOPES = ["https://www.googleapis.com/auth/youtube.upload", "https://www.googleapis.com/auth/youtube.force-ssl"]
+# YouTube API 스코프 설정
+SCOPES = ["https://www.googleapis.com/auth/youtube.upload",
+          "https://www.googleapis.com/auth/youtube.force-ssl"]
 
 class YouTubeUploader:
     def __init__(self, client_id: str, client_secret: str, refresh_token: str):
         self.client_id = client_id
         self.client_secret = client_secret
         self.refresh_token = refresh_token
-        self.credentials = self._authenticate_youtube()
+        self.youtube = self._authenticate_youtube()
 
     def _authenticate_youtube(self):
         """
-        YouTube API 인증을 처리합니다.
-        Refresh Token을 사용하여 새 Access Token을 얻습니다.
+        OAuth 2.0 Refresh Token을 사용하여 YouTube API 서비스 객체를 인증하고 반환합니다.
         """
         creds = None
-        # 자격 증명 파일 경로 (Cloud Functions에서는 /tmp에 저장)
-        # credentials.json 파일은 초기 인증 시에만 필요하며, refresh_token이 있으면 직접 credential 객체를 생성합니다.
         
-        # refresh_token을 사용하여 Credentials 객체 생성
-        if self.refresh_token:
-            creds = Credentials(
-                token=None,  # Access Token은 나중에 Refresh Token으로 새로 얻을 것임
-                refresh_token=self.refresh_token,
-                token_uri="https://oauth2.googleapis.com/token",
-                client_id=self.client_id,
-                client_secret=self.client_secret,
-                scopes=SCOPES
-            )
-            # Refresh Token으로 Access Token 갱신
-            try:
-                creds.refresh(Request())
-                logger.info("YouTube credentials refreshed successfully using refresh token.")
-            except Exception as e:
-                logger.error(f"Error refreshing YouTube credentials: {e}")
-                # refresh_token이 유효하지 않은 경우, 수동으로 재인증해야 할 수 있습니다.
-                raise Exception("Failed to refresh YouTube credentials. Please obtain a new refresh token.")
-        else:
-            logger.error("YouTube Refresh Token is not provided. Cannot authenticate.")
-            raise ValueError("YouTube Refresh Token is missing. Please ensure YOUTUBE_REFRESH_TOKEN is set in secrets.")
+        # Refresh Token을 사용하여 자격 증명 객체 생성
+        # 실제 환경에서는 파일 대신 환경 변수나 Secret Manager에서 토큰을 가져옵니다.
+        token_data = {
+            "token": None,
+            "refresh_token": self.refresh_token,
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+            "scopes": SCOPES
+        }
+        creds = Credentials.from_authorized_user_info(token_data)
 
-        return creds
-
-    def upload_video(self, video_file_path: str, title: str, description: str, tags: List[str], privacy_status: str = "private", thumbnail_file_path: str = None) -> str:
-        """
-        YouTube에 비디오를 업로드합니다.
+        if not creds or not creds.valid:
+            if creds and creds.expired and creds.refresh_token:
+                try:
+                    creds.refresh(Request(httplib2.Http()))
+                    logger.info("YouTube credentials refreshed successfully.")
+                except Exception as e:
+                    logger.error(f"Error refreshing YouTube access token: {e}")
+                    raise Exception("Failed to refresh YouTube access token. Please check refresh token validity.")
+            else:
+                logger.error("Invalid or missing YouTube credentials. Please obtain a valid refresh token.")
+                raise Exception("YouTube authentication failed. Refresh token might be invalid or expired.")
         
-        Args:
-            video_file_path (str): 업로드할 비디오 파일의 로컬 경로.
-            title (str): 비디오 제목.
-            description (str): 비디오 설명.
-            tags (List[str]): 비디오 태그 목록.
-            privacy_status (str): 비디오 공개 상태 ('public', 'private', 'unlisted').
-            thumbnail_file_path (str, optional): 업로드할 썸네일 파일의 로컬 경로.
-
-        Returns:
-            str: 업로드된 비디오의 ID (성공 시), 또는 None (실패 시).
-        """
         try:
-            youtube = build("youtube", "v3", credentials=self.credentials)
+            return build("youtube", "v3", credentials=creds)
+        except Exception as e:
+            logger.error(f"Error building YouTube API service: {e}")
+            raise
 
-            body = {
-                "snippet": {
-                    "title": title,
-                    "description": description,
-                    "tags": tags,
-                    "categoryId": "22",  # 'People & Blogs' 또는 적절한 카테고리 ID
-                    "defaultLanguage": "ko"
-                },
-                "status": {
-                    "privacyStatus": privacy_status,
-                    "selfDeclaredMadeForKids": False # 아동용 콘텐츠가 아님
-                }
+    def upload_video(self, video_file_path: str, title: str, description: str, tags: list, privacy_status: str = "private", thumbnail_file_path: str = None) -> Union[str, None]:
+        """
+        지정된 비디오 파일을 YouTube에 업로드합니다.
+        """
+        if not os.path.exists(video_file_path):
+            logger.error(f"Video file not found: {video_file_path}")
+            return None
+
+        body = {
+            "snippet": {
+                "title": title,
+                "description": description,
+                "tags": tags,
+                "categoryId": "22" # People & Blogs 카테고리
+            },
+            "status": {
+                "privacyStatus": privacy_status
             }
+        }
 
-            # 비디오 파일 업로드
-            media_body = MediaFileUpload(video_file_path, chunksize=-1, resumable=True)
+        # MediaFileUpload 객체 생성
+        media_body = MediaFileUpload(video_file_path, chunksize=-1, resumable=True)
 
-            logger.info(f"Uploading video '{title}' from {video_file_path} to YouTube...")
-            insert_request = youtube.videos().insert(
+        try:
+            insert_request = self.youtube.videos().insert(
                 part="snippet,status",
                 body=body,
                 media_body=media_body
             )
 
-            # 비디오 업로드 진행 상황 모니터링 (선택 사항)
             response = None
             while response is None:
                 status, response = insert_request.next_chunk()
                 if status:
-                    logger.info(f"Uploaded {int(status.resumable_progress * 100)}% of video.")
+                    logger.info(f"Uploaded {int(status.progress() * 100)}% of video.")
             
             video_id = response.get("id")
-            logger.info(f"Video '{title}' successfully uploaded. Video ID: {video_id}")
+            logger.info(f"Video '{title}' uploaded. Video ID: {video_id}")
 
-            # 썸네일 업로드 (선택 사항)
+            # 썸네일 업로드
             if thumbnail_file_path and os.path.exists(thumbnail_file_path):
-                logger.info(f"Uploading thumbnail from {thumbnail_file_path} for video ID: {video_id}...")
+                logger.info(f"Uploading thumbnail for video ID: {video_id}")
                 try:
                     thumbnail_media = MediaFileUpload(thumbnail_file_path)
-                    youtube.thumbnails().set(
+                    self.youtube.thumbnails().set(
                         videoId=video_id,
                         media_body=thumbnail_media
                     ).execute()
-                    logger.info(f"Thumbnail uploaded for video ID: {video_id}")
+                    logger.info("Thumbnail uploaded successfully.")
                 except HttpError as e:
-                    logger.error(f"Error uploading thumbnail: {e}")
-                    # 썸네일 업로드 실패 시에도 비디오 업로드는 성공한 것으로 간주
-            
+                    logger.warning(f"Could not set thumbnail: {e}")
+                    logger.warning("Thumbnail upload is often rate-limited or requires specific channel permissions. Proceeding without thumbnail.")
+                except Exception as e:
+                    logger.warning(f"An unexpected error occurred during thumbnail upload: {e}")
+            else:
+                logger.info("No thumbnail file provided or found. Skipping thumbnail upload.")
+
             return video_id
 
         except HttpError as e:
-            logger.error(f"An HTTP error {e.resp.status} occurred: {e.content.decode('utf-8')}")
-            # API 쿼터 초과 등의 경우 에러 메시지 출력
-            if e.resp.status == 403 and "quotaExceeded" in e.content.decode('utf-8'):
-                logger.error("YouTube API Quota Exceeded. Please check your daily quota limits.")
+            logger.error(f"An HTTP error {e.resp.status} occurred:\n{e.content.decode('utf-8')}")
             return None
         except Exception as e:
-            logger.error(f"An unexpected error occurred during YouTube upload: {e}", exc_info=True)
+            logger.error(f"An unexpected error occurred during YouTube video upload: {e}", exc_info=True)
             return None
 
-# --- YouTube Refresh Token 발급을 위한 초기 인증 스크립트 (로컬에서 1회 실행) ---
-# 이 코드는 Cloud Function에서 실행될 필요 없이, 개발 환경(Codespaces 또는 로컬)에서
-# 최초 1회만 실행하여 refresh_token을 얻는 용도로 사용됩니다.
-# 이 파일을 직접 실행할 때만 작동하도록 main 블록 안에 두었습니다.
-
 if __name__ == "__main__":
-    # 환경 변수에서 client_id와 client_secret을 로드 (로컬 테스트용)
-    # 실제 배포 시에는 config.py를 통해 Secret Manager에서 로드됩니다.
-    CLIENT_SECRETS_FILE = os.getenv("YOUTUBE_CLIENT_SECRETS_FILE", "client_secrets.json") # OAuth 클라이언트 비밀 파일
-    
-    # client_secrets.json 파일 생성 예시 (GCP 콘솔에서 OAuth 2.0 클라이언트 ID를 생성하여 다운로드)
-    # {
-    #   "web": {
-    #     "client_id": "YOUR_CLIENT_ID",
-    #     "project_id": "YOUR_PROJECT_ID",
-    #     "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-    #     "token_uri": "https://oauth2.googleapis.com/token",
-    #     "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-    #     "client_secret": "YOUR_CLIENT_SECRET",
-    #     "redirect_uris": ["http://localhost:8080"]
-    #   }
-    # }
+    # 로컬 테스트를 위한 더미 설정 (실제 키는 사용하지 마세요!)
+    # 이 테스트는 실제 YouTube 계정에 업로드되므로 주의해야 합니다.
+    # 먼저 YouTube API에 대한 OAuth 2.0 웹 클라이언트 ID와 시크릿을 생성하고,
+    # refresh_token을 수동으로 얻어야 합니다. (oauth2.py 등 별도 스크립트 필요)
 
-    if not os.path.exists(CLIENT_SECRETS_FILE):
-        logger.warning(f"'{CLIENT_SECRETS_FILE}' not found. Please download your OAuth 2.0 Client ID JSON from GCP Console.")
-        logger.warning("You can still run this script by setting YOUTUBE_CLIENT_ID and YOUTUBE_CLIENT_SECRET environment variables, but the initial token generation will require manual authorization in a browser.")
-        # 환경 변수에서 직접 로드 시도 (GCP Secret Manager에서 로드되는 방식과 유사)
-        local_client_id = os.getenv("YOUTUBE_CLIENT_ID_LOCAL") 
-        local_client_secret = os.getenv("YOUTUBE_CLIENT_SECRET_LOCAL")
+    temp_client_id = os.environ.get("YOUTUBE_CLIENT_ID_LOCAL", "YOUR_CLIENT_ID")
+    temp_client_secret = os.environ.get("YOUTUBE_CLIENT_SECRET_LOCAL", "YOUR_CLIENT_SECRET")
+    temp_refresh_token = os.environ.get("YOUTUBE_REFRESH_TOKEN_LOCAL", "YOUR_REFRESH_TOKEN")
 
-        if not local_client_id or not local_client_secret:
-            logger.error("Cannot proceed without client_id and client_secret. Please set environment variables or create client_secrets.json.")
-            exit(1)
-        
-        # client_secrets.json 파일 임시 생성 (refresh_token 발급용)
-        temp_client_config = {
-            "web": {
-                "client_id": local_client_id,
-                "project_id": "your-temp-project-id", # 임시 프로젝트 ID, 실제 사용되지 않음
-                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                "token_uri": "https://oauth2.googleapis.com/token",
-                "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-                "client_secret": local_client_secret,
-                "redirect_uris": ["http://localhost:8080"]
-            }
-        }
-        with open("temp_client_secrets.json", "w") as f:
-            json.dump(temp_client_config, f, indent=4)
-        CLIENT_SECRETS_FILE = "temp_client_secrets.json"
-        logger.info(f"Temporary client secrets file created at {CLIENT_SECRETS_FILE}")
-
-    flow = InstalledAppFlow.from_client_secrets_file(CLIENT_SECRETS_FILE, SCOPES)
-    
-    # 로컬 서버를 통해 인증 코드 받기
-    creds = flow.run_local_server(port=8080, success_message="Authentication successful! You can close this tab.")
-    
-    # refresh_token 저장 (이것을 GCP Secret Manager에 YOUTUBE_REFRESH_TOKEN으로 저장)
-    if creds and creds.refresh_token:
-        print("\n--- IMPORTANT ---")
-        print("Your YouTube Refresh Token (Please copy this to GCP Secret Manager):")
-        print(creds.refresh_token)
-        print("--- IMPORTANT ---")
-        logger.info("Refresh token obtained. Please save it to GCP Secret Manager as YOUTUBE_REFRESH_TOKEN.")
+    if "YOUR_CLIENT_ID" in temp_client_id or "YOUR_CLIENT_SECRET" in temp_client_secret or "YOUR_REFRESH_TOKEN" in temp_refresh_token:
+        logger.warning("Please set YOUTUBE_CLIENT_ID_LOCAL, YOUTUBE_CLIENT_SECRET_LOCAL, YOUTUBE_REFRESH_TOKEN_LOCAL environment variables for local YouTube upload testing. Skipping local test.")
     else:
-        logger.error("Failed to obtain refresh token. Please ensure proper authentication.")
+        # 가짜 영상 파일 생성 (실제 파일을 사용하거나 moviepy 등으로 생성)
+        dummy_video_path = "output/dummy_video.mp4"
+        if not os.path.exists("output"):
+            os.makedirs("output")
+        with open(dummy_video_path, "wb") as f:
+            f.write(b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom\x00\x00\x00\x00")
+        
+        # 가짜 썸네일 파일 생성
+        dummy_thumbnail_path = "output/dummy_thumbnail.jpg"
+        from PIL import Image
+        img = Image.new('RGB', (1280, 720), color = 'red')
+        img.save(dummy_thumbnail_path)
 
-    # 임시 파일이 생성되었다면 삭제
-    if CLIENT_SECRETS_FILE == "temp_client_secrets.json" and os.path.exists("temp_client_secrets.json"):
-        os.remove("temp_client_secrets.json")
-        logger.info("Temporary client secrets file removed.")
+        uploader = YouTubeUploader(
+            client_id=temp_client_id,
+            client_secret=temp_client_secret,
+            refresh_token=temp_refresh_token
+        )
+        
+        uploaded_video_id = uploader.upload_video(
+            video_file_path=dummy_video_path,
+            title="테스트 영상 업로드 (자동화)",
+            description="이것은 YouTube Shorts 자동화 시스템 테스트 영상입니다.",
+            tags=["테스트", "자동화", "유튜브"],
+            privacy_status="private", # 테스트용이므로 private으로 업로드
+            thumbnail_file_path=dummy_thumbnail_path
+        )
+        
+        if uploaded_video_id:
+            print(f"로컬 테스트 영상 업로드 성공: https://www.youtube.com/watch?v={uploaded_video_id}")
+        else:
+            print("로컬 테스트 영상 업로드 실패.")
+
+        os.remove(dummy_video_path)
+        os.remove(dummy_thumbnail_path)
