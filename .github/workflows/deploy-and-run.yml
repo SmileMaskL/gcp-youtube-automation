@@ -1,43 +1,25 @@
 # .github/workflows/deploy-and-run.yml
-# main.yml 대신 사용
-name: Deploy and Run YouTube Shorts Automation
+name: Deploy and Run YouTube Shorts Automation on GCP
 
 on:
   workflow_dispatch: # 수동으로 워크플로우 실행
   schedule:
-    # 매일 03, 07, 12, 18, 22시에 실행 (UTC 기준)
-    # 한국 시간(KST)으로 변환하면 다음과 같습니다:
-    # UTC 03시 = KST 12시 (정오)
-    # UTC 07시 = KST 16시 (오후 4시)
-    # UTC 12시 = KST 21시 (오후 9시)
-    # UTC 18시 = KST 03시 (다음날 오전 3시)
-    # UTC 22시 = KST 07시 (다음날 오전 7시)
-    # 따라서 하루 5번 KST 03시, 07시, 12시, 16시, 21시에 실행됩니다.
-    - cron: '0 3,7,12,18,22 * * *'
+    - cron: '0 0 * * *' # 매일 자정 (UTC)에 실행 (한국 시간 기준 오전 9시)
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  GCP_BUCKET_NAME: ${{ secrets.GCP_BUCKET_NAME }}
-  GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
-  ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
-  ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
-  NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
-  PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-  OPENAI_KEYS_JSON: ${{ secrets.OPENAI_KEYS_JSON }}
-  GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-  YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
-  YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
-  YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
-  # Cloud Function의 ENTRY_POINT는 main.py에 정의된 함수 이름
-  ENTRY_POINT: youtube_automation_main
+  FUNCTION_NAME: youtube-shorts-automation-function
+  REGION: us-central1 # Cloud Function 배포 리전
+  BUCKET_NAME: ${{ secrets.GCP_BUCKET_NAME }} # Cloud Storage 버킷 이름
 
 jobs:
-  deploy-and-run:
+  deploy_and_run:
     runs-on: ubuntu-latest
+    environment: production # 프로덕션 환경으로 지정 (필요 시)
+
     permissions:
       contents: 'read'
       id-token: 'write' # OpenID Connect (OIDC)를 사용하여 GCP 인증
-      # actions: write # Cloud Build 서비스 계정에게 권한이 필요할 수 있음
 
     steps:
       - name: Checkout repository
@@ -46,15 +28,10 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11' # requirements.txt에 맞는 Python 버전
-          cache: 'pip'
+          python-version: '3.11' # runtime.txt와 동일하게 설정
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-        # Cloud Functions 배포 시에만 필요한 라이브러리 (local run 시에는 필요 없을 수 있음)
-        # pip install google-cloud-functions-framework
+        run: pip install -r requirements.txt
 
       - name: Authenticate to Google Cloud
         id: 'auth'
@@ -62,40 +39,48 @@ jobs:
         with:
           credentials_json: '${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}'
           project_id: ${{ env.PROJECT_ID }}
-          # OIDC를 사용한다면 workloadiId-provider 및 service_account 설정
-          # workload_identity_provider: 'projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/POOL_ID/providers/PROVIDER_ID'
-          # service_account: 'SERVICE_ACCOUNT_EMAIL'
-        
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
 
       - name: Deploy Cloud Function
         id: deploy
-        run: |
-          gcloud functions deploy ${{ env.ENTRY_POINT }} \
-            --runtime python311 \
-            --trigger-http \
-            --entry-point ${{ env.ENTRY_POINT }} \
-            --region us-central1 \
-            --memory 2048MB \
-            --timeout 540s \
-            --allow-unauthenticated \
-            --source . \
-            --set-env-vars GCP_PROJECT_ID=${{ env.PROJECT_ID }},GCP_BUCKET_NAME=${{ env.GCP_BUCKET_NAME }},ELEVENLABS_API_KEY=${{ env.ELEVENLABS_API_KEY }},ELEVENLABS_VOICE_ID=${{ env.ELEVENLABS_VOICE_ID }},NEWS_API_KEY=${{ env.NEWS_API_KEY }},PEXELS_API_KEY=${{ env.PEXELS_API_KEY }},OPENAI_KEYS_JSON="${{ env.OPENAI_KEYS_JSON }}",GEMINI_API_KEY=${{ env.GEMINI_API_KEY }},YOUTUBE_CLIENT_ID=${{ env.YOUTUBE_CLIENT_ID }},YOUTUBE_CLIENT_SECRET=${{ env.YOUTUBE_CLIENT_SECRET }},YOUTUBE_REFRESH_TOKEN=${{ env.YOUTUBE_REFRESH_TOKEN }}
-        # --source . 은 현재 GitHub Actions 작업 디렉토리의 모든 파일을 Cloud Function 소스로 사용함을 의미합니다.
-        # --allow-unauthenticated는 HTTP 트리거를 통해 외부에서 호출 가능하게 합니다. (보안상 권장되지 않지만 GitHub Actions에서 호출하기 위해 사용)
-        # --memory, --timeout은 함수의 성능과 최대 실행 시간을 조정합니다. (영상 생성은 시간이 오래 걸릴 수 있으므로 넉넉하게 설정)
-      
+        uses: 'google-github-actions/deploy-cloudfunctions@v1'
+        with:
+          name: ${{ env.FUNCTION_NAME }}
+          runtime: python311
+          entry_point: youtube_automation_main # main.py에 정의된 함수 이름
+          source: . # 저장소 전체를 소스로 사용
+          region: ${{ env.REGION }}
+          memory_mb: 2048 # 메모리 증가 (영상 처리 시 메모리 부족 방지)
+          timeout_sec: 540 # 최대 실행 시간 9분 (무료 티어 최대 9분)
+          env_vars: |
+            GCP_PROJECT_ID=${{ env.PROJECT_ID }}
+            GCP_BUCKET_NAME=${{ env.BUCKET_NAME }}
+            ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }}
+            ELEVENLABS_VOICE_ID=${{ secrets.ELEVENLABS_VOICE_ID }}
+            NEWS_API_KEY=${{ secrets.NEWS_API_KEY }}
+            PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }}
+            OPENAI_KEYS_JSON=${{ secrets.OPENAI_KEYS_JSON }}
+            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+            YOUTUBE_CLIENT_ID=${{ secrets.YOUTUBE_CLIENT_ID }}
+            YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }}
+            YOUTUBE_REFRESH_TOKEN=${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+          # Cloud Functions v2 (Eventarc 트리거)를 사용하는 경우 HTTP 트리거 설정
+          # trigger_http: true 
+          # Cloud Functions v1 (HTTP 트리거)의 경우 기본적으로 HTTP 트리거이므로 명시 불필요
+
       - name: Get Cloud Function URL
         id: get_url
         run: |
-          FUNCTION_URL=$(gcloud functions describe ${{ env.ENTRY_POINT }} --region us-central1 --format='value(serviceConfig.uri)')
-          echo "FUNCTION_URL=${FUNCTION_URL}" >> "$GITHUB_OUTPUT"
+          FUNCTION_URL=$(gcloud functions describe ${{ env.FUNCTION_NAME }} --region=${{ env.REGION }} --format='value(serviceConfig.uri)')
+          echo "FUNCTION_URL=${FUNCTION_URL}" >> $GITHUB_ENV
 
       - name: Call Cloud Function
+        env:
+          FUNCTION_URL: ${{ env.FUNCTION_URL }}
         run: |
-          FUNCTION_URL=${{ steps.get_url.outputs.FUNCTION_URL }}
-          echo "Calling Cloud Function at: ${FUNCTION_URL}"
-          curl -X POST -H "Content-Type: application/json" -d '{}' "${FUNCTION_URL}"
-        # Cloud Function에 POST 요청을 보내어 실행을 트리거합니다.
-        # -d '{}'는 빈 JSON 본문을 보냅니다. (요청에 특별한 데이터가 필요 없으므로)
+          # Cloud Function에 HTTP POST 요청 전송
+          # 'daily_run' 플래그를 JSON 본문에 포함하여 스케줄링된 실행임을 명시
+          curl -X POST \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $(gcloud auth print-identity-token --audiences=${{ env.FUNCTION_NAME }})" \
+            "${{ env.FUNCTION_URL }}" \
+            -d '{"daily_run": true}'
