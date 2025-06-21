@@ -150,3 +150,51 @@ async def youtube_automation_main_logic():
         logger.error(f"YouTube 자동화 프로세스 중 오류 발생: {error_info}")
         monitoring.log_error(f"YouTube 자동화 프로세스 중 오류 발생: {e}", {'error_type': type(e).__name__, 'error_message': str(e)})
         raise # Cloud Function 오류로 전파
+
+# src/main.py (위에 붙여넣은 코드 아래에 이어서 추가)
+
+import functions_framework
+
+@functions_framework.http
+def youtube_automation_main(request):
+    """
+    Cloud Function의 HTTP 트리거 엔트리포인트.
+    HTTP 요청을 처리하고, 비동기 YouTube 자동화 로직을 실행합니다.
+    """
+    logger.info("Cloud Function (youtube_automation_main) 호출됨.")
+
+    # 기본적으로 비동기 함수를 실행하고 결과를 기다립니다.
+    # Cloud Functions는 비동기 함수를 지원하지만, HTTP 트리거는 동기 응답을 기대합니다.
+    # 따라서 asyncio.run을 사용하여 비동기 함수를 동기적으로 실행합니다.
+    # 단, Flask request context 밖에서 실행되도록 주의해야 합니다.
+
+    # 요청 본문에서 'daily_run' 플래그를 확인하여 수동 실행/스케줄 실행 구분
+    request_json = request.get_json(silent=True)
+    if request_json and isinstance(request_json, dict) and request_json.get('daily_run'):
+        logger.info("일일 자동 실행 요청 감지. 로직 실행 시작.")
+        try:
+            # 비동기 로직 실행 및 완료 대기
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            result = loop.run_until_complete(youtube_automation_main_logic())
+            loop.close()
+            return {"message": "YouTube automation initiated successfully", "result": result}, 200
+        except Exception as e:
+            logger.error(f"YouTube 자동화 로직 실행 중 오류 발생: {e}", exc_info=True)
+            return {"error": f"YouTube automation failed: {str(e)}"}, 500
+    else:
+        logger.info("일반 HTTP 요청. 함수 로직 실행 대기.")
+        # Cloud Functions는 HTTP 요청을 받으면 이 함수를 실행하지만,
+        # 실제 장시간 실행되는 작업은 백그라운드에서 비동기적으로 처리하고
+        # 빠른 응답을 주는 것이 좋습니다.
+        # 여기서는 요청을 받으면 바로 핵심 로직을 실행하도록 합니다.
+        try:
+            # 비동기 로직 실행 및 완료 대기
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            result = loop.run_until_complete(youtube_automation_main_logic())
+            loop.close()
+            return {"message": "YouTube automation completed via HTTP trigger", "result": result}, 200
+        except Exception as e:
+            logger.error(f"YouTube 자동화 로직 실행 중 오류 발생: {e}", exc_info=True)
+            return {"error": f"YouTube automation failed: {str(e)}"}, 500
