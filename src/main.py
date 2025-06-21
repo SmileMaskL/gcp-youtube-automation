@@ -1,4 +1,5 @@
 # src/main.py
+import functions_framework
 import logging
 import os
 import json
@@ -60,6 +61,7 @@ def upload_to_gcs(source_file_name: str, destination_blob_name: str):
         logger.error(f"Failed to upload {source_file_name} to GCS: {e}")
         return False
 
+@functions_framework.http
 def youtube_automation_main(request: Request):
     """
     HTTP 요청을 받아 YouTube Shorts 자동화 프로세스를 시작하는 Cloud Function의 진입점.
