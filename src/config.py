@@ -14,19 +14,19 @@ class Config:
         self.secret_client = secretmanager.SecretManagerServiceClient()
 
         # Secret Manager에서 API 키 로드
-        self.elevenlabs_api_key = self._get_secret("elevenlabs-api-key")
-        self.news_api_key = self._get_secret("news-api-key")
-        self.pexels_api_key = self._get_secret("pexels-api-key")
+        self.elevenlabs_api_key = self._get_secret("ELEVENLABS_API_KEY")
+        self.news_api_key = self._get_secret("NEWS_API_KEY")
+        self.pexels_api_key = self._get_secret("PEXELS_API_KEY")
         
         # OpenAI 키는 로테이션을 위해 리스트로 로드
-        openai_keys_json_str = self._get_secret("openai-api-keys")
+        openai_keys_json_str = self._get_secret("OPENAI_KEYS_B64s")
         self.openai_api_keys = json.loads(openai_keys_json_str) if openai_keys_json_str else []
         
         self.gemini_api_key = self._get_secret("gemini-api-key")
         
-        self.youtube_client_id = self._get_secret("youtube-client-id")
-        self.youtube_client_secret = self._get_secret("youtube-client-secret")
-        self.youtube_refresh_token = self._get_secret("youtube-refresh-token")
+        self.youtube_client_id = self._get_secret("YOUTUBE_CLIENT_ID")
+        self.youtube_client_secret = self._get_secret("YOUTUBE_CLIENT_SECRET")
+        self.youtube_refresh_token = self._get_secret("YOUTUBE_REFRESH_TOKENn")
 
         # API 쿼터 관리 및 로깅 설정
         self.api_usage_tracking_bucket = self.bucket_name # 사용량 추적 정보를 저장할 버킷
