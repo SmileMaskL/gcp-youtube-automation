@@ -1,76 +1,95 @@
+# src/video_creator.py
 import logging
 import os
-from moviepy.editor import AudioFileClip, ColorClip
-from elevenlabs.client import ElevenLabs
-from elevenlabs.types import Voice, VoiceSettings
+from moviepy.editor import VideoFileClip, AudioFileClip, TextClip, CompositeVideoClip, ColorClip
+from moviepy.config import change_settings # FFmpeg 경로 설정
+from moviepy.video.tools.subtitles import SubtitlesClip
+from moviepy.editor import ImageClip
+from PIL import Image, ImageDraw, ImageFont
 
-# ✅ 로깅 설정
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
-# ✅ 환경변수에서 API 키와 보이스 ID 불러오기
-ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
-ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID")
+# FFmpeg 경로 설정 (Cloud Functions 환경에 맞게)
+# Cloud Functions 런타임에 기본 FFmpeg가 포함되어 있으므로, moviepy가 자동으로 찾을 수 있습니다.
+# 만약 문제가 발생하면, Cloud Function에 custom FFmpeg를 포함시키거나,
+# moviepy.config.change_settings({"FFMPEG_BINARY": "/path/to/ffmpeg"}) 등으로 설정 필요.
+# 현재는 별도 설정 없이 진행합니다.
 
-if not ELEVENLABS_API_KEY or not ELEVENLABS_VOICE_ID:
-    logging.error("❌ ELEVENLABS_API_KEY 또는 ELEVENLABS_VOICE_ID가 없습니다.")
-    raise ValueError("❗ ElevenLabs API Key 및 Voice ID는 필수입니다.")
+class VideoCreator:
+    def __init__(self, font_path: str):
+        self.font_path = font_path
+        if not os.path.exists(self.font_path):
+            logger.error(f"Font file not found at {self.font_path}. Video creation might fail or use default font.")
+            # 폰트가 없으면 기본 폰트 사용 또는 에러 처리 로직 추가 필요
+            # 현재는 에러 로그만 남기고 진행. main.py에서 폰트 다운로드 실패 시 중단하도록 처리됨.
 
-# ✅ ElevenLabs 클라이언트 초기화
-client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
+    def create_video(self, audio_path: str, text_content: str, output_path: str, background_video_path: str = None) -> bool:
+        """
+        오디오와 텍스트를 기반으로 60초 길이의 Shorts 비디오를 생성합니다.
+        
+        Args:
+            audio_path (str): 음성 파일 경로.
+            text_content (str): 비디오에 표시할 텍스트 내용.
+            output_path (str): 최종 비디오 저장 경로.
+            background_video_path (str, optional): 배경 비디오 파일 경로 (없으면 단색 배경).
 
-# ✅ 텍스트를 음성으로 변환하고 mp3 저장
-def generate_audio(text: str, output_path: str = "output/output.mp3", voice_settings: VoiceSettings = None) -> str:
-    try:
-        if voice_settings is None:
-            voice_settings = VoiceSettings(
-                stability=0.5,
-                similarity_boost=0.75,
-                style=0.0,
-                speaker_boost=True
+        Returns:
+            bool: 비디오 생성 성공 여부.
+        """
+        try:
+            audio_clip = AudioFileClip(audio_path)
+            video_duration = min(audio_clip.duration, 60) # 최대 60초 Shorts
+
+            # 배경 비디오 또는 단색 배경 생성
+            if background_video_path and os.path.exists(background_video_path):
+                # TODO: 비디오 다운로더 연동 필요
+                # 현재는 배경 비디오 다운로드 로직이 없으므로 단색 배경으로 처리
+                logger.warning("Background video path provided but not yet implemented. Using solid color background.")
+                final_video = ColorClip((1080, 1920), color=(0, 0, 0), duration=video_duration) # Shorts 비율 9:16
+            else:
+                final_video = ColorClip((1080, 1920), color=(0, 0, 0), duration=video_duration) # Shorts 비율 9:16
+
+            # 텍스트 클립 생성
+            # text_content를 적절히 분할하여 한 화면에 너무 많은 텍스트가 표시되지 않도록 합니다.
+            # 여기서는 간단하게 전체 텍스트를 사용하지만, 실제로는 문장 단위로 나누어 시간 동기화 필요
+            
+            # SubtitlesClip 대신 TextClip을 사용하여 직접 텍스트 오버레이
+            text_clip = (TextClip(text_content, 
+                                fontsize=60, 
+                                color='white', 
+                                font=self.font_path, # 고양이체 폰트 적용
+                                method='caption', # 텍스트 자동 줄바꿈
+                                stroke_color='black', 
+                                stroke_width=2,
+                                align='center',
+                                size=(final_video.w * 0.8, None)) # 영상 너비의 80% 사용, 높이는 자동 조절
+                        .set_duration(video_duration)
+                        .set_position(('center', 'center')))
+
+            # 오디오 클립을 영상에 설정
+            final_video = final_video.set_audio(audio_clip.set_duration(video_duration))
+
+            # 텍스트 클립을 비디오에 합성
+            final_clip = CompositeVideoClip([final_video, text_clip])
+
+            # 최종 비디오 저장
+            logger.info(f"Writing final video to {output_path}...")
+            final_clip.write_videofile(
+                output_path, 
+                fps=24, 
+                codec="libx264", 
+                audio_codec="aac",
+                temp_audiofile=os.path.join(os.path.dirname(output_path), f"temp_audio_{uuid.uuid4().hex}.m4a"), # 임시 오디오 파일 경로 지정
+                remove_temp=True
             )
-        voice = Voice(
-            voice_id=ELEVENLABS_VOICE_ID,
-            settings=voice_settings
-        )
+            logger.info(f"Video successfully created at {output_path}")
+            return True
 
-        logging.info("🎙️ 텍스트를 음성으로 변환 중...")
-        audio = client.generate(
-            text=text,
-            voice=voice,
-            model="eleven_multilingual_v2"
-        )
+        except Exception as e:
+            logger.error(f"Error creating video: {e}", exc_info=True)
+            return False
 
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        with open(output_path, "wb") as f:
-            f.write(audio)
-
-        logging.info(f"✅ 오디오 생성 완료: {output_path}")
-        return output_path
-
-    except Exception as e:
-        logging.error(f"❌ ElevenLabs 음성 생성 실패: {e}")
-        raise
-
-# ✅ 오디오를 기반으로 영상 생성 (Shorts용: 1080x1920)
-def create_video(text: str, output_path: str = "output/final_video.mp4") -> str:
-    try:
-        logging.info("🎬 영상 생성 시작")
-        audio_file = generate_audio(text)
-        audio_clip = AudioFileClip(audio_file)
-        duration = audio_clip.duration + 2  # 끝 여유시간 2초
-
-        # 영상 클립 (검정 배경)
-        video_clip = ColorClip(size=(1080, 1920), color=(0, 0, 0), duration=duration)
-        video_clip = video_clip.set_audio(audio_clip)
-
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        video_clip.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac")
-
-        audio_clip.close()
-        video_clip.close()
-        logging.info(f"✅ 영상 생성 완료: {output_path}")
-        return output_path
-
-    except Exception as e:
-        logging.error(f"❌ 영상 생성 실패: {e}")
-        raise
+# 필요한 경우, src/bg_downloader.py와 연동하여 배경 영상 다운로드 로직 추가 필요
+# 현재는 배경 영상 다운로더가 구현되어 있지 않아 단색 배경으로 진행됩니다.
+# 만약 배경 영상을 사용하려면 bg_downloader.py에서 Pexels API 등을 사용하여 영상을 다운로드하고,
+# 해당 경로를 create_video 함수에 전달하도록 main.py를 수정해야 합니다.
