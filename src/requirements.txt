@@ -13,6 +13,8 @@ google-api-python-client==2.136.0  # 최신 안정 버전
 
 # Cloud Functions
 google-cloud-functions==1.12.0  # Cloud Functions 클라이언트 라이브러리
+
+# Cloud Functions HTTP 트리거를 위해 반드시 필요
 functions-framework==3.*  # 최신 3.x 버전 (3.4.0 대신 호환성 더 좋은 버전)
 
 # 미디어 처리
@@ -34,3 +36,4 @@ setuptools==68.0.0  # 80.0.0 대신 더 안정적인 버전 (pkg_resources 경�
 Pexels==0.0.11
 numpy==1.26.4
 pandas==2.2.2
+
