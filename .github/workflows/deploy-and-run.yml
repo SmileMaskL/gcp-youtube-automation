@@ -64,7 +64,7 @@ jobs:
             --runtime=python311 \
             --region=us-central1 \
             --source=. \
-            --entry-point=src.main.youtube_automation_main \
+            --entry-point=youtube_automation_mai \
             --trigger-http \
             --allow-unauthenticated \
             --memory=2048MB \
