@@ -1,54 +1,51 @@
-import requests
-import json
+# src/trend_api.py
 import logging
-import random
-from datetime import datetime, timedelta
+from newsapi import NewsApiClient
 
 logger = logging.getLogger(__name__)
 
-def get_trending_news(api_key: str, country='kr', language='ko') -> str:
-    """
-    News API에서 현재 대한민국 (또는 지정된 국가/언어)의 트렌딩 뉴스 헤드라인을 가져옵니다.
-    """
-    if not api_key:
-        logger.error("News API Key is not provided.")
-        return "오늘의 인기 주제"
+class NewsAPI:
+    def __init__(self, api_key: str):
+        if not api_key:
+            logger.error("News API Key is not provided.")
+            raise ValueError("News API Key is missing.")
+        self.newsapi = NewsApiClient(api_key=api_key)
 
-    url = f"https://newsapi.org/v2/top-headlines?country={country}&language={language}&apiKey={api_key}"
-
-    try:
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-
-        articles = data.get('articles', [])
-        if not articles:
-            logger.warning("No trending articles found from News API.")
-            return "최신 인기 뉴스, 오늘 이슈"
-
-        selected_article = random.choice(articles)
-        title = selected_article.get('title', "오늘의 흥미로운 소식")
+    def get_trending_topics(self, language: str = "ko", country: str = "kr", count: int = 5) -> list:
+        """
+        최신 트렌드 뉴스를 가져와서 주제 목록을 반환합니다.
         
-        if ' - ' in title:
-            title = title.split(' - ')[0]
-        
-        logger.info(f"Successfully fetched trending news: {title}")
-        return title
+        Args:
+            language (str): 뉴스 언어 (기본값: 'ko').
+            country (str): 뉴스 국가 (기본값: 'kr').
+            count (int): 가져올 주제의 최대 개수.
 
-    except Exception as e:
-        logger.error(f"An error occurred while fetching news: {e}")
-        return "오늘의 인기 토픽, 최신 정보"
+        Returns:
+            list: 트렌드 주제 (문자열) 목록.
+        """
+        try:
+            # NewsAPI의 top_headlines는 특정 카테고리의 인기 기사를 가져올 수 있습니다.
+            # 모든 카테고리에서 가장 인기 있는 기사를 가져오는 방법은 제한적일 수 있습니다.
+            # 여기서는 'general' 카테고리에서 최신 기사를 가져오고 제목을 주제로 사용합니다.
+            # 실제 트렌드 분석을 위해서는 Google Trends API 또는 더 복잡한 로직이 필요할 수 있습니다.
+            top_headlines = self.newsapi.get_top_headlines(
+                language=language,
+                country=country,
+                category='general' # 또는 business, entertainment, health, science, sports, technology
+            )
+            
+            topics = []
+            if top_headlines and top_headlines['articles']:
+                for article in top_headlines['articles']:
+                    title = article.get('title')
+                    if title and title not in topics: # 중복 제거
+                        topics.append(title)
+                    if len(topics) >= count:
+                        break
+            
+            logger.info(f"Successfully fetched {len(topics)} trending topics from NewsAPI.")
+            return topics[:count]
 
-def get_trending_topics(api_key: str = None) -> list:
-    """
-    트렌딩 토픽을 가져오는 함수 (기본값 제공)
-    """
-    try:
-        if api_key:
-            news = get_trending_news(api_key)
-            return [news]
-        else:
-            return ["최신 트렌드", "인기 주제", "오늘의 화제"]
-    except Exception as e:
-        logger.error(f"Error in get_trending_topics: {e}")
-        return ["인기 있는 주제", "최신 동향"]
+        except Exception as e:
+            logger.error(f"Failed to fetch trending topics from NewsAPI: {e}", exc_info=True)
+            return []
