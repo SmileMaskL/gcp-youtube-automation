@@ -1,41 +1,42 @@
 # 핵심 라이브러리
-google-cloud-secret-manager==2.24.0  # 최신 안정 버전
-openai==1.35.13  # 1.78.1 대신 안정적인 버전으로 다운그레이드
-google-cloud-storage==3.1.1  # 최신 안정 버전
-google-generativeai==0.8.5  # 최신 버전 유지
-Flask==2.3.3
-elevenlabs==1.2.0  # 필수 버전 유지
+google-cloud-secret-manager==2.24.0
+openai==1.35.13
+google-cloud-storage==3.1.1
+google-generativeai==0.8.5
+elevenlabs==1.2.0
 
 # Google 관련
-google-auth==2.29.0  # 최신 안정 버전
-google-auth-oauthlib==1.2.0  # 최신 안정 버전
-google-api-python-client==2.136.0  # 최신 안정 버전
+google-auth==2.29.0
+google-auth-oauthlib==1.2.0
+google-api-python-client==2.136.0
 
 # Cloud Functions
-google-cloud-functions==1.12.0  # Cloud Functions 클라이언트 라이브러리
+functions-framework==3.* # 최신 3.x 버전
 
-# Cloud Functions HTTP 트리거를 위해 반드시 필요
-functions-framework==3.*  # 최신 3.x 버전 (3.4.0 대신 호환성 더 좋은 버전)
-
-# 미디어 처리
-Pillow==10.3.0  # 최신 안정 버전
-moviepy==1.0.3  # 최신 안정 버전
-imageio-ffmpeg==0.4.9  # 최신 버전 유지
-ffmpeg-python==0.2.0  # 최신 버전 유지
-opencv-python-headless==4.10.0.84  # opencv-python 대신 헤드리스 버전 사용
+# 미디어 처리 (주의: 서버리스 환경에서 moviepy와 ffmpeg는 성능 및 호환성 문제가 있을 수 있음)
+# moviepy 및 관련 라이브러리들은 Cloud Function에서 CPU/메모리 사용량이 높고,
+# FFmpeg 바이너리 경로 설정 등 추가적인 고려사항이 많아 문제의 원인이 될 수 있습니다.
+# 만약 미디어 처리 부분이 계속 문제가 된다면, 이 부분을 별도의 서비스(예: Cloud Run, Compute Engine)로 분리하는 것을 고려해야 합니다.
+Pillow==10.3.0
+moviepy==1.0.3
+imageio-ffmpeg==0.4.9
+# ffmpeg-python==0.2.0 # moviepy가 imageio-ffmpeg를 통해 ffmpeg를 관리하므로 중복될 수 있음.
+# opencv-python-headless==4.10.0.84 # CPU/메모리 요구사항이 높고, 설치 문제 발생 가능성이 있음.
+# 만약 이 라이브러리가 반드시 필요하다면, 에러 발생 시 별도 조치 필요.
+# headless 버전은 GUI 관련 의존성이 없지만, 여전히 빌드에 문제가 있을 수 있습니다.
 
 # 기타 유틸리티
-newsapi-python==0.2.7  # 최신 버전 유지
-requests==2.32.3  # 최신 안정 버전
-beautifulsoup4==4.12.3  # 최신 안정 버전
-python-dotenv==1.0.1  # 최신 안정 버전
-python-json-logger==2.0.7  # 최신 안정 버전
-setuptools==68.0.0  # 80.0.0 대신 더 안정적인 버전 (pkg_resources 경고 해결)
+newsapi-python==0.2.7
+requests==2.32.3
+beautifulsoup4==4.12.3
+python-dotenv==1.0.1
+python-json-logger==2.0.7
+setuptools==68.0.0
 
 # 추가 설치
-Pexels==0.0.11
+# Pexels==0.0.11 # 사용 여부 확인
 numpy==1.26.4
 pandas==2.2.2
 httplib2==0.22.0
-yt-dlp
+# yt-dlp # Cloud Function에서 호환성 문제 가능성 높음. 제외 권장.
 pydub
