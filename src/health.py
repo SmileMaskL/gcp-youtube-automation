@@ -1,17 +1,12 @@
-from fastapi import FastAPI
-import os
+# src/health.py
 import logging
 
-app = FastAPI()
-PORT = 8080  # 명시적 포트 설정 (Cloud Run 표준)
-
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-@app.get("/health")
-def health_check():
-    return {"status": "ok", "port": PORT}
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=PORT)
+def health_check(request):
+    """
+    Cloud Function의 헬스 체크 엔드포인트.
+    컨테이너가 정상적으로 시작되고 요청을 처리할 수 있는지 확인합니다.
+    """
+    logger.info("Health check endpoint called.")
+    return "OK", 200
