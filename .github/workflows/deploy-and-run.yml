@@ -13,8 +13,8 @@ on:
     - cron: '0 3,7,12,18,22 * * *'
 
 env:
-  GCP_PROJECT_ID: your-gcp-project-id # 본인의 GCP 프로젝트 ID로 변경
-  GCP_BUCKET_NAME: your-gcp-bucket-name # 본인의 GCP 버킷 이름으로 변경
+  GCP_PROJECT_ID: youtube-fully-automated # 본인의 GCP 프로젝트 ID로 변경
+  GCP_BUCKET_NAME: youtube-fully-automated_cloudbuilde # 본인의 GCP 버킷 이름으로 변경
   FUNCTION_NAME: youtube-shorts-automation
   REGION: us-central1 # Cloud Function 배포 리전
 
