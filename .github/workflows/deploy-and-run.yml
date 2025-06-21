@@ -67,7 +67,7 @@ jobs:
       - name: Invoke Cloud Function (Scheduled Run)
         # 스케줄된 실행인 경우에만 Cloud Function을 호출합니다.
         # push 또는 workflow_dispatch로 수동 트리거된 경우에는 직접 호출하지 않습니다.
-        if: github.event_name == 'schedule'
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         run: |
           FUNCTION_URL=$(gcloud functions describe ${{ env.FUNCTION_NAME }} \
             --region=${{ env.REGION }} \
