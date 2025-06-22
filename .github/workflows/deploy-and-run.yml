@@ -12,7 +12,7 @@ on:
 
 env:
   GCP_PROJECT_ID: youtube-fully-automated
-  GCP_BUCKET_NAME:  youtube-fully-automated_cloudbuild
+  GCP_BUCKET_NAME: youtube-fully-automated_cloudbuild
   FUNCTION_NAME: youtube-shorts-automation
   REGION: us-central1
 
@@ -23,7 +23,7 @@ jobs:
       contents: read
       id-token: write
 
-    steps:
+    steps: # <-- 'steps:' 아래에 모든 스텝들이 옵니다.
       - name: ✅ Checkout Repository
         uses: actions/checkout@v4
 
@@ -57,18 +57,16 @@ jobs:
             --runtime=python311 \
             --region=${{ env.REGION }} \
             --source=./src \
-            --entry-point=youtube_automation_main \
+            --entry-point=trigger_youtube_upload \ # 이전 답변에서 수정 제안했던 부분
             --trigger-http \
             --allow-unauthenticated \
             --memory=2048MB \
             --timeout=540s \
             --gen2 \
             --service-account=${{ secrets.WIF_SERVICE_ACCOUNT }} \
-            --set-env-vars="GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }},GCP_BUCKET_NAME=${{ env.GCP_BUCKET_NAME }}" \
+            --set-env-vars="GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }},GCP_BUCKET_NAME=${{ env.GCP_BUCKET_NAME }},GCS_VIDEO_PATH=videos/generated_video.mp4" \ # GCS_VIDEO_PATH 추가 예시
             --set-secrets="YOUTUBE_CLIENT_ID=projects/${{ env.GCP_PROJECT_ID }}/secrets/YOUTUBE_CLIENT_ID:latest,YOUTUBE_CLIENT_SECRET=projects/${{ env.GCP_PROJECT_ID }}/secrets/YOUTUBE_CLIENT_SECRET:latest,YOUTUBE_REFRESH_TOKEN=projects/${{ env.GCP_PROJECT_ID }}/secrets/YOUTUBE_REFRESH_TOKEN:latest,ELEVENLABS_API_KEY=projects/${{ env.GCP_PROJECT_ID }}/secrets/ELEVENLABS_API_KEY:latest,OPENAI_API_KEY=projects/${{ env.GCP_PROJECT_ID }}/secrets/OPENAI_API_KEY:latest,GEMINI_API_KEY=projects/${{ env.GCP_PROJECT_ID }}/secrets/GEMINI_API_KEY:latest,NEWSAPI_API_KEY=projects/${{ env.GCP_PROJECT_ID }}/secrets/NEWSAPI_API_KEY:latest,PEXELS_API_KEY=projects/${{ env.GCP_PROJECT_ID }}/secrets/PEXELS_API_KEY:latest"
-            # ELEVENLABS_VOICE_ID는 환경변수로 직접 주입하는 것이 편리하다면 그대로 유지 가능
-            # --set-env-vars="GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }},GCP_BUCKET_NAME=${{ env.GCP_BUCKET_NAME }},ELEVENLABS_VOICE_ID=${{ secrets.ELEVENLABS_VOICE_ID }}"
-            # Secret Manager에서 가져오는 방식과 혼동되지 않도록 조정
+
       - name: 🌐 Invoke Cloud Function (Scheduled Run)
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         run: |
@@ -83,3 +81,9 @@ jobs:
 
       - name: List src directory contents
         run: ls -l src/
+
+      - name: Upload artifacts # <-- 이 부분이 'steps:' 바로 아래, 즉 위 스텝들과 동일한 들여쓰기로 위치해야 합니다.
+        uses: actions/upload-artifact@v4
+        with:
+          name: my-artifact
+          path: ./output
