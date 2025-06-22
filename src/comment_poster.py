@@ -5,7 +5,6 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 logger = logging.getLogger(__name__)
-
 SCOPES = ["https://www.googleapis.com/auth/youtube.force-ssl"]
 
 class CommentPoster:
@@ -14,11 +13,11 @@ class CommentPoster:
         self.client_secret = client_secret
         self.refresh_token = refresh_token
         self.youtube = self._get_authenticated_service()
-
+    
     def _get_authenticated_service(self):
         if not all([self.client_id, self.client_secret, self.refresh_token]):
             logger.error("YouTube API credentials are missing.")
-            raise ValueError("YouTube API credentials are required for authentication.")
+            raise ValueError("YouTube API credentials are required.")
             
         credentials = Credentials(
             token=None,
