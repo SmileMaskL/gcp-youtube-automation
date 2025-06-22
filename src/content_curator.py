@@ -1,5 +1,5 @@
-import requests
 import logging
+import requests
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
@@ -10,7 +10,7 @@ class ContentCurator:
         self.base_url = "https://newsapi.org/v2/everything"
         if not self.api_key:
             logger.warning("News API Key is not provided. Trend analysis may be limited.")
-
+    
     def get_hot_topics(self, query: str = "technology OR science OR finance", 
                       language: str = "en", num_topics: int = 3, days_ago: int = 1):
         if not self.api_key:
