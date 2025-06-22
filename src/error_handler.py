@@ -1,20 +1,29 @@
 import logging
-import requests
 
 logger = logging.getLogger(__name__)
 
-def handle_error(message: str, level: str = "ERROR"):
-    """오류 처리 및 알림"""
-    if level == "ERROR":
-        logger.error(message)
-    elif level == "WARNING":
+def log_error_and_notify(message: str, level: str = "ERROR", exc_info: bool = False):
+    if level.upper() == "INFO":
+        logger.info(message)
+    elif level.upper() == "WARNING":
         logger.warning(message)
+    elif level.upper() == "ERROR":
+        logger.error(message, exc_info=exc_info)
+    elif level.upper() == "CRITICAL":
+        logger.critical(message, exc_info=exc_info)
+    else:
+        logger.debug(message, exc_info=exc_info)
     
-    # Slack 알림 (웹훅 URL 필요)
-    webhook_url = os.getenv("SLACK_WEBHOOK_URL")
-    if webhook_url:
+    logger.info(f"Error/Notification logged: {message}")
+
+def send_notification_to_slack(message: str):
+    slack_webhook_url = os.environ.get("SLACK_WEBHOOK_URL")
+    if slack_webhook_url:
         try:
-            payload = {"text": f"🚨 오류 발생: {message}"}
-            requests.post(webhook_url, json=payload)
+            import requests
+            payload = {"text": f"🚨 YouTube Automation Alert: {message}"}
+            response = requests.post(slack_webhook_url, json=payload)
+            response.raise_for_status()
+            logger.info("Slack notification sent successfully.")
         except Exception as e:
-            logger.error(f"Slack 알림 실패: {e}")
+            logger.error(f"Failed to send Slack notification: {e}")
