@@ -11,19 +11,19 @@ def edit_video_for_shorts(video_path, content_text, video_title):
         duration = clip.duration
         width, height = clip.size
 
-        # --- 1. 제목 오버레이 추가 (중앙 상단) ---
+        # 제목 오버레이 추가 (중앙 상단)
         title_text_clip = TextClip(
             txt=video_title,
             fontsize=70,
             color='white',
-            font='NanumSquare', # 폰트 설정
+            font='NanumSquare',
             stroke_color='black',
             stroke_width=2,
             method='caption',
             size=(width * 0.8, None)
-        ).set_pos(('center', 'top')).set_duration(duration)
+        ).set_position(('center', 'top')).set_duration(duration)
 
-        # --- 2. 간단한 자막 추가 (내용 기반) ---
+        # 자막 추가 (내용 기반)
         content_subtitle_clip = TextClip(
             txt=content_text,
             fontsize=50,
@@ -33,16 +33,16 @@ def edit_video_for_shorts(video_path, content_text, video_title):
             stroke_width=1.5,
             method='caption',
             size=(width * 0.9, None)
-        ).set_pos(('center', 'bottom')).set_duration(duration)
+        ).set_position(('center', 'bottom')).set_duration(duration)
 
-        # 모든 클립을 합칩니다.
+        # 모든 클립 합치기
         final_clip_edited = CompositeVideoClip([
             clip,
             title_text_clip,
             content_subtitle_clip
         ])
 
-        # 편집된 비디오 파일 저장 (원본 파일 덮어쓰기)
+        # 편집된 비디오 저장
         final_clip_edited.write_videofile(
             video_path,
             codec="libx264",
