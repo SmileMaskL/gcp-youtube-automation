@@ -1,97 +1,92 @@
-# src/bg_downloader.py (새 파일 또는 기존 파일 수정)
-import logging
-import requests
-import os
-import random
+    # src/bg_downloader.py
 
-logger = logging.getLogger(__name__)
+    import logging
+    import requests
+    import os
+    import random
 
-# Pexels API 문서: https://www.pexels.com/api/documentation/#videos
-# API 키 필요
+    logger = logging.getLogger(__name__)
 
-class BackgroundDownloader:
-    def __init__(self, api_key: str):
-        if not api_key:
-            logger.error("Pexels API Key is not provided.")
-            raise ValueError("Pexels API Key is missing.")
-        self.api_key = api_key
-        self.base_url = "https://api.pexels.com/videos"
+    # Pexels API Base URL 및 Endpoint
+    PEXELS_API_BASE_URL = "[https://api.pexels.com/videos](https://api.pexels.com/videos)"
+    PEXELS_SEARCH_ENDPOINT = "/search"
 
-    def search_videos(self, query: str, per_page: int = 10) -> list:
+    def download_background_video(pexels_api_key, query, output_path, min_duration=5, max_duration=60):
         """
-        Pexels API를 사용하여 비디오를 검색합니다.
+        Pexels API를 사용하여 쿼리에 해당하는 배경 영상을 다운로드합니다.
         
         Args:
-            query (str): 검색어.
-            per_page (int): 페이지당 결과 수.
-
+            pexels_api_key (str): Pexels API 키.
+            query (str): 검색 쿼리 (예: "nature", "city", "technology").
+            output_path (str): 다운로드된 비디오 파일을 저장할 경로.
+            min_duration (int): 최소 비디오 길이 (초).
+            max_duration (int): 최대 비디오 길이 (초).
         Returns:
-            list: 검색된 비디오 URL 목록.
+            str: 다운로드된 비디오 파일의 경로.
         """
-        headers = {"Authorization": self.api_key}
-        params = {"query": query, "per_page": per_page}
+        headers = {
+            "Authorization": pexels_api_key
+        }
+        params = {
+            "query": query,
+            "per_page": 15, # 한 페이지당 결과 수
+            "orientation": "portrait", # 세로형 영상 (쇼츠에 적합)
+            "min_duration": min_duration,
+            "max_duration": max_duration
+        }
+
         try:
-            response = requests.get(f"{self.base_url}/search", headers=headers, params=params)
+            logger.info(f"Pexels에서 배경 영상 검색 시작. 쿼리: '{query}'")
+            response = requests.get(f"{PEXELS_API_BASE_URL}{PEXELS_SEARCH_ENDPOINT}", headers=headers, params=params)
             response.raise_for_status() # HTTP 오류 발생 시 예외 발생
             data = response.json()
-            
-            video_urls = []
-            for video_item in data.get('videos', []):
-                # 가장 높은 해상도의 비디오 파일을 찾기
-                max_quality_url = None
-                max_quality_res = 0
-                for file_info in video_item.get('video_files', []):
-                    # 'link' 필드를 사용 (Pexels API 변경될 수 있음)
-                    # 'quality' 필드가 있다면 사용, 없으면 'width'나 'height'로 판단
-                    quality = file_info.get('quality')
-                    if quality == 'hd' or quality == 'sd': # 예시: 'hd' 선호
-                        video_urls.append(file_info['link'])
-                        break # 첫 번째 HD 또는 SD 비디오를 사용
-                    
-                    # 해상도로 판단
-                    if 'width' in file_info and 'height' in file_info:
-                        current_res = file_info['width'] * file_info['height']
-                        if current_res > max_quality_res:
-                            max_quality_res = current_res
-                            max_quality_url = file_info['link']
-                if max_quality_url:
-                    video_urls.append(max_quality_url)
-            
-            logger.info(f"Found {len(video_urls)} videos for query '{query}' from Pexels.")
-            return video_urls
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Error searching Pexels videos for query '{query}': {e}")
-            return []
 
-    def download_video(self, video_url: str, output_path: str) -> bool:
-        """
-        주어진 URL에서 비디오 파일을 다운로드합니다.
-        """
-        try:
-            response = requests.get(video_url, stream=True)
-            response.raise_for_status()
+            videos = data.get("videos", [])
+            if not videos:
+                logger.warning(f"'{query}'에 대한 Pexels 영상 검색 결과가 없습니다. 다른 쿼리를 시도하거나 기본 영상 사용을 고려하세요.")
+                raise ValueError(f"Pexels에서 '{query}'에 대한 영상을 찾을 수 없습니다.")
+
+            # 여러 비디오 중 무작위로 하나 선택
+            selected_video = random.choice(videos)
+            
+            # 비디오 파일의 다양한 해상도 중 가장 적합한 것 선택 (예: 'sd' 또는 'hd' 또는 'medium')
+            # Pexels API 응답 구조를 확인하여 가장 적합한 'link'를 선택해야 합니다.
+            # 일반적으로 video_files 리스트에 해상도별 링크가 있습니다.
+            video_url = None
+            # 가장 높은 해상도의 세로형 비디오를 찾거나, 'hd' 또는 'sd' 중 하나를 선택
+            # Pexels 응답 형식에 따라 이 로직은 달라질 수 있습니다.
+            # 여기서는 편의상 첫 번째 'link'를 사용한다고 가정합니다.
+            if selected_video.get("video_files"):
+                # 보통 가장 높은 해상도 (width, height) 또는 특정 퀄리티 ('hd', 'sd')를 선택합니다.
+                # 여기서는 단순히 첫 번째 사용 가능한 링크를 가져옵니다. 실제로는 더 정교한 로직이 필요.
+                for vf in selected_video["video_files"]:
+                    if vf.get("quality") == "hd" and vf.get("width") and vf.get("height") and vf["height"] > vf["width"]: # 세로형 HD
+                        video_url = vf["link"]
+                        break
+                if not video_url: # HD 세로형이 없으면 그냥 첫 번째 링크 사용
+                    video_url = selected_video["video_files"][0]["link"]
+            
+            if not video_url:
+                raise ValueError("선택된 비디오에서 유효한 다운로드 URL을 찾을 수 없습니다.")
+
+            logger.info(f"선택된 배경 영상 다운로드 시작: {video_url}")
+            video_response = requests.get(video_url, stream=True)
+            video_response.raise_for_status()
+
             with open(output_path, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
+                for chunk in video_response.iter_content(chunk_size=8192):
                     f.write(chunk)
-            logger.info(f"Video downloaded successfully to {output_path}")
-            return True
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Error downloading video from {video_url}: {e}")
-            return False
+            
+            logger.info(f"배경 영상 다운로드 완료: {output_path}")
+            return output_path
 
-# main.py에서 사용 예시:
-# from src.bg_downloader import BackgroundDownloader
-# ...
-# bg_downloader = BackgroundDownloader(api_key=config.pexels_api_key)
-# video_urls = bg_downloader.search_videos(query=topic, per_page=5)
-# if video_urls:
-#    selected_video_url = random.choice(video_urls)
-#    background_video_path = os.path.join("/tmp", f"bg_{uuid.uuid4().hex}.mp4")
-#    if bg_downloader.download_video(selected_video_url, background_video_path):
-#        video_success = video_creator.create_video(..., background_video_path=background_video_path)
-#    else:
-#        background_video_path = None # 다운로드 실패 시 배경 비디오 없이 진행
-# else:
-#    background_video_path = None
-#
-# 그리고 VideoCreator.create_video 함수에서 background_video_path를 활용하도록 수정해야 합니다.
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Pexels API 요청 실패 또는 네트워크 오류: {e}", exc_info=True)
+            raise
+        except ValueError as e:
+            logger.error(f"Pexels 영상 처리 오류: {e}", exc_info=True)
+            raise
+        except Exception as e:
+            logger.error(f"알 수 없는 배경 영상 다운로드 오류: {e}", exc_info=True)
+            raise
+    
