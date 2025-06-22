@@ -1,114 +1,88 @@
-from moviepy.editor import VideoFileClip, AudioFileClip, ImageClip, CompositeVideoClip
-import os
-from pathlib import Path
-from src.config import VIDEO_DIR
-from src.monitoring import log_system_health
+    # src/video_editor.py
 
-def create_video(audio_path, background_image_path, output_filename="final_video.mp4"):
-    """
-    오디오 파일과 배경 이미지를 결합하여 Shorts에 적합한 9:16 비율의 비디오를 생성합니다.
-    """
-    output_path = os.path.join(VIDEO_DIR, output_filename)
-    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    import logging
+    from moviepy.editor import VideoFileClip, TextClip, CompositeVideoClip, ColorClip, ImageClip
+    from moviepy.video.tools.subtitles import SubtitlesClip # 자막 추가를 위한 모듈
+    import os
 
-    try:
-        audio_clip = AudioFileClip(audio_path)
-        video_duration = audio_clip.duration
+    logger = logging.getLogger(__name__)
 
-        # 배경 이미지 로드
-        image_clip = ImageClip(background_image_path)
+    def edit_video_for_shorts(video_path, content_text, video_title):
+        """
+        생성된 비디오에 자막, 제목 오버레이 등의 편집을 추가합니다.
+        
+        Args:
+            video_path (str): 원본 비디오 파일 경로.
+            content_text (str): 영상에 들어갈 주된 내용 (자막 생성에 사용될 수 있음).
+            video_title (str): 영상 제목 (오버레이로 추가될 수 있음).
+        Returns:
+            str: 편집된 비디오 파일 경로 (원본 파일을 덮어쓰거나 새 파일로 저장).
+        """
+        try:
+            logger.info(f"영상 편집 시작: {video_path}")
 
-        # Shorts (9:16 비율)에 맞게 비디오 크기 설정 (예: 1080x1920)
-        target_width = 1080
-        target_height = 1920
+            clip = VideoFileClip(video_path)
+            duration = clip.duration
+            width, height = clip.size
 
-        # 이미지 비율 유지하면서 목표 크기에 맞게 조정 (fill mode)
-        # 이미지 원본 비율이 16:9라고 가정하고, 9:16으로 잘라낼 영역을 계산합니다.
-        img_width, img_height = image_clip.size
+            # --- 1. 제목 오버레이 추가 (중앙 상단) ---
+            # TextClip을 사용하여 제목 텍스트 클립 생성
+            title_text_clip = TextClip(
+                txt=video_title,
+                fontsize=70,
+                color='white',
+                font='NanumSquare', # 폰트 설정 (fonts/Catfont.ttf 등 로컬 폰트를 사용하려면 설치 필요)
+                                    # Cloud Functions 환경에서는 시스템 폰트만 사용 가능하거나,
+                                    # 사용자 정의 폰트를 빌드 시 이미지에 포함시켜야 합니다.
+                                    # 여기서는 일반적인 시스템 폰트 사용을 가정합니다.
+                stroke_color='black',
+                stroke_width=2,
+                method='caption', # 텍스트가 경계를 넘어가지 않도록 자동 줄바꿈
+                size=(width * 0.8, None) # 가로 너비의 80%
+            )
+            # 제목 클립을 중앙 상단에 위치시킵니다.
+            title_text_clip = title_text_clip.set_pos(('center', 'top')).set_duration(duration)
 
-        # 원본 이미지의 가로/세로 비율
-        img_aspect_ratio = img_width / img_height
-        # 목표 비디오의 가로/세로 비율
-        video_aspect_ratio = target_width / target_height # 9/16 = 0.5625
+            # --- 2. 간단한 자막 추가 (내용 기반) ---
+            # content_text를 기반으로 자막을 생성합니다.
+            # 이 부분은 자막 싱크를 맞추는 복잡한 로직이 필요하므로, 여기서는 간단한 예시로만 보여줍니다.
+            # 실제로는 음성 파형 분석 또는 AI가 생성한 시간 동기화된 자막 데이터를 사용해야 합니다.
+            # 현재는 단순히 전체 영상 길이 동안 콘텐츠 텍스트를 보여주는 방식으로 구현합니다.
+            content_subtitle_clip = TextClip(
+                txt=content_text,
+                fontsize=50,
+                color='yellow',
+                font='NanumSquare',
+                stroke_color='black',
+                stroke_width=1.5,
+                method='caption',
+                size=(width * 0.9, None) # 가로 너비의 90%
+            ).set_pos(('center', 'bottom')).set_duration(duration)
 
-        if img_aspect_ratio > video_aspect_ratio:
-            # 이미지가 더 넓은 경우 (가로형 이미지), 높이를 기준으로 폭을 잘라냅니다.
-            new_width = int(img_height * video_aspect_ratio)
-            new_height = img_height
-            x_center = img_width / 2
-            y_center = img_height / 2
-            image_clip = image_clip.crop(x1=x_center - new_width / 2,
-                                        y1=y_center - new_height / 2,
-                                        x2=x_center + new_width / 2,
-                                        y2=y_center + new_height / 2)
-        else:
-            # 이미지가 더 좁은 경우 (세로형 이미지 또는 정사각형), 폭을 기준으로 높이를 잘라냅니다.
-            new_width = img_width
-            new_height = int(img_width / video_aspect_ratio)
-            x_center = img_width / 2
-            y_center = img_height / 2
-            image_clip = image_clip.crop(x1=x_center - new_width / 2,
-                                        y1=y_center - new_height / 2,
-                                        x2=x_center + new_width / 2,
-                                        y2=y_center + new_height / 2)
 
-        # 최종적으로 목표 해상도로 리사이징
-        image_clip = image_clip.resize((target_width, target_height))
+            # 모든 클립을 합칩니다.
+            final_clip_edited = CompositeVideoClip([
+                clip,
+                title_text_clip,
+                content_subtitle_clip
+            ])
 
-        # 비디오 클립 생성 (배경 이미지를 비디오 길이만큼 늘림)
-        video_clip = image_clip.set_duration(video_duration)
-        video_clip = video_clip.set_audio(audio_clip)
+            # 편집된 비디오 파일 저장 (원본 파일 덮어쓰기)
+            # Cloud Functions는 /tmp에만 쓰기 가능하므로, 원본 video_path도 /tmp에 있어야 합니다.
+            final_clip_edited.write_videofile(
+                video_path,
+                codec="libx264",
+                audio_codec="aac",
+                fps=clip.fps,
+                temp_audiofile=f"{os.path.splitext(video_path)[0]}_edited_audio.m4a",
+                remove_temp=True,
+                logger=None
+            )
+            
+            logger.info(f"영상 편집 완료: {video_path}")
+            return video_path
 
-        # 최종 비디오 저장
-        video_clip.write_videofile(output_path, 
-                                   codec='libx264', 
-                                   audio_codec='aac', 
-                                   fps=24, # 프레임 속도 설정 (24 또는 30)
-                                   temp_audiofile=os.path.join(output_path.parent, "temp_audio.m4a"), # 임시 오디오 파일 경로
-                                   remove_temp=True
-                                )
-
-        audio_clip.close()
-        image_clip.close()
-        video_clip.close()
-
-        log_system_health(f"비디오가 성공적으로 생성되었습니다: {output_path}", level="info")
-        return output_path
-    except Exception as e:
-        log_system_health(f"비디오 생성 중 오류 발생: {e}", level="error")
-        raise ValueError(f"비디오 생성 실패: {e}")
-
-# For local testing (optional)
-if __name__ == "__main__":
-    # 테스트를 위해 dummy audio.mp3와 background.jpg 파일을 준비해야 합니다.
-    # 예시: 임시 파일 생성
-    dummy_audio_path = "output/audio/dummy_audio.mp3"
-    dummy_bg_path = "output/backgrounds/dummy_bg.jpg"
-
-    # 임시 오디오 파일 생성 (10초 길이)
-    # from moviepy.audio.AudioClip import AudioArrayClip
-    # import numpy as np
-    # sample_rate = 44100
-    # duration = 10 # seconds
-    # t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
-    # data = np.sin(2 * np.pi * 440 * t) * 0.5 # 440 Hz sine wave
-    # audio_data = np.array([data, data]).T # Stereo
-    # audio_clip_temp = AudioArrayClip(audio_data, fps=sample_rate)
-    # Path(dummy_audio_path).parent.mkdir(parents=True, exist_ok=True)
-    # audio_clip_temp.write_audiofile(dummy_audio_path)
-    # audio_clip_temp.close()
-
-    # 임시 배경 이미지 생성 (1280x720)
-    # from PIL import Image
-    # dummy_img = Image.new('RGB', (1280, 720), color = (73, 109, 137))
-    # Path(dummy_bg_path).parent.mkdir(parents=True, exist_ok=True)
-    # dummy_img.save(dummy_bg_path)
-
-    try:
-        # 실제 테스트 시 위 주석 처리된 부분을 참고하여 dummy 파일 생성 후 실행
-        # 또는 실제 오디오/이미지 파일 경로를 지정
-        # video_path = create_video(dummy_audio_path, dummy_bg_path, "test_video.mp4")
-        # print(f"Test video saved to: {video_path}")
-        print("To run this test, please manually create dummy audio.mp3 and background.jpg files in their respective directories.")
-    except ValueError as e:
-        print(f"Error during test: {e}")
+        except Exception as e:
+            logger.error(f"비디오 편집 중 오류 발생: {e}", exc_info=True)
+            raise # 오류를 다시 발생시켜 main.py에서 처리하도록 합니다.
+    
