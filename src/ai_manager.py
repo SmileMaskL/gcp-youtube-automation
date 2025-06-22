@@ -2,7 +2,6 @@ import logging
 from openai import OpenAI
 import google.generativeai as genai
 import json
-import time
 
 from openai_utils import get_next_openai_key
 
@@ -41,13 +40,13 @@ def generate_content_with_gemini(gemini_api_key, prompt_text, model="gemini-1.5-
         logger.info(f"Google Gemini 모델로 콘텐츠 생성 요청. 모델: {model}")
         full_prompt = (
             f"{prompt_text}\n\n"
-            f"Your response MUST be a JSON object with two keys: 'title' (string) and 'content' (string). "
-            f"Example: {{\"title\": \"추천 제목\", \"content\": \"생성된 내용\"}}"
+            "Your response MUST be a JSON object with two keys: 'title' (string) and 'content' (string). "
+            "Example: {{\"title\": \"추천 제목\", \"content\": \"생성된 내용\"}}"
         )
         
         response = model_instance.generate_content(full_prompt)
-        
         content_text = response.text
+        
         if content_text.startswith("```json"):
             content_text = content_text.replace("```json\n", "").replace("\n```", "")
         
@@ -62,7 +61,7 @@ def generate_content_with_gemini(gemini_api_key, prompt_text, model="gemini-1.5-
 def generate_niche_content(config_instance, niche_keyword, model_preference="openai"):
     prompt = (
         f"유튜브 쇼츠 영상을 위해 '{niche_keyword}'에 대한 흥미로운 사실, 유용한 팁, 또는 짧은 스토리를 1개 작성해주세요. "
-        f"제목과 내용을 포함하는 JSON 형식으로 응답해주세요. 내용은 50단어 이내로 간결하게 작성해주세요. "
+        "제목과 내용을 포함하는 JSON 형식으로 응답해주세요. 내용은 50단어 이내로 간결하게 작성해주세요. "
         f"예시: {{\"title\": \"{niche_keyword}의 놀라운 비밀\", \"content\": \"{niche_keyword}에 대한 놀라운 사실입니다...\"}}"
     )
     
