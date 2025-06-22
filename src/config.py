@@ -20,14 +20,13 @@
             self.secret_manager_client = secretmanager.SecretManagerServiceClient()
             self.project_path = f"projects/{self.project_id}"
 
-            # ElevenLabs Voice ID는 환경 변수를 우선하고, 없으면 기본값 사용
             self.elevenlabs_voice_id = os.getenv("ELEVENLABS_VOICE_ID", "21m00Tcm4FnGU8l8FGzN")
 
             self.env_vars = env_vars if env_vars else {}
             self.load_env_vars()
 
         def load_env_vars(self):
-            pass # 현재 이 함수에서 추가 로드할 환경 변수는 없습니다.
+            pass
 
         def _access_secret(self, secret_id):
             """Secret Manager에서 특정 시크릿의 최신 버전을 가져옵니다."""
@@ -53,11 +52,10 @@
         def get_elevenlabs_api_key(self):
             return self._access_secret("ELEVENLABS_API_KEY")
             
-        def get_openai_api_keys(self): # <--- 이 함수가 변경되었습니다!
+        def get_openai_api_keys(self): # <--- 이 함수가 JSON 배열을 파싱합니다.
             """OPENAI_API_KEYS 시크릿에서 JSON 형태의 여러 OpenAI API 키를 가져옵니다."""
             keys_json_str = self._access_secret("OPENAI_API_KEYS")
             try:
-                # JSON 문자열을 파이썬 리스트로 변환
                 keys = json.loads(keys_json_str)
                 if not isinstance(keys, list):
                     raise TypeError("OPENAI_API_KEYS 시크릿은 JSON 배열 형태여야 합니다.")
@@ -70,10 +68,9 @@
         def get_gemini_api_key(self):
             return self._access_secret("GEMINI_API_KEY")
             
-        def get_newsapi_api_key(self): # <--- 이 함수는 이제 'NEWSAPI_API_KEY'를 가져옵니다.
+        def get_newsapi_api_key(self):
             return self._access_secret("NEWSAPI_API_KEY")
             
         def get_pexels_api_key(self):
             return self._access_secret("PEXELS_API_KEY")
-
     
