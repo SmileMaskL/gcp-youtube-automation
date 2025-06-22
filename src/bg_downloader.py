@@ -19,7 +19,11 @@ def download_background_video(pexels_api_key, query, output_path, min_duration=5
 
     try:
         logger.info(f"Pexels에서 배경 영상 검색 시작. 쿼리: '{query}'")
-        response = requests.get(f"{PEXELS_API_BASE_URL}{PEXELS_SEARCH_ENDPOINT}", headers=headers, params=params)
+        response = requests.get(
+            f"{PEXELS_API_BASE_URL}{PEXELS_SEARCH_ENDPOINT}", 
+            headers=headers, 
+            params=params
+        )
         response.raise_for_status()
         data = response.json()
 
@@ -33,10 +37,7 @@ def download_background_video(pexels_api_key, query, output_path, min_duration=5
         
         if selected_video.get("video_files"):
             for vf in selected_video["video_files"]:
-                if (vf.get("quality") == "hd" and 
-                    vf.get("width") and 
-                    vf.get("height") and 
-                    vf["height"] > vf["width"]):
+                if vf.get("quality") == "hd" and vf.get("width") and vf.get("height") and vf["height"] > vf["width"]:
                     video_url = vf["link"]
                     break
             if not video_url:
