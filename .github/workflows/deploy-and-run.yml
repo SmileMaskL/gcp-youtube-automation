@@ -64,8 +64,11 @@ jobs:
             --timeout=540s \
             --gen2 \
             --service-account=${{ secrets.WIF_SERVICE_ACCOUNT }} \
-            --set-env-vars="GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }},GCP_BUCKET_NAME=${{ env.GCP_BUCKET_NAME }},ELEVENLABS_VOICE_ID=${{ secrets.ELEVENLABS_VOICE_ID }}"
-
+            --set-env-vars="GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }},GCP_BUCKET_NAME=${{ env.GCP_BUCKET_NAME }}" \
+            --set-secrets="YOUTUBE_CLIENT_ID=projects/${{ env.GCP_PROJECT_ID }}/secrets/YOUTUBE_CLIENT_ID:latest,YOUTUBE_CLIENT_SECRET=projects/${{ env.GCP_PROJECT_ID }}/secrets/YOUTUBE_CLIENT_SECRET:latest,YOUTUBE_REFRESH_TOKEN=projects/${{ env.GCP_PROJECT_ID }}/secrets/YOUTUBE_REFRESH_TOKEN:latest,ELEVENLABS_API_KEY=projects/${{ env.GCP_PROJECT_ID }}/secrets/ELEVENLABS_API_KEY:latest,OPENAI_API_KEY=projects/${{ env.GCP_PROJECT_ID }}/secrets/OPENAI_API_KEY:latest,GEMINI_API_KEY=projects/${{ env.GCP_PROJECT_ID }}/secrets/GEMINI_API_KEY:latest,NEWSAPI_API_KEY=projects/${{ env.GCP_PROJECT_ID }}/secrets/NEWSAPI_API_KEY:latest,PEXELS_API_KEY=projects/${{ env.GCP_PROJECT_ID }}/secrets/PEXELS_API_KEY:latest"
+            # ELEVENLABS_VOICE_ID는 환경변수로 직접 주입하는 것이 편리하다면 그대로 유지 가능
+            # --set-env-vars="GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }},GCP_BUCKET_NAME=${{ env.GCP_BUCKET_NAME }},ELEVENLABS_VOICE_ID=${{ secrets.ELEVENLABS_VOICE_ID }}"
+            # Secret Manager에서 가져오는 방식과 혼동되지 않도록 조정
       - name: 🌐 Invoke Cloud Function (Scheduled Run)
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         run: |
