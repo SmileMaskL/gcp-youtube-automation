@@ -1,7 +1,18 @@
 import logging
 import os
+import logging
 
 logger = logging.getLogger(__name__)
+
+    level = level.lower()
+    log_func = {
+        "info": logger.info,
+        "warning": logger.warning,
+        "error": logger.error,
+        "critical": logger.critical
+    }.get(level, logger.debug)
+    
+    log_func(message)
 
 def log_system_health(message: str, level: str = "info"):
     logger = logging.getLogger(__name__)
