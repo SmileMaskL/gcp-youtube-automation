@@ -1,13 +1,12 @@
-# src/comment_poster.py
-import httplib2
 import logging
+import httplib2
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 logger = logging.getLogger(__name__)
 
-SCOPES = ["https://www.googleapis.com/auth/youtube.force-ssl"] # 댓글 작성 스코프
+SCOPES = ["https://www.googleapis.com/auth/youtube.force-ssl"]
 
 class CommentPoster:
     def __init__(self, client_id, client_secret, refresh_token):
@@ -17,9 +16,8 @@ class CommentPoster:
         self.youtube = self._get_authenticated_service()
 
     def _get_authenticated_service(self):
-        """YouTube API 서비스에 인증하고 빌드합니다."""
         if not all([self.client_id, self.client_secret, self.refresh_token]):
-            logger.error("YouTube API credentials (client_id, client_secret, refresh_token) are missing.")
+            logger.error("YouTube API credentials are missing.")
             raise ValueError("YouTube API credentials are required for authentication.")
             
         credentials = Credentials(
@@ -41,7 +39,6 @@ class CommentPoster:
         return build("youtube", "v3", credentials=credentials)
 
     def post_comment(self, video_id, comment_text):
-        """지정된 영상에 댓글을 작성합니다."""
         try:
             request = self.youtube.commentThreads().insert(
                 part="snippet",
