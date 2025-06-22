@@ -4,6 +4,7 @@ import os
 logger = logging.getLogger(__name__)
 
 def log_system_health(message: str, level: str = "info"):
+    logger = logging.getLogger(__name__)
     """
     시스템 상태 및 중요한 이벤트를 로깅합니다.
     Args:
