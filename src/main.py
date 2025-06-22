@@ -3,8 +3,8 @@ import functions_framework
 import os
 import logging
 from youtube_uploader import upload_video # youtube_uploader.py에서 함수 임포트
-# (선택 사항) GCS에서 파일 다운로드용 라이브러리
 from google.cloud import storage
+from cleanup_manager import cleanup_old_files # cleanup_manager 임포트
 
 logging.basicConfig(level=logging.INFO)
 
@@ -75,7 +75,17 @@ def trigger_youtube_upload(request):
         if os.path.exists(video_file_path):
             os.remove(video_file_path)
             logging.info(f"Temporary video file deleted: {video_file_path}")
-
+     
+        # 🚨 추가: 영상 업로드 완료 후 GCS 버킷 클린업 실행
+        if gcs_bucket_name: # 버킷 이름이 있을 경우에만 실행
+            try:
+                storage_client = storage.Client()
+                bucket = storage_client.bucket(gcs_bucket_name)
+                cleanup_old_files(bucket, retention_days=7) # 7일 이상 된 파일 정리
+            except Exception as e:
+                logging.error(f"Failed to perform GCS cleanup: {e}")
+                # 클린업 실패가 영상 업로드 자체에 영향을 주지 않도록 경고만 로깅
+        
         return f"Video upload successful! ID: {response.get('id')}", 200
     except Exception as e:
         logging.error(f"Failed to upload video: {e}")
