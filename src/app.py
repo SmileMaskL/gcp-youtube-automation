@@ -1,28 +1,39 @@
-from flask import Flask, jsonify
+import os
 import subprocess
 import threading
-import os
+import logging
+from flask import Flask, request, jsonify
 from src.monitoring import log_system_health
 
 app = Flask(__name__)
+logger = logging.getLogger(__name__)
 
 @app.route('/')
 def hello():
-    return 'YouTube 자동화 서비스 실행 중'
+    return 'YouTube Automation Service is running. Access /run to start the automation process.'
 
 @app.route('/run', methods=['POST'])
 def run_automation():
+    log_system_health("Automation process triggered via HTTP request.", level="info")
+    
     def run_script():
         try:
-            subprocess.run(["python", "src/batch_processor.py"], check=True)
-            log_system_health("배치 처리 완료", level="info")
+            result = subprocess.run(
+                ["python", "-m", "src.batch_processor"],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            log_system_health(f"Automation script completed successfully. Output: {result.stdout}", level="info")
+        except subprocess.CalledProcessError as e:
+            log_system_health(f"Automation script failed. Error: {e.stderr}", level="error")
         except Exception as e:
-            log_system_health(f"배치 처리 실패: {e}", level="error")
+            log_system_health(f"Unexpected error during script execution: {e}", level="error")
 
     thread = threading.Thread(target=run_script)
     thread.start()
-    return jsonify({"status": "백그라운드에서 처리 시작"}), 202
+    return jsonify({"status": "Automation process started in background."}), 202
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 8080))
-    app.run(host='0.0.0.0', port=port)
+    logger.info(f"Flask app will be served by Gunicorn on port {port}")
