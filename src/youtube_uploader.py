@@ -1,87 +1,82 @@
-# src/youtube_uploader.py (수정 및 보완된 전체 코드)
-
+# youtube_uploader.py
 import os
-import google.oauth2.credentials
 import google_auth_oauthlib.flow
-from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
-from googleapiclient.http import MediaFileUpload
+import googleapiclient.discovery
+import googleapiclient.errors
 import logging
+from google.oauth2.credentials import Credentials
+import json # JSON 임포트
 
-logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO)
 
-# YouTube Data API 스코프
-SCOPES = ['https://www.googleapis.com/auth/youtube.upload']
-API_SERVICE_NAME = 'youtube'
-API_VERSION = 'v3'
+def upload_video(file_path, title, description, tags, category_id, privacy_status):
+    API_SERVICE_NAME = "youtube"
+    API_VERSION = "v3"
 
-class YouTubeUploader:
-    def __init__(self, client_id, client_secret, refresh_token, project_id, bucket_name):
-        self.client_id = client_id
-        self.client_secret = client_secret
-        self.refresh_token = refresh_token
-        self.project_id = project_id
-        self.bucket_name = bucket_name
-        self.youtube = self._get_authenticated_service()
+    # 환경 변수에서 인증 정보 로드
+    CLIENT_ID = os.environ.get("YOUTUBE_CLIENT_ID")
+    CLIENT_SECRET = os.environ.get("YOUTUBE_CLIENT_SECRET")
+    REFRESH_TOKEN = os.environ.get("YOUTUBE_REFRESH_TOKEN")
 
-    def _get_authenticated_service(self):
-        logger.info("YouTube API 인증 시도...")
-        try:
-            # Refresh Token을 사용하여 자격 증명 생성
-            credentials = google.oauth2.credentials.Credentials(
-                token=None,  # Access token은 refresh token으로 자동으로 갱신됩니다.
-                refresh_token=self.refresh_token,
-                token_uri='https://oauth2.googleapis.com/token',
-                client_id=self.client_id,
-                client_secret=self.client_secret,
-                scopes=SCOPES
-            )
-            
-            # 자격 증명 갱신 (만료되었을 경우)
-            credentials.refresh(google.auth.transport.requests.Request())
+    if not all([CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN]):
+        logging.error("Missing YouTube API credentials in environment variables.")
+        raise ValueError("YouTube API credentials (CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN) must be set.")
 
-            logger.info("YouTube API 자격 증명 갱신 및 빌드 성공.")
-            return build(API_SERVICE_NAME, API_VERSION, credentials=credentials)
-        except Exception as e:
-            logger.error(f"YouTube API 인증 중 오류 발생: {e}", exc_info=True)
-            raise
+    # Refresh Token을 사용하여 자격 증명 객체 생성 및 갱신
+    # 이 부분이 중요합니다! 한 번 발급받은 Refresh Token으로 Access Token을 갱신합니다.
+    credentials = Credentials(
+        token=None,  # Access Token은 갱신될 것이므로 초기에는 None
+        refresh_token=REFRESH_TOKEN,
+        client_id=CLIENT_ID,
+        client_secret=CLIENT_SECRET,
+        token_uri="https://oauth2.googleapis.com/token",
+        scopes=["https://www.googleapis.com/auth/youtube.upload", "https://www.googleapis.com/auth/youtube.readonly"]
+    )
 
-    def upload_video(self, file_path, title, description, tags, privacy_status='private'):
-        if not os.path.exists(file_path):
-            logger.error(f"영상 파일이 존재하지 않습니다: {file_path}")
-            raise FileNotFoundError(f"'{file_path}' 경로에 영상 파일이 없습니다.")
+    try:
+        # Access Token 갱신 시도
+        credentials.refresh(google.auth.transport.requests.Request())
+        logging.info("YouTube API access token refreshed successfully.")
+    except Exception as e:
+        logging.error(f"Failed to refresh YouTube API access token: {e}")
+        raise # 토큰 갱신 실패 시 오류 발생
 
-        body = {
-            'snippet': {
-                'title': title,
-                'description': description,
-                'tags': tags,
-                'categoryId': '28' # 카테고리 ID (28은 과학기술, 24는 엔터테인먼트 등)
-            },
-            'status': {
-                'privacyStatus': privacy_status,
-                'selfDeclaredMadeForKids': False, # 아동용 콘텐츠 여부
-                'for_shorts': True # YouTube Shorts로 지정 (매우 중요!)
-            }
+    youtube = googleapiclient.discovery.build(API_SERVICE_NAME, API_VERSION, credentials=credentials)
+
+    body = {
+        "snippet": {
+            "title": title,
+            "description": description,
+            "tags": tags,
+            "categoryId": category_id
+        },
+        "status": {
+            "privacyStatus": privacy_status
         }
+    }
 
-        # MediaFileUpload를 사용하여 파일 업로드 준비
-        media_body = MediaFileUpload(file_path, chunksize=-1, resumable=True)
+    try:
+        logging.info(f"Attempting to upload video: {title} from {file_path}")
+        # MediaFileUpload는 파일 경로를 받습니다.
+        media_body = googleapiclient.http.MediaFileUpload(file_path, mimetype="video/mp4", resumable=True)
 
-        try:
-            logger.info(f"YouTube에 영상 업로드 시작: {title}")
-            insert_request = self.youtube.videos().insert(
-                part='snippet,status',
-                body=body,
-                media_body=media_body
-            )
-            response = insert_request.execute()
-            logger.info(f"YouTube 영상 업로드 완료. 영상 ID: {response['id']}")
-            return response['id']
-        except HttpError as e:
-            logger.error(f"YouTube API 업로드 오류: {e.resp.status} - {e.content}", exc_info=True)
-            raise
-        except Exception as e:
-            logger.error(f"예상치 못한 업로드 오류: {e}", exc_info=True)
-            raise
+        request = youtube.videos().insert(
+            part="snippet,status",
+            body=body,
+            media_body=media_body
+        )
+        response = request.execute()
+        logging.info(f"Video uploaded successfully. Video ID: {response.get('id')}")
+        logging.info(f"Video URL: https://www.youtube.com/watch?v={response.get('id')}")
+        return response
+    except googleapiclient.errors.HttpError as e:
+        error_content = e.content.decode('utf-8')
+        logging.error(f"YouTube API HttpError occurred: {e.resp.status}")
+        logging.error(f"YouTube API Error Details: {error_content}")
+        raise # 오류를 다시 발생시켜 상위 호출자가 처리할 수 있도록 함
+    except Exception as e:
+        logging.error(f"An unexpected error occurred during video upload: {e}")
+        raise
+
+# 이 파일은 주로 다른 파일에서 임포트하여 사용됩니다.
+# main.py에서 이 함수를 호출할 것입니다.
