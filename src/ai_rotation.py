@@ -1,4 +1,7 @@
+# src/ai_rotation.py
+
 import os
+import logging
 import google.generativeai as genai
 from openai import OpenAI
 from src.config import (
@@ -32,7 +35,6 @@ class AIRotationManager:
             log_system_health(f"Error initializing OpenAI client: {e}. OpenAI client will not be available.", level="error")
             self.openai_client = None
 
-
     def generate_content(self, prompt, model_preference=None, max_tokens=1000, temperature=0.7):
         """
         주어진 프롬프트에 따라 AI 콘텐츠를 생성합니다.
@@ -41,7 +43,7 @@ class AIRotationManager:
         selected_model = model_preference if model_preference else get_next_ai_model()
         log_system_health(f"콘텐츠 생성을 위해 '{selected_model}' 모델을 시도합니다.", level="info")
 
-        for _ in range(2): # 최대 2번 시도 (다른 모델로 폴백)
+        for _ in range(2):  # 최대 2번 시도 (다른 모델로 폴백)
             if selected_model == "gpt-4o":
                 if api_usage_tracker.check_limit("openai", api_usage_tracker.get_usage("openai"), MAX_OPENAI_CALLS_PER_DAY):
                     try:
@@ -58,7 +60,7 @@ class AIRotationManager:
                         return chat_completion.choices[0].message.content
                     except Exception as e:
                         log_system_health(f"GPT-4o 콘텐츠 생성 오류: {e}. 다른 모델로 전환합니다.", level="error")
-                        selected_model = "gemini" # 오류 발생 시 다음 모델로 전환
+                        selected_model = "gemini"  # 오류 발생 시 다음 모델로 전환
                 else:
                     log_system_health("GPT-4o 일일 사용 한도 초과. Gemini로 전환합니다.", level="warning")
                     selected_model = "gemini"
@@ -78,7 +80,7 @@ class AIRotationManager:
                             return response.text
                         except Exception as e:
                             log_system_health(f"Gemini 콘텐츠 생성 오류: {e}. 다른 모델로 전환합니다.", level="error")
-                            selected_model = "gpt-4o" # 오류 발생 시 다음 모델로 전환
+                            selected_model = "gpt-4o"  # 오류 발생 시 다음 모델로 전환
                     else:
                         log_system_health("Gemini 클라이언트가 초기화되지 않았습니다. GPT-4o로 전환합니다.", level="warning")
                         selected_model = "gpt-4o"
@@ -87,11 +89,10 @@ class AIRotationManager:
                     selected_model = "gpt-4o"
 
             # 첫 시도에서 실패하여 모델이 전환되었다면, 두 번째 시도
-            if model_preference: # 초기 선호 모델이 있었던 경우, 폴백 후 다시 시도하지 않음
+            if model_preference:  # 초기 선호 모델이 있었던 경우, 폴백 후 다시 시도하지 않음
                 break
-            else: # 로테이션으로 선택된 경우, 다음 모델로 다시 시도
+            else:  # 로테이션으로 선택된 경우, 다음 모델로 다시 시도
                 log_system_health(f"다음 모델인 '{selected_model}'로 다시 시도합니다.", level="info")
-
 
         log_system_health("모든 AI 모델이 콘텐츠 생성에 실패했습니다.", level="error")
         raise Exception("Failed to generate content with any AI model.")
