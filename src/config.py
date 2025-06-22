@@ -5,6 +5,7 @@ from google.cloud import secretmanager
 
 logger = logging.getLogger(__name__)
 
+
 class Config:
     def __init__(self, project_id=None, bucket_name=None, env_vars=None):
         self.project_id = project_id or os.getenv("GCP_PROJECT_ID")
@@ -27,7 +28,8 @@ class Config:
     def _access_secret(self, secret_id):
         secret_name = f"{self.project_path}/secrets/{secret_id}/versions/latest"
         try:
-            response = self.secret_manager_client.access_secret_version(request={"name": secret_name})
+            response = self.secret_manager_client.access_secret_version(
+                request={"name": secret_name})
             payload = response.payload.data.decode("UTF-8")
             logger.info(f"Secret '{secret_id}' 로드 성공.")
             return payload
@@ -57,7 +59,8 @@ class Config:
             return keys
         except (json.JSONDecodeError, TypeError) as e:
             logger.error(f"OPENAI_API_KEYS 시크릿 파싱 실패: {e}", exc_info=True)
-            raise ValueError("OPENAI_API_KEYS 시크릿 내용이 올바른 JSON 배열 형식이 아닙니다.")
+            raise ValueError(
+                "OPENAI_API_KEYS 시크릿 내용이 올바른 JSON 배열 형식이 아닙니다.")
         
     def get_gemini_api_key(self):
         return self._access_secret("GEMINI_API_KEY")
