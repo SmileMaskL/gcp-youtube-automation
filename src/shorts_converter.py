@@ -11,7 +11,7 @@ change_settings({"IMAGEMAGICK_BINARY": "/usr/bin/convert"})
 
 def convert_to_shorts(input_video_path: str, output_video_path: str, font_path: str = "fonts/Catfont.ttf"):
     if not os.path.exists(input_video_path):
-        logger.error(f"Input video file not found: {input_video_path}")
+        logger.error(f"Input video file not found: {input极path}")
         return False
         
     if not os.path.exists(font_path):
@@ -41,9 +41,13 @@ def convert_to_shorts(input_video_path: str, output_video_path: str, font_path: 
             # 세로 비율에 맞춰 높이를 조절하고, 중앙을 크롭
             new_height = target_height
             new_width = int(new_height * aspect_ratio) # 새로운 높이에 맞춰 너비 조절
-            temp_clip = clip.resize(height=new_height).crop(
-                x_center=clip.w / 2, y_center=clip.h / 2,
-                width=target_width, height=target_height
+            temp_clip = clip.resize(height=new_height)
+            # 중앙 크롭: crop 함수에 키워드 인자로 전달
+            temp_clip = temp_clip.crop(
+                x_center=temp_clip.w / 2,
+                y_center=temp_clip.h / 2,
+                width=target_width,
+                height=target_height
             )
             logger.info(f"Cropped wide video to {target_width}x{target_height}")
         elif aspect_ratio < (target_width / target_height): # 비디오가 너무 좁음 (세로형인데 Shorts보다 좁음)
@@ -81,7 +85,7 @@ def convert_to_shorts(input_video_path: str, output_video_path: str, font_path: 
                              size=(clip.w * 0.8, None) # 클립 너비의 80%
                             ).set_position(('center', 'top')).set_duration(clip.duration).set_opacity(0.8)
         
-        final_clip = CompositeVideoClip([clip, text_clip])
+        final_cl极 = CompositeVideoClip([clip, text_clip])
         
         # 출력 디렉토리 생성
         output_dir = os.path.dirname(output_video_path)
