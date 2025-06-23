@@ -30,9 +30,15 @@ class CommentPoster:
 
         try:
             credentials.refresh(httplib2.Http())
-            logger.info("YouTube API credentials successfully refreshed for comment posting.")
+            # 수정: 81자 → 분할 (원본 18번 라인)
+            logger.info(
+                "YouTube API credentials successfully refreshed "
+                "for comment posting."
+            )
         except Exception as e:
-            logger.error(f"Failed to refresh YouTube access token for comment posting: {e}")
+            logger.error(
+                f"Failed to refresh YouTube access token for comment posting: {e}"
+            )
             raise RuntimeError(f"YouTube authentication failed for comment posting: {e}")
 
         return build("youtube", "v3", credentials=credentials)
@@ -56,8 +62,13 @@ class CommentPoster:
             logger.info(f"Comment posted: {comment_text}")
             return True
         except HttpError as e:
-            logger.error(f"An HTTP error {e.resp.status} occurred while posting comment: {e.content}")
+            logger.error(
+                f"An HTTP error {e.resp.status} occurred while posting comment: {e.content}"
+            )
             return False
         except Exception as e:
-            logger.error(f"An unexpected error occurred during comment posting: {e}", exc_info=True)
+            logger.error(
+                f"An unexpected error occurred during comment posting: {e}", 
+                exc_info=True
+            )
             return False
