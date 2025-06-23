@@ -1,29 +1,26 @@
+# src/error_handler.py
 import logging
 
 logger = logging.getLogger(__name__)
 
-def log_error_and_notify(message: str, level: str = "ERROR", exc_info: bool = False):
-    if level.upper() == "INFO":
-        logger.info(message)
-    elif level.upper() == "WARNING":
-        logger.warning(message)
-    elif level.upper() == "ERROR":
-        logger.error(message, exc_info=exc_info)
-    elif level.upper() == "CRITICAL":
-        logger.critical(message, exc_info=exc_info)
-    else:
-        logger.debug(message, exc_info=exc_info)
-    
-    logger.info(f"Error/Notification logged: {message}")
 
-def send_notification_to_slack(message: str):
-    slack_webhook_url = os.environ.get("SLACK_WEBHOOK_URL")
-    if slack_webhook_url:
-        try:
-            import requests
-            payload = {"text": f"🚨 YouTube Automation Alert: {message}"}
-            response = requests.post(slack_webhook_url, json=payload)
-            response.raise_for_status()
-            logger.info("Slack notification sent successfully.")
-        except Exception as e:
-            logger.error(f"Failed to send Slack notification: {e}")
+class ErrorHandler:
+    def __init__(self):
+        logger.info("ErrorHandler initialized.")
+
+    def handle_exception(self, exception: Exception, context: str = "general operation"):
+        """
+        Logs and processes exceptions for better monitoring.
+        """
+        error_message = f"An error occurred during {context}: {exception}"
+        logger.error(error_message, exc_info=True)
+        return error_message
+
+    def log_warning(self, message: str, context: str = "general operation"):
+        """Logs a warning message."""
+        logger.warning(f"Warning during {context}: {message}")
+
+    def log_info(self, message: str, context: str = "general operation"):
+        """Logs an informational message."""
+        logger.info(f"Info during {context}: {message}")
+    
