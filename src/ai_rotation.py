@@ -10,7 +10,6 @@ from src.monitoring import log_system_health
 
 logger = logging.getLogger(__name__)
 
-
 class AIRotationManager:
     def __init__(self):
         self.gemini_client = None
@@ -48,6 +47,7 @@ class AIRotationManager:
 
         for _ in range(2):
             if selected_model == "gpt-4o":
+                # 수정: 112자 → 분할 (원본 27번 라인)
                 if api_usage_tracker.check_limit(
                     "openai", 
                     api_usage_tracker.get_usage("openai"),
@@ -56,6 +56,7 @@ class AIRotationManager:
                     try:
                         self.openai_client = OpenAI(
                             api_key=get_next_openai_key())
+                        # 수정: 82자 → 분할 (원본 32번 라인)
                         chat_completion = self.openai_client.chat.completions.create(
                             model="gpt-4o",
                             messages=[{"role": "user", "content": prompt}],
@@ -80,6 +81,7 @@ class AIRotationManager:
                     selected_model = "gemini"
             
             elif selected_model == "gemini":
+                # 수정: 87자 → 분할 (원본 38번 라인)
                 if api_usage_tracker.check_limit(
                     "gemini", 
                     api_usage_tracker.get_usage("gemini"),
@@ -128,6 +130,5 @@ class AIRotationManager:
         log_system_health(
             "모든 AI 모델이 콘텐츠 생성에 실패했습니다.", level="error")
         raise Exception("Failed to generate content with any AI model.")
-
 
 ai_rotation_manager = AIRotationManager()
