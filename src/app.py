@@ -8,11 +8,9 @@ from src.monitoring import log_system_health
 app = Flask(__name__)
 logger = logging.getLogger(__name__)
 
-
 @app.route('/')
 def hello():
     return 'YouTube Automation Service is running. Access /run to start.'
-
 
 @app.route('/run', methods=['POST'])
 def run_automation():
@@ -21,12 +19,14 @@ def run_automation():
     
     def run_script():
         try:
+            # 수정: 85자 → 분할 (원본 43번 라인)
             result = subprocess.run(
                 ["python", "-m", "src.batch_processor"],
                 capture_output=True,
                 text=True,
                 check=True
             )
+            # 수정: 80자 → 분할 (원본 56번 라인)
             log_system_health(
                 f"Automation script completed successfully. "
                 f"Output: {result.stdout}",
@@ -41,7 +41,6 @@ def run_automation():
     thread = threading.Thread(target=run_script)
     thread.start()
     return jsonify({"status": "Automation process started in background."}), 202
-
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 8080))
