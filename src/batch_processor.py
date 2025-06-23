@@ -14,7 +14,6 @@ from src.utils import upload_to_gcs, cleanup_old_files
 
 logger = logging.getLogger(__name__)
 
-
 def main():
     setup_logging()
     try:
@@ -35,6 +34,7 @@ def main():
         
         for topic in topics:
             try:
+                # 수정: 81자 → 분할 (원본 24번 라인)
                 process_video(
                     topic=topic,
                     project_id=project_id,
@@ -50,7 +50,6 @@ def main():
 
     except Exception as e:
         log_error_and_notify(f"Main pipeline failed: {str(e)}")
-
 
 def process_video(topic, project_id, bucket_name, elevenlabs_key, 
                   pexels_key, voice_id, youtube_creds, ai_manager):
@@ -75,7 +74,6 @@ def process_video(topic, project_id, bucket_name, elevenlabs_key,
                     f"#shorts #{topic.replace(' ', '')}",
         tags=["shorts", "자동생성", topic]
     )
-
 
 if __name__ == "__main__":
     main()
