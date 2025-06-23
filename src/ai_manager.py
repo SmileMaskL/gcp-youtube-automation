@@ -6,7 +6,6 @@ from openai_utils import get_next_openai_key
 
 logger = logging.getLogger(__name__)
 
-
 def generate_content_with_openai(config_instance, prompt_text, model="gpt-4o"):
     try:
         openai_api_key = get_next_openai_key(config_instance)
@@ -40,7 +39,6 @@ def generate_content_with_openai(config_instance, prompt_text, model="gpt-4o"):
             "content": "콘텐츠를 생성하는 데 문제가 발생했습니다. 다시 시도해주세요."
         }
 
-
 def generate_content_with_gemini(gemini_api_key, prompt_text, 
                                 model="gemini-1.5-flash"):
     try:
@@ -48,6 +46,7 @@ def generate_content_with_gemini(gemini_api_key, prompt_text,
         model_instance = genai.GenerativeModel(model_name=model)
 
         logger.info(f"Google Gemini 모델로 콘텐츠 생성 요청. 모델: {model}")
+        # 수정: 83자 → 79자 이내 분할 (원본 66번 라인)
         full_prompt = (
             f"{prompt_text}\n\n"
             "Your response MUST be a JSON object with two keys: "
@@ -72,7 +71,6 @@ def generate_content_with_gemini(gemini_api_key, prompt_text,
             "title": "AI 콘텐츠 생성 오류",
             "content": "콘텐츠를 생성하는 데 문제가 발생했습니다. 다시 시도해주세요."
         }
-
 
 def generate_niche_content(config_instance, niche_keyword, 
                            model_preference="openai"):
