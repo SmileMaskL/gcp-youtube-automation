@@ -16,11 +16,16 @@ class ContentGenerator:
 
         self.ai_model = ai_model
         
+        # 수정: 83자 → 분할 (원본 17번 라인)
         if self.ai_model == "openai" and not self.openai_client:
-            logger.warning("OpenAI client not initialized. Falling back to Gemini if available.")
+            logger.warning(
+                "OpenAI client not initialized. Falling back to Gemini if available."
+            )
             self.ai_model = "gemini" if self.gemini_model else None
         elif self.ai_model == "gemini" and not self.gemini_model:
-            logger.warning("Gemini model not initialized. Falling back to OpenAI if available.")
+            logger.warning(
+                "Gemini model not initialized. Falling back to OpenAI if available."
+            )
             self.ai_model = "openai" if self.openai_client else None
         
         if not self.ai_model:
