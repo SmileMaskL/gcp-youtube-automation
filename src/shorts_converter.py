@@ -1,132 +1,92 @@
-import os
+# src/shorts_converter.py
 import logging
-import sys
-from moviepy.editor import VideoFileClip, TextClip, CompositeVideoClip, ColorClip
-from moviepy.config import change_settings
-
+import os
+from moviepy.editor import VideoFileClip, AudioFileClip, CompositeAudioClip
 
 logger = logging.getLogger(__name__)
 
-# ImageMagick 경로 설정
-change_settings({"IMAGEMAGICK_BINARY": "/usr/bin/convert"})
 
+class ShortsConverter:
+    def __init__(self):
+        logger.info("ShortsConverter initialized.")
 
-def convert_to_shorts(input_video_path: str, output_video_path: str, 
-                      font_path: str = "fonts/Catfont.ttf"):
-    if not os.path.exists(input_video_path):
-        logger.error(f"Input video file not found: {input_video_path}")
-        return False
-        
-    if not os.path.exists(font_path):
-        logger.error(
-            f"Font file not found: {font_path}. "
-            "Please ensure Catfont.ttf is in the 'fonts/' directory."
-        )
-        font_path = "DejaVuSans-Bold"
-        logger.warning(
-            f"Using default font: {font_path} due to missing custom font."
-        )
+    def convert_to_shorts_format(self, input_video_path, output_video_path,
+                                target_resolution=(1080, 1920), max_duration=60):
+        """
+        Converts an input video to YouTube Shorts vertical format (9:16 aspect ratio).
+        """
+        try:
+            # E501 해결: 줄 길이를 79자 이하로 맞춤
+            logger.info(f"Converting video '{input_video_path}' to Shorts format. "
+                        f"Target resolution: {target_resolution}, Max duration: {max_duration}s")
 
-    try:
-        logger.info(f"Loading video clip from: {input_video_path}")
-        clip = VideoFileClip(input_video_path)
-        
-        target_width = 1080
-        target_height = 1920
-        aspect_ratio = clip.w / clip.h
-        
-        if aspect_ratio > (target_width / target_height):
-            new_height = target_height
-            new_width = int(new_height * aspect_ratio)
-            temp_clip = clip.resize(height=new_height).crop(
-                x_center=clip.w / 2, 
-                y_center=clip.h / 2,
-                width=target_width, 
-                height=target_height
+            clip = VideoFileClip(input_video_path)
+
+            if clip.duration > max_duration:
+                clip = clip.subclip(0, max_duration)
+                logger.info(f"Video trimmed to {max_duration} seconds.")
+
+            original_width, original_height = clip.size
+            target_width, target_height = target_resolution
+
+            if original_width * target_height > original_height * target_width:
+                clip = clip.resize(height=target_height)
+                current_width = clip.w
+                x_center = current_width / 2
+                clip = clip.crop(x_center - target_width / 2, 0,
+                                 x_center + target_width / 2, target_height)
+                logger.info("Video resized by height and cropped to target aspect ratio.")
+            else:
+                clip = clip.resize(width=target_width)
+                current_height = clip.h
+                y_center = current_height / 2
+                clip = clip.crop(0, y_center - target_height / 2,
+                                 target_width, y_center + target_height / 2)
+                logger.info("Video resized by width and cropped to target aspect ratio.")
+
+            clip.write_videofile(
+                output_video_path,
+                codec="libx264",
+                audio_codec="aac",
+                fps=24,
+                temp_audiofile=f"{os.path.splitext(output_video_path)[0]}_temp_audio.m4a",
+                remove_temp=True,
+                logger=None
             )
-            logger.info(f"Cropped wide video to {target_width}x{target_height}")
-        elif aspect_ratio < (target_width / target_height):
-            new_width = target_width
-            new_height = int(new_width / aspect_ratio)
-            temp_clip = clip.resize(width=new_width)
-            
-            black_background = ColorClip(
-                (target_width, target_height), 
-                color=(0, 0, 0)
-            ).set_duration(temp_clip.duration)
-            
-            final_clip = CompositeVideoClip(
-                [black_background, temp_clip.set_pos("center")]
-            ).set_duration(temp_clip.duration)
-            logger.info(
-                "Added black bars to narrow video. "
-                f"Resulting resolution: {target_width}x{target_height}"
+            logger.info(f"Video converted successfully to: {output_video_path}")
+            return output_video_path
+
+        except Exception as e:
+            logger.error(f"Error converting video to Shorts format: {e}", exc_info=True)
+            raise
+
+    def add_background_music(self, video_path, music_path, output_path, volume_ratio=0.3):
+        """
+        Adds background music to a video.
+        """
+        try:
+            logger.info(f"Adding background music to '{video_path}' from '{music_path}'")
+            video_clip = VideoFileClip(video_path)
+            music_clip = AudioFileClip(music_path).set_duration(video_clip.duration)
+
+            music_clip = music_clip.audio_fadein(1).audio_fadeout(1)
+
+            final_audio = CompositeAudioClip([video_clip.audio, music_clip.volumex(volume_ratio)])
+            final_clip = video_clip.set_audio(final_audio)
+
+            final_clip.write_videofile(
+                output_path,
+                codec="libx264",
+                audio_codec="aac",
+                fps=video_clip.fps,
+                # E501 해결: 줄 길이를 79자 이하로 맞춤
+                temp_audiofile=(f"{os.path.splitext(output_path)[0]}_music_temp_audio.m4a"),
+                remove_temp=True,
+                logger=None
             )
-            clip = final_clip
-        else:
-            clip = clip.resize((target_width, target_height))
-            logger.info(f"Resized video to {target_width}x{target_height}")
-        
-        if clip.duration > 60:
-            clip = clip.subclip(0, 60)
-            logger.info("Clipped video to 60 seconds for Shorts.")
-        
-        text_content = "Generated YouTube Shorts"
-        text_clip = TextClip(
-            text_content, 
-            fontsize=70, 
-            color='white', 
-            font=font_path,
-            stroke_color='black', 
-            stroke_width=2,
-            method='caption',
-            size=(clip.w * 0.8, None)
-        ).set_position(('center', 'top')).set_duration(clip.duration).set_opacity(0.8)
-        
-        final_clip = CompositeVideoClip([clip, text_clip])
-        
-        output_dir = os.path.dirname(output_video_path)
-        if output_dir and not os.path.exists(output_dir):
-            os.makedirs(output_dir, exist_ok=True)
-            logger.info(f"Created output directory: {output_dir}")
-        
-        logger.info(f"Writing Shorts video to: {output_video_path}")
-        final_clip.write_videofile(
-            output_video_path,
-            codec="libx264",
-            audio_codec="aac",
-            fps=24,
-            preset="fast",
-            threads=os.cpu_count() or 1,
-            logger=None
-        )
-        logger.info(
-            f"Video successfully converted to Shorts and saved to {output_video_path}"
-        )
-        return True
+            logger.info(f"Background music added to: {output_path}")
+            return output_path
+        except Exception as e:
+            logger.error(f"Error adding background music: {e}", exc_info=True)
+            raise
     
-    except Exception as e:
-        logger.error(f"Error converting video to Shorts: {e}", exc_info=True)
-        return False
-
-
-# 테스트 코드
-if __name__ == "__main__":
-    from src.config import setup_logging
-    setup_logging()
-    input_test_video = "dummy_video.mp4"
-    output_test_shorts = "output/test_shorts_output.mp4"
-    font_test_path = "fonts/Catfont.ttf"
-    
-    if not os.path.exists(input_test_video):
-        print(
-            f"Error: Test video file not found at '{input_test_video}'. "
-            "Please create one or specify a valid path."
-        )
-        sys.exit(1)
-    
-    print(f"Attempting to convert '{input_test_video}' to Shorts...")
-    if convert_to_shorts(input_test_video, output_test_shorts, font_path=font_test_path):
-        print(f"Successfully converted to Shorts: {output_test_shorts}")
-    else:
-        print("Failed to convert video to Shorts.")
