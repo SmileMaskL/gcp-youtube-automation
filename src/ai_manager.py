@@ -41,9 +41,8 @@ def generate_content_with_openai(config_instance, prompt_text, model="gpt-4o"):
         }
 
 
-def generate_content_with_gemini(
-    gemini_api_key, prompt_text, model="gemini-1.5-flash"
-):
+def generate_content_with_gemini(gemini_api_key, prompt_text, 
+                                model="gemini-1.5-flash"):
     try:
         genai.configure(api_key=gemini_api_key)
         model_instance = genai.GenerativeModel(model_name=model)
