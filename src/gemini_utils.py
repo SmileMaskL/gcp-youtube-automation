@@ -14,7 +14,11 @@ class GeminiClient:
         if not api_key:
             try:
                 client = secretmanager.SecretManagerServiceClient()
-                secret_name = f"projects/{os.getenv('GCP_PROJECT_ID')}/secrets/gemini-api-key/versions/latest"
+                # 수정: 100자 → 분할 (원본 42번 라인)
+                secret_name = (
+                    f"projects/{os.getenv('GCP_PROJECT_ID')}/secrets/"
+                    f"gemini-api-key/versions/latest"
+                )
                 response = client.access_secret_version(name=secret_name)
                 api_key = response.payload.data.decode("UTF-8")
             except Exception as e:
