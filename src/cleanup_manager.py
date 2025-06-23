@@ -11,7 +11,11 @@ def cleanup_old_files(bucket: storage.Bucket, retention_days: int = 7):
     
     now = datetime.utcnow()
     prefixes_to_clean = ["videos/", "thumbnails/", "api_usage_log.json"]
-    logger.info(f"Starting cleanup of files older than {retention_days} days in bucket '{bucket.name}'.")
+    # 수정: 86자 → 분할 (원본 67번 라인)
+    logger.info(
+        f"Starting cleanup of files older than {retention_days} days "
+        f"in bucket '{bucket.name}'."
+    )
     deleted_count = 0
 
     for prefix in prefixes_to_clean:
@@ -23,7 +27,10 @@ def cleanup_old_files(bucket: storage.Bucket, retention_days: int = 7):
             if blob.time_created and (now - blob.time_created) > timedelta(days=retention_days):
                 try:
                     blob.delete()
-                    logger.info(f"Deleted old file: gs://{bucket.name}/{blob.name} (Created: {blob.time_created.strftime('%Y-%m-%d %H:%M:%S')})")
+                    logger.info(
+                        f"Deleted old file: gs://{bucket.name}/{blob.name} "
+                        f"(Created: {blob.time_created.strftime('%Y-%m-%d %H:%M:%S')})"
+                    )
                     deleted_count += 1
                 except Exception as e:
                     logger.error(f"Failed to delete blob {blob.name}: {e}")
