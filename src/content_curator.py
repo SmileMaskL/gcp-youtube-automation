@@ -8,8 +8,11 @@ class ContentCurator:
     def __init__(self, api_key: str):
         self.api_key = api_key
         self.base_url = "https://newsapi.org/v2/everything"
+        # 수정: 111자 → 분할 (원본 12번 라인)
         if not self.api_key:
-            logger.warning("News API Key is not provided. Trend analysis may be limited.")
+            logger.warning(
+                "News API Key is not provided. Trend analysis may be limited."
+            )
     
     def get_hot_topics(self, query: str = "technology OR science OR finance", 
                       language: str = "en", num_topics: int = 3, days_ago: int = 1):
@@ -42,12 +45,23 @@ class ContentCurator:
                     if len(topics) >= num_topics:
                         break
             
-            logger.info(f"Found {len(topics)} hot topics for query '{query}': {list(topics)[:num_topics]}")
+            # 수정: 81자 → 분할 (원본 69번 라인)
+            logger.info(
+                f"Found {len(topics)} hot topics for query '{query}': "
+                f"{list(topics)[:num_topics]}"
+            )
             return list(topics)[:num_topics]
             
         except requests.exceptions.RequestException as e:
-            logger.error(f"Error fetching news from News API: {e}", exc_info=True)
+            # 수정: 83자 → 분할 (원본 76번 라인)
+            logger.error(
+                f"Error fetching news from News API: {e}", 
+                exc_info=True
+            )
             return []
         except Exception as e:
-            logger.error(f"An unexpected error occurred in ContentCurator: {e}", exc_info=True)
+            logger.error(
+                f"An unexpected error occurred in ContentCurator: {e}", 
+                exc_info=True
+            )
             return []
