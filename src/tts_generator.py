@@ -1,12 +1,20 @@
+# src/tts_generator.py
+
 import logging
 from elevenlabs import Voice, VoiceSettings, generate, save
 
 logger = logging.getLogger(__name__)
 
+
 def generate_tts_audio(elevenlabs_api_key, text_content, voice_id, output_path):
+    """
+    ElevenLabs API를 사용하여 텍스트를 음성 오디오 파일로 변환합니다.
+    """
     try:
-        logger.info(f"ElevenLabs 음성 생성 시작. 음성 ID: {voice_id}, 텍스트 길이: {len(text_content)}")
-        
+        # E501 해결: 줄 길이를 79자 이하로 맞춤
+        logger.info(f"ElevenLabs 음성 생성 시작. 음성 ID: {voice_id}, "
+                    f"텍스트 길이: {len(text_content)}")
+
         audio = generate(
             text=text_content,
             voice=Voice(
@@ -20,7 +28,7 @@ def generate_tts_audio(elevenlabs_api_key, text_content, voice_id, output_path):
             ),
             api_key=elevenlabs_api_key
         )
-        
+
         save(audio, output_path)
         logger.info(f"음성 파일 생성 성공: {output_path}")
         return output_path
@@ -28,3 +36,4 @@ def generate_tts_audio(elevenlabs_api_key, text_content, voice_id, output_path):
     except Exception as e:
         logger.error(f"ElevenLabs 음성 생성 실패: {e}", exc_info=True)
         raise
+    
