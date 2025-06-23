@@ -4,21 +4,29 @@ import sys
 from moviepy.editor import VideoFileClip, TextClip, CompositeVideoClip, ColorClip
 from moviepy.config import change_settings
 
+
 logger = logging.getLogger(__name__)
 
 # ImageMagick 경로 설정
 change_settings({"IMAGEMAGICK_BINARY": "/usr/bin/convert"})
 
-def convert_to_shorts(input_video_path: str, output_video_path: str, font_path: str = "fonts/Catfont.ttf"):
+
+def convert_to_shorts(input_video_path: str, output_video_path: str, 
+                      font_path: str = "fonts/Catfont.ttf"):
     if not os.path.exists(input_video_path):
         logger.error(f"Input video file not found: {input_video_path}")
         return False
         
     if not os.path.exists(font_path):
-        logger.error(f"Font file not found: {font_path}. Please ensure Catfont.ttf is in the 'fonts/' directory.")
+        logger.error(
+            f"Font file not found: {font_path}. "
+            "Please ensure Catfont.ttf is in the 'fonts/' directory."
+        )
         font_path = "DejaVuSans-Bold"
-        logger.warning(f"Using default font: {font_path} due to missing custom font.")
-    
+        logger.warning(
+            f"Using default font: {font_path} due to missing custom font."
+        )
+
     try:
         logger.info(f"Loading video clip from: {input_video_path}")
         clip = VideoFileClip(input_video_path)
@@ -30,7 +38,6 @@ def convert_to_shorts(input_video_path: str, output_video_path: str, font_path: 
         if aspect_ratio > (target_width / target_height):
             new_height = target_height
             new_width = int(new_height * aspect_ratio)
-            # 수정: 쉼표 누락 추가 (원본 69번 라인)
             temp_clip = clip.resize(height=new_height).crop(
                 x_center=clip.w / 2, 
                 y_center=clip.h / 2,
@@ -45,13 +52,16 @@ def convert_to_shorts(input_video_path: str, output_video_path: str, font_path: 
             
             black_background = ColorClip(
                 (target_width, target_height), 
-                color=(0,0,0)
+                color=(0, 0, 0)
             ).set_duration(temp_clip.duration)
             
             final_clip = CompositeVideoClip(
                 [black_background, temp_clip.set_pos("center")]
             ).set_duration(temp_clip.duration)
-            logger.info(f"Added black bars to narrow video. Resulting resolution: {target_width}x{target_height}")
+            logger.info(
+                "Added black bars to narrow video. "
+                f"Resulting resolution: {target_width}x{target_height}"
+            )
             clip = final_clip
         else:
             clip = clip.resize((target_width, target_height))
@@ -90,12 +100,15 @@ def convert_to_shorts(input_video_path: str, output_video_path: str, font_path: 
             threads=os.cpu_count() or 1,
             logger=None
         )
-        logger.info(f"Video successfully converted to Shorts and saved to {output_video_path}")
+        logger.info(
+            f"Video successfully converted to Shorts and saved to {output_video_path}"
+        )
         return True
     
     except Exception as e:
         logger.error(f"Error converting video to Shorts: {e}", exc_info=True)
         return False
+
 
 # 테스트 코드
 if __name__ == "__main__":
@@ -106,7 +119,10 @@ if __name__ == "__main__":
     font_test_path = "fonts/Catfont.ttf"
     
     if not os.path.exists(input_test_video):
-        print(f"Error: Test video file not found at '{input_test_video}'. Please create one or specify a valid path.")
+        print(
+            f"Error: Test video file not found at '{input_test_video}'. "
+            "Please create one or specify a valid path."
+        )
         sys.exit(1)
     
     print(f"Attempting to convert '{input_test_video}' to Shorts...")
