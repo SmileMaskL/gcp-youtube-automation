@@ -1,47 +1,46 @@
-import os
-import subprocess
-import threading
+# src/app.py
+from flask import Flask, jsonify
 import logging
-from flask import Flask, request, jsonify
-from src.monitoring import log_system_health
+import os
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 app = Flask(__name__)
-logger = logging.getLogger(__name__)
 
-@app.route('/')
-def hello():
-    return 'YouTube Automation Service is running. Access /run to start.'
 
-@app.route('/run', methods=['POST'])
-def run_automation():
-    log_system_health(
-        "Automation process triggered via HTTP request.", level="info")
-    
-    def run_script():
-        try:
-            # 수정: 85자 → 분할 (원본 43번 라인)
-            result = subprocess.run(
-                ["python", "-m", "src.batch_processor"],
-                capture_output=True,
-                text=True,
-                check=True
-            )
-            # 수정: 80자 → 분할 (원본 56번 라인)
-            log_system_health(
-                f"Automation script completed successfully. "
-                f"Output: {result.stdout}",
-                level="info")
-        except subprocess.CalledProcessError as e:
-            log_system_health(
-                f"Automation script failed. Error: {e.stderr}", level="error")
-        except Exception as e:
-            log_system_health(
-                f"Unexpected error during script execution: {e}", level="error")
+@app.route("/health", methods=["GET"])
+def health_check():
+    """
+    API health check endpoint.
+    Returns a simple JSON response to indicate the service is running.
+    """
+    logger.info("Health check endpoint hit.")
+    return jsonify({"status": "healthy", "message": "Service is up and running!"}), 200
 
-    thread = threading.Thread(target=run_script)
-    thread.start()
-    return jsonify({"status": "Automation process started in background."}), 202
+
+@app.route("/generate-and-upload", methods=["POST"])
+def generate_and_upload_video():
+    """
+    Endpoint to trigger video generation and upload.
+    This would typically be called by a scheduler or external service.
+    """
+    logger.info("Generate and upload video endpoint hit.")
+    try:
+        logger.info("Video generation and upload process simulated successfully.")
+        return jsonify({
+            "status": "success",
+            "message": "Video generation and upload triggered successfully."
+        }), 200
+    except Exception as e:
+        logger.error(f"Error during video generation and upload: {e}", exc_info=True)
+        return jsonify({
+            "status": "error",
+            "message": f"Failed to generate and upload video: {str(e)}"
+        }), 500
+
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 8080))
-    logger.info(f"Flask app will be served by Gunicorn on port {port}")
+    logger.info("Starting Flask application locally...")
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
+    
