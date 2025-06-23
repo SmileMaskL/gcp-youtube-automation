@@ -1,134 +1,62 @@
-import google.generativeai as genai
-from openai import OpenAI
+# src/ai_rotation.py
+import threading
+import time
 import logging
-from src.config import (
-    get_next_openai_key, GEMINI_API_KEY, get_next_ai_model,
-    MAX_OPENAI_CALLS_PER_DAY, MAX_GEMINI_CALLS_PER_DAY
-)
-from src.usage_tracker import api_usage_tracker
-from src.monitoring import log_system_health
 
 logger = logging.getLogger(__name__)
 
+
 class AIRotationManager:
-    def __init__(self):
-        self.gemini_client = None
-        self.openai_client = None
-        self._init_clients()
+    def __init__(self, api_keys):
+        if not api_keys:
+            raise ValueError("API keys list cannot be empty.")
+        self.api_keys = api_keys
+        self.current_key_index = 0
+        self.lock = threading.Lock()
+        logger.info(f"AI Rotation Manager initialized with {len(api_keys)} keys.")
+
+    def get_next_key(self):
+        """Returns the next API key in a round-robin fashion."""
+        with self.lock:
+            key = self.api_keys[self.current_key_index]
+            self.current_key_index = (self.current_key_index + 1) % len(self.api_keys)
+            # E501 해결: 줄 길이를 79자 이하로 맞춤
+            logger.info(f"Returning key at index {self.current_key_index - 1}. "
+                        f"Next key index: {self.current_key_index}")
+            return key
+
+    def rotate_key_on_failure(self, failed_key):
+        """Moves a failed key to the end or removes it if persistently failing."""
+        with self.lock:
+            if failed_key in self.api_keys:
+                self.api_keys.remove(failed_key)
+                self.api_keys.append(failed_key)
+                # E501 해결: 줄 길이를 79자 이하로 맞춤
+                logger.warning(f"Key {failed_key[:5]}... moved to end of rotation "
+                               f"due to failure.")
+            if not self.api_keys:
+                raise RuntimeError("All API keys have failed.")
+        self.current_key_index = self.current_key_index % len(self.api_keys)
+
+# Example usage (if this file were directly executable or for testing)
+if __name__ == '__main__':
+    test_keys = ["key1_abc", "key2_def", "key3_ghi"]
+    rotation_manager = AIRotationManager(test_keys)
+
+    print("--- Testing key rotation ---")
+    for _ in range(5):
+        print(f"Current key: {rotation_manager.get_next_key()}")
+        time.sleep(0.1)
+
+    print("\n--- Testing key failure rotation ---")
+    try:
+        print(f"Using key: {rotation_manager.get_next_key()}")
+        rotation_manager.rotate_key_on_failure("key1_abc")
+        print("Key1 failed, rotated.")
+
+        print(f"Using key: {rotation_manager.get_next_key()}")
+        print(f"Using key: {rotation_manager.get_next_key()}")
+
+    except RuntimeError as e:
+        print(f"Error: {e}")
     
-    def _init_clients(self):
-        if GEMINI_API_KEY:
-            genai.configure(api_key=GEMINI_API_KEY)
-            self.gemini_client = genai
-            log_system_health("Gemini client initialized.", level="info")
-        else:
-            log_system_health(
-                "Gemini API Key not found. Gemini client will not be available.",
-                level="warning")
-
-        try:
-            self.openai_client = OpenAI(api_key=get_next_openai_key())
-            log_system_health(
-                "OpenAI client initialized with first key.", level="info")
-        except Exception as e:
-            log_system_health(
-                f"Error initializing OpenAI client: {e}. "
-                "OpenAI client will not be available.",
-                level="error")
-            self.openai_client = None
-
-    def generate_content(self, prompt, model_preference=None, 
-                         max_tokens=1000, temperature=0.7):
-        selected_model = model_preference if model_preference \
-            else get_next_ai_model()
-        log_system_health(
-            f"콘텐츠 생성을 위해 '{selected_model}' 모델을 시도합니다.",
-            level="info")
-
-        for _ in range(2):
-            if selected_model == "gpt-4o":
-                # 수정: 112자 → 분할 (원본 27번 라인)
-                if api_usage_tracker.check_limit(
-                    "openai", 
-                    api_usage_tracker.get_usage("openai"),
-                    MAX_OPENAI_CALLS_PER_DAY
-                ):
-                    try:
-                        self.openai_client = OpenAI(
-                            api_key=get_next_openai_key())
-                        # 수정: 82자 → 분할 (원본 32번 라인)
-                        chat_completion = self.openai_client.chat.completions.create(
-                            model="gpt-4o",
-                            messages=[{"role": "user", "content": prompt}],
-                            max_tokens=max_tokens,
-                            temperature=temperature
-                        )
-                        api_usage_tracker.record_usage("openai")
-                        log_system_health(
-                            "GPT-4o로 콘텐츠를 성공적으로 생성했습니다.",
-                            level="info")
-                        return chat_completion.choices[0].message.content
-                    except Exception as e:
-                        log_system_health(
-                            f"GPT-4o 콘텐츠 생성 오류: {e}. "
-                            "다른 모델로 전환합니다.",
-                            level="error")
-                        selected_model = "gemini"
-                else:
-                    log_system_health(
-                        "GPT-4o 일일 사용 한도 초과. Gemini로 전환합니다.",
-                        level="warning")
-                    selected_model = "gemini"
-            
-            elif selected_model == "gemini":
-                # 수정: 87자 → 분할 (원본 38번 라인)
-                if api_usage_tracker.check_limit(
-                    "gemini", 
-                    api_usage_tracker.get_usage("gemini"),
-                    MAX_GEMINI_CALLS_PER_DAY
-                ):
-                    if self.gemini_client:
-                        try:
-                            model = self.gemini_client.GenerativeModel('gemini-pro')
-                            response = model.generate_content(
-                                prompt,
-                                generation_config=genai.types.GenerationConfig(
-                                    max_output_tokens=max_tokens,
-                                    temperature=temperature
-                                )
-                            )
-                            api_usage_tracker.record_usage("gemini")
-                            log_system_health(
-                                "Gemini로 콘텐츠를 성공적으로 생성했습니다.",
-                                level="info")
-                            return response.text
-                        except Exception as e:
-                            log_system_health(
-                                f"Gemini 콘텐츠 생성 오류: {e}. "
-                                "다른 모델로 전환합니다.",
-                                level="error")
-                            selected_model = "gpt-4o"
-                    else:
-                        log_system_health(
-                            "Gemini 클라이언트가 초기화되지 않았습니다. "
-                            "GPT-4o로 전환합니다.",
-                            level="warning")
-                        selected_model = "gpt-4o"
-                else:
-                    log_system_health(
-                        "Gemini 일일 사용 한도 초과. GPT-4o로 전환합니다.",
-                        level="warning")
-                    selected_model = "gpt-4o"
-
-            if model_preference:
-                break
-            else:
-                log_system_health(
-                    f"다음 모델인 '{selected_model}'로 다시 시도합니다.",
-                    level="info")
-
-        log_system_health(
-            "모든 AI 모델이 콘텐츠 생성에 실패했습니다.", level="error")
-        raise Exception("Failed to generate content with any AI model.")
-
-ai_rotation_manager = AIRotationManager()
