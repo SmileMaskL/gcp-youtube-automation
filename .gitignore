@@ -1,46 +1,12 @@
-# .gitignore
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-env/
-venv/
-*.env
-.vscode/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# IDEs
-.idea/
-.project
-.classpath
-.settings/
-
-# OS generated files
-.DS_Store
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# Logs and Output
-*.log
-logs/
-output/
-
-# Cloud Function temporary files
-/tmp/*
-
-# Environment variables
-.env
-
-# ✅ src/bin 폴더와 ffmpeg, ffprobe 파일은 포함시킴
+# ✅ src/bin 폴더와 ffmpeg, ffprobe 파일은 Git에 반드시 포함시킴
+# 먼저 무시 규칙을 삭제하거나 예외로 전환
+# src/bin 관련 무시 금지
 !src/bin/
 !src/bin/ffmpeg
 !src/bin/ffprobe
-bin/
-src/bin/
+
+# 일반 바이너리는 여전히 무시
 *.exe
 *.out
+bin/
+
