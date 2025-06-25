@@ -35,3 +35,8 @@ output/
 
 # Environment variables
 .env
+
+# ✅ src/bin 폴더와 ffmpeg, ffprobe 파일은 포함시킴
+!src/bin/
+!src/bin/ffmpeg
+!src/bin/ffprobe
