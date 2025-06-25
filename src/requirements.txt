@@ -35,3 +35,5 @@ numpy==1.26.4
 pandas==2.2.2
 httplib2==0.22.0
 pydub==0.25.1
+
+functions-framework==3.*
