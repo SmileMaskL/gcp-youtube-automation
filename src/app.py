@@ -43,4 +43,3 @@ def generate_and_upload_video():
 if __name__ == '__main__':
     logger.info("Starting Flask application locally...")
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
-    
