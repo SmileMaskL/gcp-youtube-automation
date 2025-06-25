@@ -5,26 +5,49 @@ import os
 import logging
 from datetime import datetime
 import random
+from flask import Request, jsonify # Flask Request 객체를 사용하기 위해 import
 
-from config import Config
-from youtube_uploader import upload_video
-from ai_manager import generate_niche_content
-from tts_generator import generate_tts_audio
-from video_creator import create_short_video
-from video_editor import edit_video_for_shorts
-from bg_downloader import download_background_video
+# src/ 디렉토리 내의 커스텀 모듈들을 임포트합니다.
+# 점(.)을 사용하여 상대 경로로 임포트해야 합니다.
+from .config import Config
+from .youtube_uploader import upload_video
+from .ai_manager import generate_niche_content
+from .tts_generator import generate_tts_audio
+from .video_creator import create_short_video
+from .video_editor import edit_video_for_shorts
+from .bg_downloader import download_background_video
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 
 @functions_framework.http
-def trigger_youtube_upload(request):
+def trigger_youtube_upload(request: Request):
+    """
+    HTTP 요청을 받아 YouTube 동영상 업로드 프로세스를 시작합니다.
+    이 함수는 Cloud Functions의 주 진입점이며, 모든 로직을 직접 수행합니다.
+    Flask Request 객체를 사용하여 요청 데이터를 처리합니다.
+    """
     logger.info("--- Cloud Function 'trigger_youtube_upload' 시작 ---")
+
+    # Cloud Functions 2세대 (Cloud Run 기반) 헬스체크 처리
+    # Cloud Run은 기본적으로 / 경로에 GET 요청을 보내 컨테이너의 건강 상태를 확인합니다.
+    # 이 부분이 없으면 'Container Healthcheck failed' 에러가 발생할 수 있습니다.
+    if request.method == 'GET' and request.path == '/':
+        logger.info("Healthcheck request received. Responding with 200 OK.")
+        # 200 OK 응답을 보내 컨테이너가 정상적으로 실행 중임을 알립니다.
+        return "OK", 200
+
+    # 실제 자동화 로직은 POST 요청 또는 다른 경로에 대해 실행됩니다.
+    # Cloud Scheduler는 기본적으로 POST 요청을 보낼 것이므로, 이 부분을 그대로 진행합니다.
 
     try:
         project_id = os.environ.get("GCP_PROJECT_ID")
         bucket_name = os.environ.get("GCP_BUCKET_NAME")
+
+        if not project_id or not bucket_name:
+            logger.error("GCP_PROJECT_ID 또는 GCP_BUCKET_NAME 환경 변수가 설정되지 않았습니다.")
+            return "설정 오류: 필수 환경 변수 누락.", 500
 
         config = Config(project_id=project_id, bucket_name=bucket_name)
 
@@ -41,8 +64,9 @@ def trigger_youtube_upload(request):
         logger.error(f"설정 또는 시크릿 로드 실패: {e}", exc_info=True)
         return f"설정 오류: {str(e)}", 500
 
+    # Cloud Functions는 /tmp 디렉토리만 쓰기 가능합니다.
     temp_dir = "/tmp"
-    os.makedirs(temp_dir, exist_ok=True)
+    os.makedirs(temp_dir, exist_ok=True) # 혹시 없을 경우를 대비하여 생성
 
     niche_keywords = ["신기한 과학 사실", "역사 속 숨겨진 이야기", "최신 기술 트렌드",
                       "일상 속 꿀팁", "건강 상식"]
@@ -54,7 +78,6 @@ def trigger_youtube_upload(request):
     suggested_title = ""
 
     try:
-        # E501 해결: 줄 길이를 79자 이하로 맞춤
         logger.info(f"선택된 틈새 키워드: '{selected_niche}', "
                     f"AI 모델 선호: '{ai_model_preference}'")
 
@@ -68,14 +91,12 @@ def trigger_youtube_upload(request):
             if len(content_topic) > 200:
                 content_topic = content_topic[:200] + "..."
         else:
-            # E501 해결: 줄 길이를 79자 이하로 맞춤
             logger.warning(f"AI 응답 형식이 예상과 다릅니다: {ai_response}. "
                            f"기본 콘텐츠 사용.")
             content_topic = ("자동 생성된 유튜브 쇼츠 영상입니다. "
                              "콘텐츠 생성에 문제가 있었습니다.")
             suggested_title = "자동 생성 오류 쇼츠"
 
-        # E501 해결: 줄 길이를 79자 이하로 맞춤
         logger.info(f"콘텐츠 생성 완료. 제목: '{suggested_title}', "
                     f"내용: '{content_topic[:50]}...'")
 
@@ -95,6 +116,7 @@ def trigger_youtube_upload(request):
         return f"TTS 오류: {str(e)}", 500
 
     background_video_path = os.path.join(temp_dir, "background_video.mp4")
+    # Pexels 쿼리 키워드 선정 (선택된 니치의 첫 단어 사용)
     pexels_query = selected_niche.split(' ')[0] if selected_niche else "abstract"
     try:
         download_background_video(pexels_api_key, pexels_query, background_video_path)
@@ -103,22 +125,21 @@ def trigger_youtube_upload(request):
         logger.error(f"배경 영상 다운로드 실패: {e}", exc_info=True)
         return f"배경 영상 다운로드 오류: {str(e)}", 500
 
-
-    output_dir = "output"
-    os.makedirs(output_dir, exist_ok=True)
+    # 모든 임시 및 최종 영상 파일은 /tmp에 저장
     final_video_filename = (f"youtube_short_"
                             f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4")
-    final_video_file_path = os.path.join(output_dir, final_video_filename)
+    final_video_file_path = os.path.join(temp_dir, final_video_filename) # /tmp에 저장
 
     try:
         created_video_path = create_short_video(background_video_path,
                                                 audio_file_path,
                                                 os.path.join(temp_dir,
-                                                            "temp_created_video.mp4"))
+                                                             "temp_created_video.mp4"))
         logger.info(f"기본 영상 생성 완료: {created_video_path}")
 
         edited_video_path = edit_video_for_shorts(created_video_path,
                                                   content_topic, suggested_title)
+        # 생성된 임시 편집 영상 파일을 최종 경로로 옮깁니다. (모두 /tmp 내에서)
         os.rename(edited_video_path, final_video_file_path)
         logger.info(f"최종 쇼츠 영상 편집 완료 및 저장: {final_video_file_path}")
 
@@ -137,8 +158,8 @@ def trigger_youtube_upload(request):
     video_tags = [tag.strip() for tag in
                   (f"shorts,AI,자동화,유튜브,꿀팁,수익화,정보,{selected_niche},"
                    f"{suggested_title.replace(' ', '')}").split(',') if tag.strip()]
-    video_category_id = "22"
-    video_privacy_status = "public"
+    video_category_id = "22" # YouTube에서 '블로그/사람들' 카테고리 ID
+    video_privacy_status = "public" # public, private, unlisted 중 선택 가능
 
     try:
         response = upload_video(
@@ -152,6 +173,7 @@ def trigger_youtube_upload(request):
         )
         logger.info(f"영상 업로드 성공! YouTube ID: {response.get('id')}")
 
+        # 모든 임시 파일 및 생성된 영상 파일 삭제 (리소스 해제)
         for f in os.listdir(temp_dir):
             file_path = os.path.join(temp_dir, f)
             if os.path.isfile(file_path):
@@ -163,5 +185,14 @@ def trigger_youtube_upload(request):
 
     except Exception as e:
         logger.error(f"최종 YouTube 업로드 실패: {e}", exc_info=True)
+        # 오류 발생 시에도 임시 파일 정리 시도 (최대한 리소스 해제)
+        for f in os.listdir(temp_dir):
+            file_path = os.path.join(temp_dir, f)
+            if os.path.isfile(file_path):
+                try:
+                    os.remove(file_path)
+                    logger.info(f"오류 발생 후 임시 파일 삭제: {file_path}")
+                except Exception as cleanup_e:
+                    logger.warning(f"오류 발생 후 임시 파일 삭제 실패: {file_path}, {cleanup_e}")
+
         return f"YouTube 업로드 오류: {str(e)}", 500
-    
