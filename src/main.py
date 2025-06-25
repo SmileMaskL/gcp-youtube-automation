@@ -264,3 +264,11 @@ def _cleanup_temp_files(temp_dir):
                 logger.info(f"임시 파일 삭제: {file_path}")
             except Exception as cleanup_e:
                 logger.warning(f"임시 파일 삭제 실패: {file_path}, {cleanup_e}")
+        if __name__ == '__main__':
+            from flask import Flask, request
+            # 로컬 테스트 시 Flask 앱 생성
+            app = Flask(__name__)
+            app.add_url_rule('/', view_func=trigger_youtube_upload, methods=['GET', 'POST'])
+            app.add_url_rule('/<path:path>', view_func=trigger_youtube_upload, methods=['GET', 'POST'])
+            PORT = int(os.environ.get('PORT', 8080))
+            app.run(host='0.0.0.0', port=PORT)
