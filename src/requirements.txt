@@ -1,7 +1,7 @@
-# src/requirements.txt
-
 # 핵심 라이브러리
-Flask==2.3.0 # Flask 라이브러리 추가 또는 버전 확인
+Flask==3.0.2  # ✅ Flask 3.x로 올림 (flask-pymongo와 호환)
+flask-pymongo==3.0.1  # ✅ Flask 3.x 지원 버전
+
 google-cloud-secret-manager==2.24.0
 openai==1.35.13
 google-cloud-storage==2.16.0
