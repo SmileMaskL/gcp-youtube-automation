@@ -3,7 +3,7 @@
 FROM python:3.11-slim-buster
 
 # 환경 변수 설정
-ENV PYTHONUNBUFFERED 1
+ENV PYTHONUNBUFFERED=1
 ENV PORT=8080
 
 # 작업 디렉토리 설정
