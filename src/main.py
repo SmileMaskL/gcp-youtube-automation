@@ -5,7 +5,7 @@ import os
 import logging
 from datetime import datetime
 import random
-from flask import Request, jsonify # Flask Request 객체를 사용하기 위해 import
+from flask import Request # Flask Request 객체를 사용하기 위해 import
 
 # src/ 디렉토리 내의 커스텀 모듈들을 임포트합니다.
 # 점(.)을 사용하여 상대 경로로 임포트해야 합니다.
@@ -30,16 +30,20 @@ def trigger_youtube_upload(request: Request):
     """
     logger.info("--- Cloud Function 'trigger_youtube_upload' 시작 ---")
 
-    # Cloud Functions 2세대 (Cloud Run 기반) 헬스체크 처리
-    # Cloud Run은 기본적으로 / 경로에 GET 요청을 보내 컨테이너의 건강 상태를 확인합니다.
-    # 이 부분이 없으면 'Container Healthcheck failed' 에러가 발생할 수 있습니다.
+    # --- Cloud Functions 2세대 (Cloud Run 기반) 헬스체크 처리 시작 ---
+    # Cloud Run은 배포된 컨테이너의 활성 상태를 확인하기 위해
+    # 기본적으로 '/' 경로로 HTTP GET 요청을 보냅니다.
+    # 이 요청에 대해 200 OK 응답을 주지 않으면 'Container Healthcheck failed' 에러가 발생합니다.
     if request.method == 'GET' and request.path == '/':
         logger.info("Healthcheck request received. Responding with 200 OK.")
-        # 200 OK 응답을 보내 컨테이너가 정상적으로 실행 중임을 알립니다.
-        return "OK", 200
+        return "OK", 200 # 헬스체크 성공 응답
 
-    # 실제 자동화 로직은 POST 요청 또는 다른 경로에 대해 실행됩니다.
-    # Cloud Scheduler는 기본적으로 POST 요청을 보낼 것이므로, 이 부분을 그대로 진행합니다.
+    # Cloud Scheduler는 HTTP POST 요청을 보낼 것이므로,
+    # 실제 동영상 생성 및 업로드 로직은 POST 요청 시에만 실행됩니다.
+    if request.method != 'POST':
+        logger.warning(f"Unsupported HTTP method: {request.method}. Only POST is supported for triggering.")
+        return "Unsupported method. Please use POST to trigger video generation.", 405
+    # --- Cloud Functions 2세대 헬스체크 처리 종료 ---
 
     try:
         project_id = os.environ.get("GCP_PROJECT_ID")
