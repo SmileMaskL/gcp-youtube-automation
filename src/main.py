@@ -8,6 +8,20 @@ import random
 from flask import Request, jsonify # Flask Request 객체를 명시적으로 임포트
 import subprocess # FFmpeg 경로 확인을 위해 추가
 
+# FFmpeg 경로를 PATH 환경 변수에 추가
+# Cloud Functions 환경에서 ./bin/ffmpeg 경로를 인식하도록 설정
+os.environ["PATH"] += os.pathsep + os.path.join(os.getcwd(), "bin")
+
+# FFmpeg 경로 확인용 로깅 (배포 후 로그에서 이 메시지를 확인해보세요)
+logging.info(f"Updated PATH: {os.environ['PATH']}")
+try:
+    import subprocess
+    subprocess.run(["ffmpeg", "-version"], check=True, capture_output=True)
+    logging.info("FFmpeg found and working!")
+except Exception as e:
+    logging.error(f"FFmpeg not found or not working: {e}")
+    logging.error(f"FFmpeg stderr: {e.stderr.decode()}") # stderr 내용도 출력
+
 # 로그 설정을 맨 위로 옮겨서 함수 시작부터 로그를 볼 수 있도록 합니다.
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
