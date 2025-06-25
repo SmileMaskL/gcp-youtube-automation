@@ -1,17 +1,18 @@
 name: Cleanup Old Workflow Runs
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # 수동 실행을 위한 트리거
   schedule:
-    - cron: '0 0 * * 0' # 매주 일요일 UTC 00:00 (한국 시간 오전 9시)
+    - cron: '0 0 * * 0' # 매주 일요일 UTC 00:00 (한국 시간 오전 9시)에 자동 실행
 
 jobs:
   delete-old-runs:
     runs-on: ubuntu-latest
     steps:
       - name: Delete old workflow runs
-        uses: peter-evans/delete-old-workflow-runs@v3 # 또는 다른 cleanup 액션
+        uses: peter-evans/delete-old-workflow-runs@v3 # 오래된 워크플로우 실행 기록을 삭제하는 액션
         with:
+          # artifact: workflow_run (이전 버전에서 사용되던 방식. 현재는 'package-type'을 사용)
           package-type: workflow_run # workflow run artifacts를 대상으로 지정
-          keep_minimum_runs: 5 
-          days_old: 7
+          keep_minimum_runs: 5      # 최소 5개의 최신 실행 기록을 유지
+          days_old: 7               # 7일이 지난 실행 기록을 삭제
