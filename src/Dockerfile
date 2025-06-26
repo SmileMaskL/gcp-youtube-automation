@@ -1,24 +1,27 @@
-# Python 3.11 Slim 이미지 사용
-FROM python:3.11-slim
+# 수정된 파일: src/Dockerfile
+
+# Python 3.9 (Cloud Run 권장 버전)
+FROM python:3.9-slim-buster
 
 # 작업 디렉토리 설정
 WORKDIR /app
 
-# 시스템 의존성 설치 (필요시)
-# apt-get update && apt-get install -y --no-install-recommends \
-#   ffmpeg \ # 비디오 처리 관련 라이브러리가 필요하다면 주석 해제
-#   && rm -rf /var/lib/apt/lists/*
+# 시스템에 필요한 패키지 설치 (예: FFmpeg for video processing)
+# 주의: Cloud Run 환경에서는 추가 패키지 설치가 이미지 크기와 빌드 시간을 증가시킬 수 있습니다.
+# RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+#     && rm -rf /var/lib/apt/lists/*
 
-# 파이썬 의존성 복사 및 설치
+# 파이썬 의존성 설치
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 애플리케이션 코드 복사
+# 애플리케이션 소스 코드 복사
 COPY . .
 
-# 포트 설정 (Cloud Run에서 PORT 환경 변수로 자동 주입)
-# ENV PORT 8080 # Cloud Run이 자동으로 설정하므로 명시적으로 지정할 필요 없음
+# Cloud Run이 Flask 애플리케이션을 실행할 포트 설정
+ENV PORT 8080
 
 # Gunicorn을 사용하여 Flask 애플리케이션 실행
-# Gunicorn은 app.py 파일 내의 'app'이라는 Flask 인스턴스를 찾아서 실행합니다.
-CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 --chdir /app app:app
+# --timeout 0: 요청 타임아웃을 무한대로 설정 (장시간 비동기 작업에 유용)
+# --workers 1: 단일 워커 (Cloud Run 인스턴스당 하나의 컨테이너 프로세스)
+CMD exec gunicorn --bind :$PORT --workers 1 --timeout 0 app:app
