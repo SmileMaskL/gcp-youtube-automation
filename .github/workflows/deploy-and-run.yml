@@ -8,15 +8,14 @@ on:
 
 env:
   # ⚠️ 이 값들을 당신의 실제 GCP 정보로 변경하세요!
-  # GitHub Actions의 env는 jobs.<job_id>.steps.<step_id>.run 에서 직접 접근 가능합니다.
-  # 하지만 다른 컨텍스트에서 접근하려면 ${{ env.<변수명> }} 형식을 사용해야 합니다.
-  # 여기서는 PROJECT_ID와 GCP_BUCKET_NAME을 환경 변수로 정의하고,
-  # 아래 스텝에서 이 변수들을 필요한 형식으로 전달하겠습니다.
-  PROJECT_ID: youtube-fully-automated #
+  # env 섹션 내에서 다른 env 변수를 참조할 때는 $ 기호를 사용합니다.
+  # 또는 jobs.<job_id>.steps.<step_id>.run 에서 ${{ env.<변수명> }}을 사용합니다.
+  PROJECT_ID: youtube-fully-automated # ⬅️ 당신의 GCP 프로젝트 ID (예: 'my-awesome-project-12345')
   GCP_REGION: us-central1
   CLOUD_RUN_SERVICE_NAME: youtube-shorts-automation
   # Cloud Storage 버킷 이름은 Terraform에서 정의한 이름과 일치해야 합니다.
-  GCP_BUCKET_NAME_FULL: ${{ env.PROJECT_ID }}_youtube_shorts_temp_files # 이 변수 이름을 사용합니다.
+  # env 섹션 내에서 다른 env 변수를 참조할 때는 $PROJECT_ID와 같이 사용합니다.
+  GCP_BUCKET_NAME: ${{ env.PROJECT_ID }}_youtube_shorts_temp_files # ⬅️ 이 부분은 이제 올바르게 해석됩니다.
 
 jobs:
   deploy-and-trigger:
@@ -46,7 +45,6 @@ jobs:
           tf_actions_subcommand: 'apply'
           tf_actions_working_dir: 'terraform' 
           # Terraform 변수를 전달할 때는 -var="변수명=값" 형식을 사용합니다.
-          # 여기서 env.PROJECT_ID를 그대로 사용합니다.
           args: -var="project_id=${{ env.PROJECT_ID }}" -auto-approve
 
       - name: 'Cloud Build를 사용하여 Cloud Run 서비스 빌드 및 배포'
@@ -59,7 +57,7 @@ jobs:
           # Cloud Run 환경 변수 설정 (Secret Manager 대신 직접 사용)
           env_vars: |
             GCP_PROJECT_ID=${{ env.PROJECT_ID }}
-            GCP_BUCKET_NAME=${{ env.GCP_BUCKET_NAME_FULL }} # 변경된 환경 변수 이름 사용
+            GCP_BUCKET_NAME=${{ env.GCP_BUCKET_NAME }} # 변경된 환경 변수 이름 사용
             YOUTUBE_CLIENT_ID=${{ secrets.YOUTUBE_CLIENT_ID }}
             YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }}
             YOUTUBE_REFRESH_TOKEN=${{ secrets.YOUTUBE_REFRESH_TOKEN }}
