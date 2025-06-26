@@ -1,39 +1,39 @@
-# src/tts_generator.py
+# tts_generator.py (수정 후)
 
-import logging
-from elevenlabs import Voice, VoiceSettings, generate, save
+import os
+from elevenlabs import ElevenLabs  # ElevenLabs 클라이언트 임포트
+from elevenlabs.types import Voice, VoiceSettings # Voice, VoiceSettings는 그대로 유지
 
-logger = logging.getLogger(__name__)
-
-
-def generate_tts_audio(elevenlabs_api_key, text_content, voice_id, output_path):
+def generate_tts_audio(text: str, file_path: str) -> None:
     """
-    ElevenLabs API를 사용하여 텍스트를 음성 오디오 파일로 변환합니다.
+    텍스트를 Eleven Labs를 사용하여 음성 오디오로 변환하고 저장합니다.
     """
+    api_key = os.environ.get("ELEVENLABS_API_KEY")
+    voice_id = os.environ.get("ELEVENLABS_VOICE_ID")
+
+    if not api_key or not voice_id:
+        print("ElevenLabs API Key 또는 Voice ID가 설정되지 않았습니다.")
+        return
+
+    # ElevenLabs 클라이언트 초기화
+    client = ElevenLabs(api_key=api_key)
+
     try:
-        # E501 해결: 줄 길이를 79자 이하로 맞춤
-        logger.info(f"ElevenLabs 음성 생성 시작. 음성 ID: {voice_id}, "
-                    f"텍스트 길이: {len(text_content)}")
-
-        audio = generate(
-            text=text_content,
+        audio = client.generate(
+            text=text,
             voice=Voice(
                 voice_id=voice_id,
-                settings=VoiceSettings(
-                    stability=0.7,
-                    similarity_boost=0.8,
-                    style=0.0,
-                    use_speaker_boost=True
-                )
-            ),
-            api_key=elevenlabs_api_key
+                settings=VoiceSettings(stability=0.75, similarity_boost=0.75)
+            )
         )
+        
+        # client.save 함수는 직접 파일 경로를 인자로 받지 않습니다.
+        # 대신, audio 객체에서 직접 파일로 저장하거나, stremaing_player 등을 사용해야 합니다.
+        # 여기서는 가장 간단한 파일 저장 방식을 사용합니다.
+        with open(file_path, "wb") as f:
+            for chunk in audio:
+                f.write(chunk)
 
-        save(audio, output_path)
-        logger.info(f"음성 파일 생성 성공: {output_path}")
-        return output_path
-
+        print(f"음성 오디오가 성공적으로 '{file_path}'에 저장되었습니다.")
     except Exception as e:
-        logger.error(f"ElevenLabs 음성 생성 실패: {e}", exc_info=True)
-        raise
-    
+        print(f"음성 오디오 생성 중 오류 발생: {e}")
