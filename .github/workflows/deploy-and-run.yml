@@ -47,6 +47,16 @@ jobs:
             exit 1
           fi
 
+      # --- 수정 시작: FFmpeg 바이너리 실행 권한 부여 ---
+      - name: ⚙️ Set execute permissions for ffmpeg binaries # FFmpeg 및 FFprobe에 실행 권한 부여
+        run: |
+          chmod +x src/bin/ffmpeg
+          chmod +x src/bin/ffprobe
+        # 참고: 이 스텝은 src/bin 디렉토리에 바이너리가 존재할 때만 의미가 있습니다.
+        # 바이너리가 없으면 "No such file or directory" 에러가 발생할 수 있습니다.
+        # 따라서, src/bin/ffmpeg 및 src/bin/ffprobe 파일이 리포지토리에 반드시 존재해야 합니다.
+      # --- 수정 끝: FFmpeg 바이너리 실행 권한 부여 ---
+
       - name: 🔐 Authorize GCP Service Account # GCP 서비스 계정 인증
         id: auth
         uses: google-github-actions/auth@v2
@@ -95,7 +105,7 @@ jobs:
           path: ./output
           retention-days: 7
 
-      - name: List src directory contents
+      - name: List src directory contents # 디버깅용 (src 폴더 내용 확인)
         run: ls -l src/
-      - name: List src/bin directory contents
+      - name: List src/bin directory contents # 디버깅용 (src/bin 폴더 내용 확인)
         run: ls -l src/bin/ || echo "src/bin directory not found or empty."
