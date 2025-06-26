@@ -1,12 +1,15 @@
-Flask==3.0.2
+# 수정된 파일: src/requirements.txt
+
+Flask
 gunicorn
-# 아래 라이브러리들은 실제 YouTube Shorts 생성 로직을 추가할 때 주석을 해제하고 설치합니다.
-# google-cloud-storage==2.10.0
-# google-api-python-client==2.95.0
-# google-auth-httplib2==0.1.0
-# google-auth-oauthlib==1.0.0
-# elevenlabs==0.2.14
-# openai==1.3.5
-# google-generativeai==0.3.0
-# newsapi-python==0.2.7
-# pexels-api-wrapper==0.1.0
+google-cloud-storage
+google-cloud-logging
+# google-cloud-pubsub # Pub/Sub 사용 시 주석 해제
+# google-api-python-client # YouTube API
+# google-auth-oauthlib # YouTube API
+# google-auth-httplib2 # YouTube API
+# elevenlabs # ElevenLabs TTS
+# openai # OpenAI API (GPT-4o)
+# google-generativeai # Google Gemini API
+# requests # NewsAPI, Pexels API
+# moviepy # 비디오 편집 (FFmpeg 필요)
