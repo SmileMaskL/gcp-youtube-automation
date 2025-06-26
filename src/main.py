@@ -1,83 +1,42 @@
-# src/main.py
+# 핵심 라이브러리
+Flask==3.0.2
+flask-pymongo==3.0.1 # MongoDB와 Flask 연동 (사용 여부 확인 필요, 없으면 삭제 가능)
 
-import os
-import logging
-import random
-from datetime import datetime
-from flask import Request
+google-cloud-secret-manager==2.24.0
+openai==1.35.13 # GPT-4o 사용
+google-cloud-storage==2.16.0
+google-generativeai==0.8.5 # Google Gemini 사용
+elevenlabs==1.2.0
 
-import functions_framework
+# Google 관련
+google-auth==2.29.0
+google-auth-oauthlib==1.2.0
+google-api-python-client==2.136.0 # YouTube Data API 사용
 
-# FFmpeg 경로 설정
-FFMPEG_BIN_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bin")
-os.environ["PATH"] += os.pathsep + FFMPEG_BIN_DIR
-os.environ["IMAGEIO_FFMPEG_EXE"] = os.path.join(FFMPEG_BIN_DIR, "ffmpeg")
+# Cloud Functions
+functions-framework==3.* # Cloud Function 진입점
 
-# 로깅 설정
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-logger = logging.getLogger(__name__)
+# 미디어 처리 (FFmpeg 필요)
+Pillow==10.3.0
+moviepy==1.0.3
+imageio-ffmpeg==0.4.9
 
-# 내부 모듈 가져오기
-from .config import Config
-from .youtube_uploader import upload_video
-from .ai_manager import generate_niche_content
-from .tts_generator import generate_tts_audio
-from .video_creator import create_short_video
-from .video_editor import edit_video_for_shorts
-from .bg_downloader import download_background_video
+# 기타 유틸리티
+newsapi-python==0.2.7
+requests==2.32.3
+beautifulsoup4==4.12.3 # 웹 스크래핑 (사용 여부 확인 필요, 없으면 삭제 가능)
+python-dotenv==1.0.1 # 로컬 개발용 (Cloud Function에는 필요 없음, 삭제 가능)
+python-json-logger==2.0.7 # 로깅 (사용 여부 확인 필요)
+setuptools==68.0.0
 
-@functions_framework.http
-def trigger_youtube_upload(request: Request):
-    """Cloud Functions HTTP Entry Point"""
-    logger.info(f"요청 수신: {request.method} {request.path}")
-
-    if request.method == "GET":
-        return "✅ YouTube Shorts Cloud Function is healthy!", 200
-
-    if request.method != "POST":
-        return "⚠️ Only POST method allowed", 405
-
-    # 환경 변수 체크
-    project_id = os.environ.get("GCP_PROJECT_ID")
-    bucket_name = os.environ.get("GCP_BUCKET_NAME")
-
-    if not project_id or not bucket_name:
-        return "❌ 환경변수 GCP_PROJECT_ID 또는 GCP_BUCKET_NAME 누락", 500
-
-    config = Config(project_id=project_id, bucket_name=bucket_name)
-    temp_dir = "/tmp"
-    os.makedirs(temp_dir, exist_ok=True)
-
-    try:
-        niche_keywords = ["신기한 과학", "건강 상식", "꿀팁", "기술 트렌드"]
-        selected_niche = random.choice(niche_keywords)
-        ai_model = random.choice(["openai", "gemini"])
-
-        ai_response = generate_niche_content(config, selected_niche, ai_model)
-        content = ai_response.get("content", "기본 콘텐츠입니다.")
-        title = ai_response.get("title", "AI 유튜브 쇼츠")
-
-        audio_path = os.path.join(temp_dir, "voice.mp3")
-        generate_tts_audio(config.get_elevenlabs_api_key(), content,
-                           config.elevenlabs_voice_id, audio_path)
-
-        video_path = os.path.join(temp_dir, "bg.mp4")
-        download_background_video(config.get_pexels_api_key(), selected_niche, video_path)
-
-        base_video = create_short_video(video_path, audio_path,
-                                        os.path.join(temp_dir, "base.mp4"))
-        final_video = edit_video_for_shorts(base_video, content, title)
-        final_path = os.path.join(temp_dir, "final.mp4")
-        os.rename(final_video, final_path)
-
-        response = upload_video(
-            final_path, title,
-            f"주제: {selected_niche}\n내용: {content}",
-            tags=[selected_niche, "AI", "Shorts"], category_id="22",
-            privacy_status="public", config_instance=config
-        )
-        return f"✅ 업로드 완료: Video ID = {response.get('id')}", 200
-
-    except Exception as e:
-        logger.error("🔥 오류 발생:", exc_info=True)
-        return f"❌ 에러: {e}", 500
+# 추가 설치
+# ⭐ 수정 부분: Pexels API는 requests로 직접 호출하거나, 'pexels_api'와 같은
+# 공식/안정적인 라이브러리를 사용하세요. 'Pexels==0.0.11'은 권장하지 않습니다.
+# 여기서는 직접 requests를 사용한다고 가정하고 삭제합니다.
+# numpy, pandas는 데이터 분석 라이브러리. 동영상/AI 콘텐츠 생성에 직접 필요 없을 수 있음.
+# 필요 없으면 삭제하여 배포 크기 줄이기.
+numpy==1.26.4
+pandas==2.2.2
+# ⭐ 수정 부분: httplib2는 대부분 최신 Google 라이브러리에 내장되므로 제거합니다.
+# pydub는 오디오 처리 라이브러리 (FFmpeg 필요).
+pydub==0.25.1
