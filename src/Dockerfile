@@ -21,5 +21,6 @@ COPY . .
 ENV PORT 8080
 
 # 컨테이너가 시작될 때 실행될 명령 (Flask 앱을 gunicorn으로 실행)
-# app:app은 app.py 파일의 Flask 애플리케이션 'app' 객체를 참조합니다.
-CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 app:app
+# 'app:app'은 'app.py' 파일 내의 'app'이라는 Flask 애플리케이션 객체를 의미합니다.
+# '--chdir /app'을 명시하여 gunicorn이 현재 작업 디렉토리에서 app.py를 찾도록 합니다.
+CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 --chdir /app app:app
