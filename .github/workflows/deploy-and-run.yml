@@ -7,7 +7,7 @@ on:
   workflow_dispatch: # 수동 실행을 허용
 
 env:
-  PROJECT_ID: your-gcp-project-id # ⚠️ 당신의 GCP 프로젝트 ID로 변경하세요!
+  PROJECT_ID: youtube-fully-automated # ⚠️ 당신의 GCP 프로젝트 ID로 변경하세요!
   GCP_REGION: us-central1
   CLOUD_RUN_SERVICE_NAME: youtube-shorts-automation
   # Cloud Storage 버킷 이름은 Terraform에서 정의한 이름과 일치해야 합니다.
