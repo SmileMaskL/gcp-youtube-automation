@@ -57,7 +57,18 @@ jobs:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }} # GitHub Secrets에 저장된 WIF 제공자 ID
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }} # GitHub Secrets에 저장된 서비스 계정 이메일
           token_format: "access_token"
-          # audience 필드를 제거했습니다. google-github-actions/auth 액션이 workload_identity_provider를 기반으로 자동으로 구성합니다.
+          # ⭐⭐⭐ 이 부분이 가장 중요합니다! ⭐⭐⭐
+          # 여기에 'audience' 파라미터가 절대 없어야 합니다.
+          # google-github-actions/auth@v2는 workload_identity_provider를 사용하면
+          # 올바른 audience (https://token.actions.githubusercontent.com)를 자동으로 설정합니다.
+          # 만약 여기에 'audience: https://iam.googleapis.com/...' 같은 라인이 있다면 삭제하세요!
+          # 혹은 'audience: ${{ env.GCP_PROJECT_ID }}' 같은 라인도 삭제해야 합니다.
+          # 단순히 'audience:'만 있는 경우도 제거해야 합니다.
+          # 아래는 올바른 'with' 설정 예시입니다.
+          # with:
+          #   workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          #   service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+          #   token_format: "access_token"
 
       - name: ☁️ Set up gcloud CLI # gcloud CLI(명령어 도구) 설정
         uses: google-github-actions/setup-gcloud@v2
@@ -65,7 +76,6 @@ jobs:
       - name: 🚀 Deploy Cloud Function # Cloud Function 배포
         run: |
           # gcloud functions deploy 명령어를 사용하여 Cloud Function을 배포합니다.
-          # 모든 주석은 제거했습니다.
           gcloud functions deploy ${{ env.FUNCTION_NAME }} \
             --runtime=python311 \
             --region=${{ env.REGION }} \
@@ -78,34 +88,29 @@ jobs:
             --gen2 \
             --service-account=${{ env.GCP_PROJECT_ID }}-compute@developer.gserviceaccount.com \
             --set-env-vars="GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }},GCP_BUCKET_NAME=${{ env.GCP_BUCKET_NAME }}" \
-            --set-secrets="YOUTUBE_CLIENT_ID=projects/${{ env.GCP_PROJECT_ID }}/secrets/YOUTUBE_CLIENT_ID:latest,YOUTUBE_CLIENT_SECRET=projects/${{ env.GCP_PROJECT_ID }}/secrets/YOUTUBE_CLIENT_SECRET:latest,YOUTUBE_REFRESH_TOKEN=projects/${{ env.GCP_PROJECT_ID }}/secrets/YOUTUBE_REFRESH_TOKEN:latest,ELEVENLABS_API_KEY=projects/${{ env.GCP_PROJECT_ID }}/secrets/ELEVENLABS_API_KEY:latest,OPENAI_API_KEYS=projects/${{ env.GCP_PROJECT_ID }}/secrets/OPENAI_API_KEYS:latest,GEMINI_API_KEY=projects/${{ env.GCP_PROJECT_ID }}/secrets/GEMINI_API_KEY:latest,NEWSAPI_API_KEY=projects/${{ env.GCP_PROJECT_ID }}/secrets/NEWSAPI_API_KEY:latest,PEXELS_API_KEY=projects/${{ env.GCP_PROJECT_ID }}/secrets/PEXELS_API_KEY:latest"
+            --set-secrets="YOUTUBE_CLIENT_ID=projects/${{ env.GCP_PROJECT_ID }}/secrets/YOUTUBE_CLIENT_ID:latest,YOUTUBE_CLIENT_SECRET=projects/${{ env.GCP_PROJECT_ID }}/secrets/YOUTUBE_CLIENT_SECRET:latest,YOUTUBE_REFRESH_TOKEN=projects/${{ env.GCP_PROJECT_ID }}/secrets/YOUTUBE_REFRESH_TOKEN:latest,ELEVENLABS_API_KEY=projects/${{ env.GCP_PROJECT_ID }}/secrets/ELEVENLABS_API_KEY:latest,OPENAI_API_KEYS=projects/${{ env.GCP_PROJECT_ID }}/secrets/OPENAI_API_KEYS:latest,GEMINI_API_KEY=projects/${{ env.GCP_PROJECT_ID }}/secrets/GEMINI_API_KEY:latest,NEWSAPI_API_KEY=projects/${{ env.GCP_PROJECT_ID }}/secrets/NEWSAPI_API_KEY:latest,PEXELS_API_KEY=projects/${{ env.GCP_PROJECT_ID }}/secrets/PEXELS_API_KEY:latest,ELEVENLABS_VOICE_ID=projects/${{ env.GCP_PROJECT_ID }}/secrets/ELEVENLABS_VOICE_ID:latest"
 
       - name: 🌐 Invoke Cloud Function (Scheduled Run) # 배포된 Cloud Function 호출
-        # 워크플로우가 'schedule' 이벤트(크론잡) 또는 'workflow_dispatch'(수동 실행)로 트리거될 때만 이 단계를 실행합니다.
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         run: |
-          # 배포된 Cloud Function의 URL을 가져옵니다.
           FUNCTION_URL=$(gcloud functions describe ${{ env.FUNCTION_NAME }} \
             --region=${{ env.REGION }} \
             --format="value(serviceConfig.uri)")
           echo "✅ Cloud Function URL: $FUNCTION_URL"
           
-          # 가져온 URL로 HTTP POST 요청을 보냅니다.
-          # Cloud Function은 HTTP 트리거로 설정되어 있으므로, 이 방식으로 호출됩니다.
-          # 'daily_run: true' 페이로드는 함수 내에서 이 호출이 스케줄된 실행임을 식별하는 데 사용될 수 있습니다.
           curl -X POST \
             -H "Content-Type: application/json" \
             -d '{"daily_run": true}' \
               "${FUNCTION_URL}"
 
       - name: ⬆️ Upload output artifacts # 결과물(아티팩트) 업로드
-        # Cloud Function 실행 결과로 'output' 디렉토리에 생성되는 파일을 GitHub Actions 아티팩트로 업로드합니다.
-        # 이를 통해 GitHub Actions 워크플로우 실행 결과 페이지에서 생성된 영상 파일 등을 확인할 수 있습니다.
         uses: actions/upload-artifact@v4
         with:
           name: generated-shorts-output # 아티팩트 이름
-          path: ./output # 업로드할 디렉토리 경로
+          path: ./output # 업로드할 디렉토리 경로 (이 디렉토리가 존재하고 파일이 생성되어야 함)
           retention-days: 7 # 아티팩트 보관 기간 (7일)
 
       - name: List src directory contents # src 디렉토리 내용 목록 출력 (디버깅용)
         run: ls -l src/
+      - name: List src/bin directory contents # src/bin 디렉토리 내용 목록 출력 (디버깅용)
+        run: ls -l src/bin/ || echo "src/bin directory not found or empty."
