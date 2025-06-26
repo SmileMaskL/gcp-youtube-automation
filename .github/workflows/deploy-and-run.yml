@@ -3,62 +3,93 @@ name: Deploy and Run YouTube Shorts Automation
 on:
   push:
     branches:
-      - main
-  workflow_dispatch: # 수동 실행을 위한 트리거
+      - main # main 브랜치에 푸시될 때마다 실행
+  workflow_dispatch: # 수동 실행을 허용
 
 env:
-  PROJECT_ID: youtube-fully-automated # 당신의 GCP 프로젝트 ID로 변경
-  SERVICE_NAME: youtube-shorts-automation # Cloud Run 서비스 이름
-  REGION: us-central1 # Cloud Run 서비스 배포 리전
+  PROJECT_ID: your-gcp-project-id # ⚠️ 당신의 GCP 프로젝트 ID로 변경하세요!
+  GCP_REGION: us-central1
+  CLOUD_RUN_SERVICE_NAME: youtube-shorts-automation
+  # Cloud Storage 버킷 이름은 Terraform에서 정의한 이름과 일치해야 합니다.
+  GCP_BUCKET_NAME: ${{ env.PROJECT_ID }}_youtube_shorts_temp_files 
 
 jobs:
-  deploy:
+  deploy-and-trigger:
     runs-on: ubuntu-latest
     permissions:
       contents: 'read'
-      id-token: 'write'
+      id-token: 'write' # OIDC 토큰 생성을 위해 필요
 
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-    - id: 'auth'
-      name: 'Authenticate to Google Cloud'
-      uses: 'google-github-actions/auth@v2'
-      with:
-        workload_identity_provider: 'projects/94662874801/locations/global/workloadIdentityPools/github-pool/providers/github-provider' # 당신의 WIF 제공자 정보
-        service_account: '94662874801-compute@developer.gserviceaccount.com' # 당신의 서비스 계정 이메일
+      - name: 'Google Cloud 인증'
+        id: 'auth'
+        uses: 'google-github-actions/auth@v2'
+        with:
+          # ⚠️ Workload Identity Provider 이름을 GCP 콘솔과 정확히 일치시키세요!
+          # 예: projects/94662874801/locations/global/workloadIdentityPools/github-pool/providers/github-provider-v1
+          workload_identity_provider: 'projects/94662874801/locations/global/workloadIdentityPools/github-pool/providers/github-provider' # 또는 github-provider-v1
+          service_account: '94662874801-compute@developer.gserviceaccount.com' # 당신의 서비스 계정
 
-    - name: Set up Cloud SDK
-      uses: google-github-actions/setup-gcloud@v2
+      - name: 'Terraform 초기화 및 적용'
+        uses: hashicorp/terraform-github-actions@v2
+        with:
+          tf_actions_version: 1.6.0 # 또는 최신 버전
+          tf_actions_subcommand: 'apply'
+          tf_actions_working_dir: 'terraform' # Terraform 파일이 있는 디렉토리
+          args: -var="project_id=${{ env.PROJECT_ID }}" -auto-approve
 
-    - name: 'Configure Docker for Google Container Registry'
-      run: gcloud auth configure-docker ${REGION}-docker.pkg.dev
+      - name: 'Cloud Build를 사용하여 Cloud Run 서비스 빌드 및 배포'
+        id: deploy
+        uses: 'google-github-actions/deploy-cloudrun@v2'
+        with:
+          service: ${{ env.CLOUD_RUN_SERVICE_NAME }}
+          region: ${{ env.GCP_REGION }}
+          source: './src' # Dockerfile과 소스 코드가 있는 디렉토리
+          # Cloud Run 환경 변수 설정 (Secret Manager 대신 직접 사용)
+          env_vars: |
+            GCP_PROJECT_ID=${{ env.PROJECT_ID }}
+            GCP_BUCKET_NAME=${{ env.GCP_BUCKET_NAME }}
+            YOUTUBE_CLIENT_ID=${{ secrets.YOUTUBE_CLIENT_ID }}
+            YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }}
+            YOUTUBE_REFRESH_TOKEN=${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+            ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }}
+            ELEVENLABS_VOICE_ID=${{ secrets.ELEVENLABS_VOICE_ID }}
+            OPENAI_API_KEYS=${{ secrets.OPENAI_API_KEYS }}
+            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+            NEWSAPI_API_KEY=${{ secrets.NEWSAPI_API_KEY }}
+            PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }}
+          # 최소 인스턴스를 0으로 설정하여 유휴 시 비용이 발생하지 않도록 합니다.
+          min_instances: 0
+          # Allow unauthenticated invocations (Cloud Scheduler OIDC token handles authentication)
+          allow_unauthenticated: false 
 
-    - name: 'Build and Push Docker Image to Artifact Registry'
-      run: |
-        docker build -t ${REGION}-docker.pkg.dev/${PROJECT_ID}/${SERVICE_NAME}-repo/${SERVICE_NAME}:${{ github.sha }} ./src
-        docker push ${REGION}-docker.pkg.dev/${PROJECT_ID}/${SERVICE_NAME}-repo/${SERVICE_NAME}:${{ github.sha }}
+      - name: 'Cloud Run 서비스 URL 가져오기'
+        id: 'get_url'
+        run: |
+          SERVICE_URL=$(gcloud run services describe ${{ env.CLOUD_RUN_SERVICE_NAME }} --region ${{ env.GCP_REGION }} --format='value(status.url)')
+          echo "CLOUD_RUN_URL=${SERVICE_URL}" >> $GITHUB_ENV
+          echo "Cloud Run Service URL: ${SERVICE_URL}"
 
-    - name: 'Deploy to Cloud Run'
-      run: |
-        gcloud run deploy ${{ env.SERVICE_NAME }} \
-          --image ${REGION}-docker.pkg.dev/${PROJECT_ID}/${SERVICE_NAME}-repo/${SERVICE_NAME}:${{ github.sha }} \
-          --region ${{ env.REGION }} \
-          --platform managed \
-          --allow-unauthenticated \
-          --cpu 1 \
-          --memory 2048Mi \
-          --timeout 540 \
-          --service-account 94662874801-compute@developer.gserviceaccount.com \
-          --set-env-vars GCP_BUCKET_NAME=${{ env.PROJECT_ID }}_cloudbuild,GCP_PROJECT_ID=${{ env.PROJECT_ID }},LOG_EXECUTION_ID=true \
-          --set-secrets \
-            ELEVENLABS_API_KEY=projects/${{ env.PROJECT_ID }}/secrets/ELEVENLABS_API_KEY:latest,\
-            ELEVENLABS_VOICE_ID=projects/${{ env.PROJECT_ID }}/secrets/ELEVENLABS_VOICE_ID:latest,\
-            GEMINI_API_KEY=projects/${{ env.PROJECT_ID }}/secrets/GEMINI_API_KEY:latest,\
-            NEWSAPI_API_KEY=projects/${{ env.PROJECT_ID }}/secrets/NEWSAPI_API_KEY:latest,\
-            OPENAI_API_KEYS=projects/${{ env.PROJECT_ID }}/secrets/OPENAI_API_KEYS:latest,\
-            PEXELS_API_KEY=projects/${{ env.PROJECT_ID }}/secrets/PEXELS_API_KEY:latest,\
-            YOUTUBE_CLIENT_ID=projects/${{ env.PROJECT_ID }}/secrets/YOUTUBE_CLIENT_ID:latest,\
-            YOUTUBE_CLIENT_SECRET=projects/${{ env.PROJECT_ID }}/secrets/YOUTUBE_CLIENT_SECRET:latest,\
-            YOUTUBE_REFRESH_TOKEN=projects/${{ env.PROJECT_ID }}/secrets/YOUTUBE_REFRESH_TOKEN:latest
+      - name: 'Cloud Scheduler 작업 업데이트 또는 생성'
+        env:
+          CLOUD_RUN_SERVICE_URL: ${{ env.CLOUD_RUN_URL }}
+        run: |
+          gcloud scheduler jobs create http daily-youtube-shorts-upload \
+            --schedule="0 0,6,12,18,21 * * *" \
+            --uri="${{ env.CLOUD_RUN_SERVICE_URL }}/upload-youtube-shorts" \
+            --http-method=POST \
+            --location=${{ env.GCP_REGION }} \
+            --description="매일 YouTube Shorts 업로드를 위한 Cloud Run 서비스 트리거" \
+            --oidc-service-account-email="94662874801-compute@developer.gserviceaccount.com" \
+            --oidc-token-audience="${{ env.CLOUD_RUN_SERVICE_URL }}" || \
+          gcloud scheduler jobs update http daily-youtube-shorts-upload \
+            --schedule="0 0,6,12,18,21 * * *" \
+            --uri="${{ env.CLOUD_RUN_SERVICE_URL }}/upload-youtube-shorts" \
+            --http-method=POST \
+            --location=${{ env.GCP_REGION }} \
+            --description="매일 YouTube Shorts 업로드를 위한 Cloud Run 서비스 트리거" \
+            --oidc-service-account-email="94662874801-compute@developer.gserviceaccount.com" \
+            --oidc-token-audience="${{ env.CLOUD_RUN_SERVICE_URL }}"
