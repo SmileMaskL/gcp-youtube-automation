@@ -33,27 +33,19 @@ jobs:
       - name: ✅ Checkout Repository # 리포지토리 체크아웃 (코드를 가져옴)
         uses: actions/checkout@v4
 
-      - name: 🐍 Set up Python # Python 환경 설정
+      - name: 🐍 Set up Python # Python 환경 설정 (이 단계는 Dockerfile 사용 시 엄밀히 필요 없지만, 로컬 테스트나 Pipfile 등의 경우를 위해 유지 가능)
         uses: actions/setup-python@v5
         with:
           python-version: '3.11' # 사용할 Python 버전 지정
 
-      - name: 📦 Install dependencies # Python 의존성 설치
+      - name: 📦 Install dependencies (for local testing/linting) # GitHub Actions 환경에서 의존성 설치 (Dockerfile이 실제 배포용 컨테이너에 설치)
         run: |
           if [ -f src/requirements.txt ]; then
             pip install -r src/requirements.txt
           else
-            echo "❌ requirements.txt not found in src/"
+            echo "❌ src/requirements.txt not found!"
             exit 1
           fi
-
-      # --- 수정: FFmpeg 바이너리 실행 권한 부여 스텝 제거 (Dockerfile이 처리) ---
-      # 이전에 있었던 chmod +x 스텝은 이제 Dockerfile이 ffmpeg을 설치하므로 필요 없습니다.
-      # - name: ⚙️ Set execute permissions for ffmpeg binaries
-      #   run: |
-      #     chmod +x src/bin/ffmpeg
-      #     chmod +x src/bin/ffprobe
-      # --- 수정 끝 ---
 
       - name: 🔐 Authorize GCP Service Account # GCP 서비스 계정 인증
         id: auth
@@ -72,7 +64,7 @@ jobs:
           gcloud functions deploy ${{ env.FUNCTION_NAME }} \
             --runtime=python311 \
             --region=${{ env.REGION }} \
-            --source=./src \
+            --source=. \
             --entry-point=trigger_youtube_upload \
             --trigger-http \
             --allow-unauthenticated \
@@ -103,7 +95,9 @@ jobs:
           path: ./output # 업로드할 디렉토리 경로 (이 디렉토리가 존재하고 파일이 생성되어야 함)
           retention-days: 7 # 아티팩트 보관 기간 (7일)
 
+      - name: List root directory contents # 디버깅용 (루트 폴더 내용 확인)
+        run: ls -l ./
       - name: List src directory contents # 디버깅용 (src 폴더 내용 확인)
         run: ls -l src/
-      - name: List src/bin directory contents # 디버깅용 (src/bin 폴더 내용 확인)
-        run: ls -l src/bin/ || echo "src/bin directory not found or empty."
+      - name: List fonts directory contents # 디버깅용 (fonts 폴더 내용 확인)
+        run: ls -l fonts/ || echo "fonts directory not found or empty."
