@@ -23,30 +23,12 @@ jobs:
       - name: '코드 체크아웃'
         uses: 'actions/checkout@v4'
 
-      # --- ⭐️⭐️⭐️ GitHub OIDC 토큰 클레임 출력 (정확한 sub 값 확인용) ⭐️⭐️⭐️ ---
-      - name: 'GitHub OIDC 토큰 클레임 출력 (정확한 sub 값 확인용)'
-        id: get-github-oidc-claims
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const token = await core.getIDToken('https://token.actions.githubusercontent.com'); // GitHub Actions OIDC Audience URL
-            console.log('Raw GitHub OIDC Token:');
-            console.log(token); // 원본 토큰 출력
-            // 토큰을 디코딩하여 클레임 출력
-            const payload = token.split('.')[1];
-            // Base64 URL-safe 디코딩 후 UTF-8로 변환
-            const decodedPayload = Buffer.from(payload, 'base64').toString('utf-8');
-            const claims = JSON.parse(decodedPayload);
-            console.log('Decoded GitHub OIDC Token Claims:');
-            console.log(JSON.stringify(claims, null, 2)); // 디코딩된 클레임 예쁘게 출력
-            // 'sub' 클레임 값을 별도의 출력으로 저장 (GCP 설정에 사용할 값)
-            core.setOutput('sub_claim', claims.sub);
-      # --- ⭐️⭐️⭐️ 여기까지입니다! ⭐️⭐️⭐️ ---
-
       - name: 'Google Cloud 인증'
         id: 'auth'
         uses: 'google-github-actions/auth@v2'
         with:
+          # ⭐️⭐️⭐️ 프로젝트 ID를 명시적으로 전달하여 'developer' 문제를 해결합니다. ⭐️⭐️⭐️
+          project_id: ${{ env.PROJECT_ID }}
           # Workload Identity Provider의 전체 리소스 경로
           workload_identity_provider: 'projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1'
           # Terraform과 Cloud Run 배포에 사용될 서비스 계정
