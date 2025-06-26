@@ -33,13 +33,26 @@ jobs:
           workload_identity_provider: 'projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1' 
           service_account: '94662874801-compute@developer.gserviceaccount.com' # 당신의 서비스 계정
 
-      - name: 'Terraform 초기화 및 적용'
-        # ⭐⭐ 이 부분을 정확히 확인하세요! v1.2.0으로 수정되어야 합니다. ⭐⭐
-        uses: hashicorp/terraform-github-actions@v1.2.0 # ⬅️ 이 부분을 수정했습니다!
+      # ⭐⭐⭐ 여기가 완전히 변경되었습니다! Terraform 액션 대신 직접 Terraform을 설치하고 실행합니다. ⭐⭐⭐
+      - name: 'Terraform 설치 및 설정'
+        uses: hashicorp/setup-terraform@v3 # HashiCorp의 공식 Terraform 설치 액션 사용 (안정적)
         with:
-          tf_actions_subcommand: 'apply'
-          tf_actions_working_dir: 'terraform' 
-          args: -var="project_id=${{ env.PROJECT_ID }}" -auto-approve
+          terraform_version: 1.6.6 # 최신 안정적인 Terraform 버전 지정
+
+      - name: 'Terraform 초기화'
+        run: |
+          cd terraform
+          terraform init -backend-config="bucket=${{ env.PROJECT_ID }}-tf-state" # 백엔드 버킷 이름 명시
+        env:
+          GOOGLE_PROJECT_ID: ${{ env.PROJECT_ID }} # Terraform에서 사용할 GCP 프로젝트 ID 환경 변수 설정
+
+      - name: 'Terraform 적용'
+        run: |
+          cd terraform
+          terraform apply -var="project_id=${{ env.PROJECT_ID }}" -auto-approve
+        env:
+          GOOGLE_PROJECT_ID: ${{ env.PROJECT_ID }} # Terraform에서 사용할 GCP 프로젝트 ID 환경 변수 설정
+      # ⭐⭐⭐ 변경 끝 ⭐⭐⭐
 
       - name: 'Cloud Build를 사용하여 Cloud Run 서비스 빌드 및 배포'
         id: deploy
