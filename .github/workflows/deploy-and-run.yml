@@ -12,7 +12,7 @@ env:
   # 하지만 다른 컨텍스트에서 접근하려면 ${{ env.<변수명> }} 형식을 사용해야 합니다.
   # 여기서는 PROJECT_ID와 GCP_BUCKET_NAME을 환경 변수로 정의하고,
   # 아래 스텝에서 이 변수들을 필요한 형식으로 전달하겠습니다.
-  PROJECT_ID: your-gcp-project-id # ⬅️ 당신의 GCP 프로젝트 ID (예: 'my-awesome-project-12345')
+  PROJECT_ID: youtube-fully-automated #
   GCP_REGION: us-central1
   CLOUD_RUN_SERVICE_NAME: youtube-shorts-automation
   # Cloud Storage 버킷 이름은 Terraform에서 정의한 이름과 일치해야 합니다.
