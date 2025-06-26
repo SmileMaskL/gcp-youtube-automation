@@ -11,8 +11,7 @@ env:
   PROJECT_ID: youtube-fully-automated # ⬅️ 당신의 GCP 프로젝트 ID (예: 'my-awesome-project-12345')
   GCP_REGION: us-central1
   CLOUD_RUN_SERVICE_NAME: youtube-shorts-automation
-  # GCP_BUCKET_NAME 정의를 여기서는 제거합니다.
-  # 대신 Cloud Run 배포 스텝에서 직접 계산하여 전달합니다.
+  # GCP_BUCKET_NAME은 아래 deploy-cloudrun 스텝에서 직접 생성합니다.
 
 jobs:
   deploy-and-trigger:
@@ -35,12 +34,11 @@ jobs:
           service_account: '94662874801-compute@developer.gserviceaccount.com' # 당신의 서비스 계정
 
       - name: 'Terraform 초기화 및 적용'
-        uses: hashicorp/terraform-github-actions@v1.2.0
+        # ⚠️ 액션 버전 변경: v2가 아닌 v1.2.0 (또는 v1)을 사용합니다.
+        uses: hashicorp/terraform-github-actions@v1.2.0 # ⬅️ 이 부분을 수정했습니다!
         with:
-          tf_actions_version: 1.6.0 
           tf_actions_subcommand: 'apply'
           tf_actions_working_dir: 'terraform' 
-          # Terraform 변수를 전달할 때는 -var="변수명=값" 형식을 사용합니다.
           args: -var="project_id=${{ env.PROJECT_ID }}" -auto-approve
 
       - name: 'Cloud Build를 사용하여 Cloud Run 서비스 빌드 및 배포'
@@ -50,11 +48,9 @@ jobs:
           service: ${{ env.CLOUD_RUN_SERVICE_NAME }}
           region: ${{ env.GCP_REGION }}
           source: './src' # Dockerfile과 소스 코드가 있는 디렉토리
-          # Cloud Run 환경 변수 설정
           env_vars: |
             GCP_PROJECT_ID=${{ env.PROJECT_ID }}
-            # GCP_BUCKET_NAME을 여기서 직접 계산하여 전달합니다.
-            GCP_BUCKET_NAME=${{ env.PROJECT_ID }}_youtube_shorts_temp_files 
+            GCP_BUCKET_NAME=${{ env.PROJECT_ID }}_youtube_shorts_temp_files # 여기서 직접 계산
             YOUTUBE_CLIENT_ID=${{ secrets.YOUTUBE_CLIENT_ID }}
             YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }}
             YOUTUBE_REFRESH_TOKEN=${{ secrets.YOUTUBE_REFRESH_TOKEN }}
@@ -64,9 +60,7 @@ jobs:
             GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
             NEWSAPI_API_KEY=${{ secrets.NEWSAPI_API_KEY }}
             PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }}
-          # 최소 인스턴스를 0으로 설정하여 유휴 시 비용이 발생하지 않도록 합니다.
           min_instances: 0
-          # Allow unauthenticated invocations (Cloud Scheduler OIDC token handles authentication)
           allow_unauthenticated: false 
 
       - name: 'Cloud Run 서비스 URL 가져오기'
@@ -91,7 +85,7 @@ jobs:
             --http-method=POST \
             --location=${{ env.GCP_REGION }} \
             --description="매일 YouTube Shorts 업로드를 위한 Cloud Run 서비스 트리거" \
-            --oidc-service-account-email="94662874801-compute@developer.gserviceAccount.com" \
+            --oidc-service-account-email="94662874801-compute@developer.gserviceaccount.com" \
             --oidc-token-audience="${{ env.CLOUD_RUN_SERVICE_URL }}" || \
           gcloud scheduler jobs update http daily-youtube-shorts-upload \
             --schedule="0 0,6,12,18,21 * * *" \
@@ -99,5 +93,5 @@ jobs:
             --http-method=POST \
             --location=${{ env.GCP_REGION }} \
             --description="매일 YouTube Shorts 업로드를 위한 Cloud Run 서비스 트리거" \
-            --oidc-service-account-email="94662874801-compute@developer.gserviceAccount.com" \
+            --oidc-service-account-email="94662874801-compute@developer.gserviceaccount.com" \
             --oidc-token-audience="${{ env.CLOUD_RUN_SERVICE_URL }}"
