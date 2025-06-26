@@ -35,7 +35,7 @@ jobs:
           service_account: '94662874801-compute@developer.gserviceaccount.com' # 당신의 서비스 계정
 
       - name: 'Terraform 초기화 및 적용'
-        uses: hashicorp/terraform-github-actions@v2
+        uses: hashicorp/terraform-github-actions@v1.2.0
         with:
           tf_actions_version: 1.6.0 
           tf_actions_subcommand: 'apply'
