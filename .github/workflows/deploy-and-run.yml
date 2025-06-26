@@ -7,11 +7,16 @@ on:
   workflow_dispatch: # 수동 실행을 허용
 
 env:
-  PROJECT_ID: youtube-fully-automated # ⚠️ 당신의 GCP 프로젝트 ID로 변경하세요!
+  # ⚠️ 이 값들을 당신의 실제 GCP 정보로 변경하세요!
+  # GitHub Actions의 env는 jobs.<job_id>.steps.<step_id>.run 에서 직접 접근 가능합니다.
+  # 하지만 다른 컨텍스트에서 접근하려면 ${{ env.<변수명> }} 형식을 사용해야 합니다.
+  # 여기서는 PROJECT_ID와 GCP_BUCKET_NAME을 환경 변수로 정의하고,
+  # 아래 스텝에서 이 변수들을 필요한 형식으로 전달하겠습니다.
+  PROJECT_ID: your-gcp-project-id # ⬅️ 당신의 GCP 프로젝트 ID (예: 'my-awesome-project-12345')
   GCP_REGION: us-central1
   CLOUD_RUN_SERVICE_NAME: youtube-shorts-automation
   # Cloud Storage 버킷 이름은 Terraform에서 정의한 이름과 일치해야 합니다.
-  GCP_BUCKET_NAME: ${{ env.PROJECT_ID }}_youtube_shorts_temp_files 
+  GCP_BUCKET_NAME_FULL: ${{ env.PROJECT_ID }}_youtube_shorts_temp_files # 이 변수 이름을 사용합니다.
 
 jobs:
   deploy-and-trigger:
@@ -29,16 +34,19 @@ jobs:
         uses: 'google-github-actions/auth@v2'
         with:
           # ⚠️ Workload Identity Provider 이름을 GCP 콘솔과 정확히 일치시키세요!
-          # 예: projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1
-          workload_identity_provider: 'projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1'
+          # 당신의 GCP 콘솔에서 확인된 풀 이름은 'github-actions-pool'이고 제공자 이름은 'github-provider-v1'입니다.
+          # 프로젝트 번호 94662874801을 그대로 사용합니다.
+          workload_identity_provider: 'projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1' 
           service_account: '94662874801-compute@developer.gserviceaccount.com' # 당신의 서비스 계정
 
       - name: 'Terraform 초기화 및 적용'
         uses: hashicorp/terraform-github-actions@v2
         with:
-          tf_actions_version: 1.6.0 # 또는 최신 버전
+          tf_actions_version: 1.6.0 
           tf_actions_subcommand: 'apply'
-          tf_actions_working_dir: 'terraform' # Terraform 파일이 있는 디렉토리
+          tf_actions_working_dir: 'terraform' 
+          # Terraform 변수를 전달할 때는 -var="변수명=값" 형식을 사용합니다.
+          # 여기서 env.PROJECT_ID를 그대로 사용합니다.
           args: -var="project_id=${{ env.PROJECT_ID }}" -auto-approve
 
       - name: 'Cloud Build를 사용하여 Cloud Run 서비스 빌드 및 배포'
@@ -51,7 +59,7 @@ jobs:
           # Cloud Run 환경 변수 설정 (Secret Manager 대신 직접 사용)
           env_vars: |
             GCP_PROJECT_ID=${{ env.PROJECT_ID }}
-            GCP_BUCKET_NAME=${{ env.GCP_BUCKET_NAME }}
+            GCP_BUCKET_NAME=${{ env.GCP_BUCKET_NAME_FULL }} # 변경된 환경 변수 이름 사용
             YOUTUBE_CLIENT_ID=${{ secrets.YOUTUBE_CLIENT_ID }}
             YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }}
             YOUTUBE_REFRESH_TOKEN=${{ secrets.YOUTUBE_REFRESH_TOKEN }}
@@ -69,14 +77,25 @@ jobs:
       - name: 'Cloud Run 서비스 URL 가져오기'
         id: 'get_url'
         run: |
+          # gcloud 명령에서 환경 변수를 참조할 때는 $GCP_REGION 와 같이 직접 사용합니다.
           SERVICE_URL=$(gcloud run services describe ${{ env.CLOUD_RUN_SERVICE_NAME }} --region ${{ env.GCP_REGION }} --format='value(status.url)')
-          echo "CLOUD_RUN_URL=${SERVICE_URL}" >> $GITHUB_ENV
-          echo "Cloud Run Service URL: ${SERVICE_URL}"
+          # Cloud Run URL이 성공적으로 가져와졌는지 확인 (로그로 출력)
+          echo "Cloud Run Service URL fetched: ${SERVICE_URL}"
+          echo "CLOUD_RUN_URL=${SERVICE_URL}" >> $GITHUB_ENV # 이 변수를 다음 스텝에서 사용하기 위해 설정
 
       - name: 'Cloud Scheduler 작업 업데이트 또는 생성'
         env:
-          CLOUD_RUN_SERVICE_URL: ${{ env.CLOUD_RUN_URL }}
+          # 이전 스텝에서 설정한 CLOUD_RUN_URL 환경 변수를 참조합니다.
+          CLOUD_RUN_SERVICE_URL: ${{ env.CLOUD_RUN_URL }} 
         run: |
+          # CLOUD_RUN_SERVICE_URL 변수가 비어있지 않은지 확인합니다.
+          if [ -z "${{ env.CLOUD_RUN_URL }}" ]; then
+            echo "Error: Cloud Run Service URL is empty. Cannot update Cloud Scheduler."
+            exit 1
+          fi
+          
+          # Cloud Scheduler URI와 Audience에 Cloud Run URL을 정확히 사용합니다.
+          # 기존 작업이 없으면 생성, 있으면 업데이트합니다.
           gcloud scheduler jobs create http daily-youtube-shorts-upload \
             --schedule="0 0,6,12,18,21 * * *" \
             --uri="${{ env.CLOUD_RUN_SERVICE_URL }}/upload-youtube-shorts" \
