@@ -4,6 +4,8 @@
 functions-framework==3.4.0 # Cloud Function 진입점 및 HTTP 트리거 핸들링
 Flask==2.3.3             # ⭐ 수정: functions-framework와의 호환성을 위해 Flask 버전을 2.x대로 낮춥니다.
                          # functions-framework 3.4.0은 flask<3.0, >=1.0을 요구합니다.
+gunicorn
+gevent
 
 # Google Cloud 서비스 연동
 google-cloud-secret-manager==2.24.0 # GCP Secret Manager 접근
