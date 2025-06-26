@@ -1,95 +1,95 @@
-# 수정된 파일: .github/workflows/deploy-and-run.yml
-
-name: Deploy and Run YouTube Shorts Automation
+name: Deploy to Cloud Run via Workload Identity
 
 on:
   push:
     branches:
-      - main
-  workflow_dispatch: # Allows manual trigger from GitHub UI
+      - main # main 브랜치에 푸시될 때 워크플로우 실행
 
 env:
-  PROJECT_ID: 'youtube-fully-automated' # GCP 프로젝트 ID (이 값이 정확해야 합니다!)
-  GCP_REGION: 'us-central1' # Cloud Run 서비스 배포 리전
-  CLOUD_RUN_SERVICE_NAME: 'youtube-shorts-automation'
-  GCP_BUCKET_NAME: 'youtube-fully-automated_youtube_shorts_temp_files' # Cloud Storage 버킷 이름 (고유해야 함)
+  PROJECT_ID: youtube-fully-automated
+  GCP_REGION: us-central1
+  CLOUD_RUN_SERVICE_NAME: youtube-shorts-automation
+  GCP_BUCKET_NAME: youtube-fully-automated_youtube_shorts_temp_files
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     permissions:
       contents: 'read'
-      id-token: 'write' # This is required for Workload Identity Federation
+      id-token: 'write' # OIDC 토큰 생성을 위해 필요
 
     steps:
-      - name: '코드 체크아웃'
-        uses: 'actions/checkout@v4'
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      # --- ⭐️⭐️⭐️ 중요: GCP Audience URL 및 SUB 클레임 값 확인 스텝 (가장 안전한 버전) ⭐️⭐️⭐️ ---
-      # 이 스텝은 정확한 정보를 얻기 위한 디버그용입니다.
-      # 이 스텝의 출력을 확인하고 GCP 설정을 마친 후에는 이 스텝을 제거할 수 있습니다.
-      - name: 'GCP Workload Identity Provider Audience URL 및 GitHub OIDC SUB 클레임 값 출력'
-        id: 'debug-output'
+      - name: Get OIDC Token and Extract Sub Claim
+        id: get_oidc_sub
         uses: actions/github-script@v7
         with:
-          # 스크립트가 단일 라인으로 작성되어 YAML 파싱 오류를 최소화합니다.
-          # 모든 공백은 중요하므로 절대 변경하지 마세요.
           script: |
-            try { const githubOidcToken = await core.getIDToken('https://token.actions.githubusercontent.com'); const tokenPayload = JSON.parse(Buffer.from(githubOidcToken.split('.')[1], 'base64').toString('utf-8')); const subClaim = tokenPayload.sub; core.info(`\n⭐️⭐️⭐️ 중요 정보 확인 ⭐️⭐️⭐️\n--------------------------------------------------------------------------------------------------\n1. GitHub Actions에서 생성된 OIDC 토큰의 'sub' 클레임 값:\n${subClaim}\n(이 값을 GCP Workload Identity Provider의 '액세스 권한 부여' > '속성 값' 필드에 입력하세요. 따옴표 없이.)\n\n2. GCP Workload Identity Provider '속성 조건(Attribute Condition)'에 설정할 CEL 조건문:\nattribute.sub == "${subClaim}"\n(이 줄 전체를 GCP Workload Identity Provider '제공업체 수정' > '속성 조건' 필드에 복사/붙여넣기 하세요. 따옴표 포함.)\n\n3. GCP Workload Identity Provider '대상 (Audience)' URL:\n(이 URL은 GCP 콘솔에서 직접 복사하여 아래 'audience' 파라미터에 붙여넣어야 합니다.)\n예시: https://iam.googleapis.com/projects/YOUR_PROJECT_NUMBER/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1\n--------------------------------------------------------------------------------------------------\n`); core.setOutput('sub_claim_value', subClaim); } catch (error) { core.setFailed(`GitHub OIDC 토큰 추출 또는 출력 중 오류 발생: ${error.message}`); console.error(error); }
-      # --- ⭐️⭐️⭐️ 여기까지입니다! ⭐️⭐️⭐️ ---
+            const githubOidcToken = await core.getIDToken('https://token.actions.githubusercontent.com');
+            const tokenPayload = JSON.parse(Buffer.from(githubOidcToken.split('.')[1], 'base64').toString('utf-8'));
+            const subClaim = tokenPayload.sub;
+            
+            core.info(`
+            ⭐️⭐️⭐️ 중요 정보 확인 ⭐️⭐️⭐️
+            --------------------------------------------------------------------------------------------------
+            1. GitHub Actions에서 생성된 OIDC 토큰의 'sub' 클레임 값:
+            ${subClaim}
+            (이 값을 GCP Workload Identity Provider의 '액세스 권한 부여' > '속성 값' 필드에 입력하세요. 따옴표 없이.)
+            
+            2. GCP Workload Identity Provider '속성 조건(Attribute Condition)'에 설정할 CEL 조건문:
+            attribute.sub == '${subClaim}'
+            (이 줄 전체를 GCP Workload Identity Provider '제공업체 수정' > '속성 조건' 필드에 복사/붙여넣기 하세요. 따옴표 포함.)
+            
+            3. GCP Workload Identity Provider '대상 (Audience)' URL:
+            (이 URL은 GCP 콘솔에서 직접 복사하여 아래 'audience' 파라미터에 붙여넣어야 합니다.)
+            예시: https://iam.googleapis.com/projects/YOUR_PROJECT_NUMBER/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1
+            --------------------------------------------------------------------------------------------------
+            `);
+            core.setOutput('sub_claim_value', subClaim);
+          debug: false
+          github-token: ${{ secrets.GITHUB_TOKEN }} # GITHUB_TOKEN은 자동으로 제공됨
 
-      - name: 'Google Cloud 인증'
-        id: 'auth'
-        uses: 'google-github-actions/auth@v2'
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/${{ env.PROJECT_ID }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1' # GCP 콘솔에서 정확한 경로 확인
+          service_account: 'github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com' # 생성한 서비스 계정 이메일
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ env.PROJECT_ID }}
-          workload_identity_provider: 'projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1'
-          service_account: '94662874801-compute@developer.gserviceaccount.com'
-          # ⭐️⭐️⭐️ 중요: GCP 콘솔에서 복사한 정확한 Audience URL을 여기에 붙여넣으세요! ⭐️⭐️⭐️
-          audience: 'https://iam.googleapis.com/projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1' # ⭐️⭐️⭐️ 이 부분을 다시 한번 확인하고 수정! ⭐️⭐️⭐️
-          create_credentials_file: true
-          export_environment_variables: true
-          universe: googleapis.com
-          cleanup_credentials: true
-          access_token_lifetime: 3600s
-          access_token_scopes: https://www.googleapis.com/auth/cloud-platform
-          id_token_include_email: false
 
+      - name: Configure Docker to use gcloud as a credential helper
+        run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev
 
-      - name: 'Terraform 설치 및 설정'
-        uses: 'hashicorp/setup-terraform@v3'
-        with:
-          terraform_version: '1.7.5'
-
-      - name: 'Terraform 초기화'
+      - name: Build and push Docker image to Artifact Registry
         run: |
-          terraform -chdir=./terraform init
+          gcloud builds submit --tag ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.CLOUD_RUN_SERVICE_NAME }}/youtube-shorts-automation:latest .
 
-      - name: 'Terraform 적용'
+      - name: Deploy to Cloud Run
         run: |
-          terraform -chdir=./terraform apply -auto-approve \
-            -var="project_id=${{ env.PROJECT_ID }}" \
-            -var="gcp_region=${{ env.GCP_REGION }}" \
-            -var="cloud_run_service_name=${{ env.CLOUD_RUN_SERVICE_NAME }}" \
-            -var="gcp_bucket_name=${{ env.GCP_BUCKET_NAME }}"
-        env:
-          TF_VAR_cloud_run_service_account_email: ${{ env.PROJECT_ID }}-compute@developer.gserviceaccount.com
+          gcloud run deploy ${{ env.CLOUD_RUN_SERVICE_NAME }} \
+            --image ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.CLOUD_RUN_SERVICE_NAME }}/youtube-shorts-automation:latest \
+            --region ${{ env.GCP_REGION }} \
+            --allow-unauthenticated # 필요에 따라 제거하거나 다른 인증 방식으로 변경
+            # 추가적으로 필요한 Cloud Run 설정 (예: --platform managed, --cpu, --memory 등)
 
-      - name: 'Cloud Build를 사용하여 Cloud Run 서비스 빌드 및 배포'
-        uses: 'google-github-actions/deploy-cloudrun@v2'
-        with:
-          service: ${{ env.CLOUD_RUN_SERVICE_NAME }}
-          region: ${{ env.GCP_REGION }}
-          source: ./src # Dockerfile과 Python 코드가 있는 디렉토리
-          env_vars: |
-            GCP_PROJECT_ID=${{ env.PROJECT_ID }}
-            GCP_BUCKET_NAME=${{ env.GCP_BUCKET_NAME }}
-            YOUTUBE_CLIENT_ID=${{ secrets.YOUTUBE_CLIENT_ID }}
-            YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }}
-            YOUTUBE_REFRESH_TOKEN=${{ secrets.YOUTUBE_REFRESH_TOKEN }}
-            ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }}
-            ELEVENLABS_VOICE_ID=${{ secrets.ELEVENLABS_VOICE_ID }}
-            OPENAI_API_KEYS=${{ secrets.OPENAI_API_KEYS }}
-            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
-            NEWSAPI_API_KEY=${{ secrets.NEWSAPI_API_KEY }}
-            PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }}
+      - name: Deploy Google Cloud Function (Example: Not directly provided in original context, but common for serverless)
+        # 이 스텝은 예시이며, 실제 함수 코드가 필요합니다.
+        # 예: functions/main.py 또는 functions/index.js
+        # gcloud functions deploy your-function-name \
+        #   --region ${{ env.GCP_REGION }} \
+        #   --entry-point your_entry_point \
+        #   --runtime python39 \ # 또는 nodejs16 등
+        #   --trigger-http \ # 또는 --trigger-event, --trigger-resource 등
+        #   --source ./functions/your-function-source-dir \
+        #   --project ${{ env.PROJECT_ID }} \
+        #   --service-account github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
+
+      - name: Clean up temporary files in GCS (Optional, for managing storage costs)
+        run: |
+          gsutil -m rm -r gs://${{ env.GCP_BUCKET_NAME }}/* # 주의: 프로덕션 환경에서는 더 정교한 관리 필요
