@@ -6,22 +6,22 @@ gevent==22.10.2           # gunicorn의 비동기 워커. 안정성 향상을 �
 # Google Cloud 서비스 연동
 google-cloud-secret-manager==2.24.0 # GCP Secret Manager 접근
 google-cloud-storage==2.16.0 # GCP Cloud Storage 접근
-google-generativeai==0.8.5 # Google Gemini API 클라이언트
-google-api-python-client==2.136.0 # YouTube Data API v3
+google-generativeai==0.8.5 # Google Gemini API 클라이언트 (현재 최신 안정 버전)
+google-api-python-client==2.136.0 # YouTube Data API v3 (현재 최신 안정 버전)
 
 # Google 인증 관련
 google-auth==2.29.0 # Google API 인증
-google-auth-oauthlib==1.2.0 # OAuth2 인증 지원 (YouTube Data API 인증 흐름에 필요)
+google-auth-oauthlib==1.2.0 # OAuth2 인증 지원
 
 # AI 및 미디어 처리
-openai==1.35.13 # OpenAI API 클라이언트 (GPT-4o 사용)
-elevenlabs==1.2.0 # ElevenLabs TTS API 클라이언트
+openai==1.35.13 # OpenAI API 클라이언트 (GPT-4o 사용) (현재 최신 안정 버전)
+elevenlabs==1.2.0 # ElevenLabs TTS API 클라이언트 (현재 최신 안정 버전)
 moviepy==1.0.3 # 동영상 편집 (FFmpeg 필요)
 imageio-ffmpeg==0.4.9 # MoviePy가 FFmpeg 바이너리와 통신하기 위한 인터페이스
 Pillow==10.3.0 # 이미지 처리
 pydub==0.25.1 # 오디오 처리 (FFmpeg 필요)
 
 # 기타 API 및 유틸리티
-newsapi-python==0.2.7 # NewsAPI 클라이언트
+newsapi-python==0.2.7 # NewsAPI 클라이언트 (현재 최신 안정 버전)
 requests==2.32.3 # HTTP 요청
 python-slugify==8.0.4 # URL 친화적인 슬러그 생성
