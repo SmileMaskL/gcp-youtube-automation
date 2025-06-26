@@ -71,8 +71,8 @@ jobs:
             --memory=2048MB \
             --timeout=540s \
             --gen2 \
-            --service-account=94662874801-compute@developer.gserviceaccount.com \ # ⭐⭐⭐ 이 부분이 정확히 수정되었습니다! ⭐⭐⭐
-            --set-env-vars="GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }},GCP_BUCKET_NAME=${{ env.GCP_BUCKET_NAME }}" \
+            --service-account=94662874801-compute@developer.gserviceaccount.com \
+            --set-env-vars="GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }},GCP_BUCKET_NAME=youtube-fully-automated_cloudbuild" \
             --set-secrets="YOUTUBE_CLIENT_ID=projects/${{ env.GCP_PROJECT_ID }}/secrets/YOUTUBE_CLIENT_ID:latest,YOUTUBE_CLIENT_SECRET=projects/${{ env.GCP_PROJECT_ID }}/secrets/YOUTUBE_CLIENT_SECRET:latest,YOUTUBE_REFRESH_TOKEN=projects/${{ env.GCP_PROJECT_ID }}/secrets/YOUTUBE_REFRESH_TOKEN:latest,ELEVENLABS_API_KEY=projects/${{ env.GCP_PROJECT_ID }}/secrets/ELEVENLABS_API_KEY:latest,OPENAI_API_KEYS=projects/${{ env.GCP_PROJECT_ID }}/secrets/OPENAI_API_KEYS:latest,GEMINI_API_KEY=projects/${{ env.GCP_PROJECT_ID }}/secrets/GEMINI_API_KEY:latest,NEWSAPI_API_KEY=projects/${{ env.GCP_PROJECT_ID }}/secrets/NEWSAPI_API_KEY:latest,PEXELS_API_KEY=projects/${{ env.GCP_PROJECT_ID }}/secrets/PEXELS_API_KEY:latest,ELEVENLABS_VOICE_ID=projects/${{ env.GCP_PROJECT_ID }}/secrets/ELEVENLABS_VOICE_ID:latest"
 
       - name: 🌐 Invoke Cloud Function (Scheduled Run)
