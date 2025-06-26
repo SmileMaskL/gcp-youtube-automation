@@ -1,105 +1,64 @@
-# .github/workflows/deploy-and-run.yml
-
-name: Deploy and Run Cloud Function # 워크플로우 이름
+name: Deploy and Run YouTube Shorts Automation
 
 on:
   push:
     branches:
-      - main # main 브랜치에 푸시될 때 워크플로우 실행
-  workflow_dispatch: # GitHub 웹 UI에서 수동으로 워크플로우를 실행할 수 있도록 함
-  schedule:
-    # 매일 5회 실행 (UTC 기준 시간, KST는 UTC+9)
-    # UTC 03:00 (KST 12:00 정오)
-    # UTC 07:00 (KST 16:00 오후 4시)
-    # UTC 12:00 (KST 21:00 밤 9시)
-    # UTC 18:00 (KST 익일 03:00 새벽 3시)
-    # UTC 22:00 (KST 익일 07:00 아침 7시)
-    - cron: '0 3,7,12,18,22 * * *'
+      - main
+  workflow_dispatch: # 수동 실행을 위한 트리거
 
-env: # 환경 변수 설정
-  GCP_PROJECT_ID: youtube-fully-automated # 당신의 GCP 프로젝트 ID
-  GCP_BUCKET_NAME: youtube-fully-automated_cloudbuild # 당신의 GCS 버킷 이름 (혹은 당신의 실제 버킷 이름으로 변경)
-  FUNCTION_NAME: youtube-shorts-automation # 배포될 Cloud Function의 이름
-  REGION: us-central1 # Cloud Function이 배포될 GCP 리전
+env:
+  PROJECT_ID: youtube-fully-automated # 당신의 GCP 프로젝트 ID로 변경
+  SERVICE_NAME: youtube-shorts-automation # Cloud Run 서비스 이름
+  REGION: us-central1 # Cloud Run 서비스 배포 리전
 
 jobs:
-  deploy: # 'deploy'라는 이름의 작업 정의
-    runs-on: ubuntu-latest # 이 작업이 실행될 가상 머신 환경 (최신 Ubuntu)
+  deploy:
+    runs-on: ubuntu-latest
     permissions:
-      contents: read # 리포지토리 내용 읽기 권한
-      id-token: write # GCP 인증을 위한 OIDC ID 토큰 생성 권한
+      contents: 'read'
+      id-token: 'write'
 
-    steps: # 작업의 단계들
-      - name: ✅ Checkout Repository # 리포지토리 체크아웃 (코드를 가져옴)
-        uses: actions/checkout@v4
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
 
-      - name: 🐍 Set up Python # Python 환경 설정 (이 단계는 Dockerfile 사용 시 엄밀히 필요 없지만, 로컬 테스트나 린팅 등을 위해 유지 가능)
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11' # 사용할 Python 버전 지정
+    - id: 'auth'
+      name: 'Authenticate to Google Cloud'
+      uses: 'google-github-actions/auth@v2'
+      with:
+        workload_identity_provider: 'projects/94662874801/locations/global/workloadIdentityPools/github-pool/providers/github-provider' # 당신의 WIF 제공자 정보
+        service_account: '94662874801-compute@developer.gserviceaccount.com' # 당신의 서비스 계정 이메일
 
-      - name: 📦 Install dependencies (for local testing/linting) # GitHub Actions 환경에서 의존성 설치 (Dockerfile이 실제 배포용 컨테이너에 설치)
-        run: |
-          # 🚨 중요: src/requirements.txt의 경로가 올바른지 확인
-          if [ -f src/requirements.txt ]; then
-            pip install -r src/requirements.txt
-          else
-            echo "❌ src/requirements.txt not found!"
-            exit 1
-          fi
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
 
-      - name: 🔐 Authorize GCP Service Account # GCP 서비스 계정 인증
-        id: auth
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
-          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
-          token_format: "access_token"
-          audience: 'https://token.actions.githubusercontent.com'
+    - name: 'Configure Docker for Google Container Registry'
+      run: gcloud auth configure-docker ${REGION}-docker.pkg.dev
 
-      - name: ☁️ Set up gcloud CLI # gcloud CLI(명령어 도구) 설정
-        uses: google-github-actions/setup-gcloud@v2
+    - name: 'Build and Push Docker Image to Artifact Registry'
+      run: |
+        docker build -t ${REGION}-docker.pkg.dev/${PROJECT_ID}/${SERVICE_NAME}-repo/${SERVICE_NAME}:${{ github.sha }} ./src
+        docker push ${REGION}-docker.pkg.dev/${PROJECT_ID}/${SERVICE_NAME}-repo/${SERVICE_NAME}:${{ github.sha }}
 
-      - name: 🚀 Deploy Cloud Function # Cloud Function 배포 (Dockerfile을 자동으로 사용하여 빌드 및 배포)
-        run: |
-          # 🚨 중요: Dockerfile이 src/ 안에 있으므로 --source=./src 유지
-          gcloud functions deploy ${{ env.FUNCTION_NAME }} \
-            --runtime=python311 \
-            --region=${{ env.REGION }} \
-            --source=./src \
-            --entry-point=trigger_youtube_upload \
-            --trigger-http \
-            --allow-unauthenticated \
-            --memory=2048MB \
-            --timeout=540s \
-            --gen2 \
-            --service-account=94662874801-compute@developer.gserviceaccount.com \
-            --set-env-vars="GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }},GCP_BUCKET_NAME=youtube-fully-automated_cloudbuild" \
-            --set-secrets="YOUTUBE_CLIENT_ID=projects/${{ env.GCP_PROJECT_ID }}/secrets/YOUTUBE_CLIENT_ID:latest,YOUTUBE_CLIENT_SECRET=projects/${{ env.GCP_PROJECT_ID }}/secrets/YOUTUBE_CLIENT_SECRET:latest,YOUTUBE_REFRESH_TOKEN=projects/${{ env.GCP_PROJECT_ID }}/secrets/YOUTUBE_REFRESH_TOKEN:latest,ELEVENLABS_API_KEY=projects/${{ env.GCP_PROJECT_ID }}/secrets/ELEVENLABS_API_KEY:latest,OPENAI_API_KEYS=projects/${{ env.GCP_PROJECT_ID }}/secrets/OPENAI_API_KEYS:latest,GEMINI_API_KEY=projects/${{ env.GCP_PROJECT_ID }}/secrets/GEMINI_API_KEY:latest,NEWSAPI_API_KEY=projects/${{ env.GCP_PROJECT_ID }}/secrets/NEWSAPI_API_KEY:latest,PEXELS_API_KEY=projects/${{ env.GCP_PROJECT_ID }}/secrets/PEXELS_API_KEY:latest,ELEVENLABS_VOICE_ID=projects/${{ env.GCP_PROJECT_ID }}/secrets/ELEVENLABS_VOICE_ID:latest"
-
-      - name: 🌐 Invoke Cloud Function (Scheduled Run) # 배포된 Cloud Function 호출
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-        run: |
-          FUNCTION_URL=$(gcloud functions describe ${{ env.FUNCTION_NAME }} \
-            --region=${{ env.REGION }} \
-            --format="value(serviceConfig.uri)")
-          echo "✅ Cloud Function URL: $FUNCTION_URL"
-          
-          curl -X POST \
-            -H "Content-Type: application/json" \
-            -d '{"daily_run": true}' \
-              "${FUNCTION_URL}"
-
-      - name: ⬆️ Upload output artifacts # 결과물(아티팩트) 업로드
-        uses: actions/upload-artifact@v4
-        with:
-          name: generated-shorts-output # 아티팩트 이름
-          path: ./output # 업로드할 디렉토리 경로 (이 디렉토리가 존재하고 파일이 생성되어야 함)
-          retention-days: 7 # 아티팩트 보관 기간 (7일)
-
-      - name: List root directory contents # 디버깅용 (루트 폴더 내용 확인)
-        run: ls -l ./
-      - name: List src directory contents # 디버깅용 (src 폴더 내용 확인)
-        run: ls -l src/
-      - name: List src/fonts directory contents # 디버깅용 (src/fonts 폴더 내용 확인)
-        run: ls -l src/fonts/ || echo "src/fonts directory not found or empty."
+    - name: 'Deploy to Cloud Run'
+      run: |
+        gcloud run deploy ${{ env.SERVICE_NAME }} \
+          --image ${REGION}-docker.pkg.dev/${PROJECT_ID}/${SERVICE_NAME}-repo/${SERVICE_NAME}:${{ github.sha }} \
+          --region ${{ env.REGION }} \
+          --platform managed \
+          --allow-unauthenticated \
+          --cpu 1 \
+          --memory 2048Mi \
+          --timeout 540 \
+          --service-account 94662874801-compute@developer.gserviceaccount.com \
+          --set-env-vars GCP_BUCKET_NAME=${{ env.PROJECT_ID }}_cloudbuild,GCP_PROJECT_ID=${{ env.PROJECT_ID }},LOG_EXECUTION_ID=true \
+          --set-secrets \
+            ELEVENLABS_API_KEY=projects/${{ env.PROJECT_ID }}/secrets/ELEVENLABS_API_KEY:latest,\
+            ELEVENLABS_VOICE_ID=projects/${{ env.PROJECT_ID }}/secrets/ELEVENLABS_VOICE_ID:latest,\
+            GEMINI_API_KEY=projects/${{ env.PROJECT_ID }}/secrets/GEMINI_API_KEY:latest,\
+            NEWSAPI_API_KEY=projects/${{ env.PROJECT_ID }}/secrets/NEWSAPI_API_KEY:latest,\
+            OPENAI_API_KEYS=projects/${{ env.PROJECT_ID }}/secrets/OPENAI_API_KEYS:latest,\
+            PEXELS_API_KEY=projects/${{ env.PROJECT_ID }}/secrets/PEXELS_API_KEY:latest,\
+            YOUTUBE_CLIENT_ID=projects/${{ env.PROJECT_ID }}/secrets/YOUTUBE_CLIENT_ID:latest,\
+            YOUTUBE_CLIENT_SECRET=projects/${{ env.PROJECT_ID }}/secrets/YOUTUBE_CLIENT_SECRET:latest,\
+            YOUTUBE_REFRESH_TOKEN=projects/${{ env.PROJECT_ID }}/secrets/YOUTUBE_REFRESH_TOKEN:latest
