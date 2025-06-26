@@ -47,15 +47,13 @@ jobs:
             exit 1
           fi
 
-      # --- 수정 시작: FFmpeg 바이너리 실행 권한 부여 ---
-      - name: ⚙️ Set execute permissions for ffmpeg binaries # FFmpeg 및 FFprobe에 실행 권한 부여
-        run: |
-          chmod +x src/bin/ffmpeg
-          chmod +x src/bin/ffprobe
-        # 참고: 이 스텝은 src/bin 디렉토리에 바이너리가 존재할 때만 의미가 있습니다.
-        # 바이너리가 없으면 "No such file or directory" 에러가 발생할 수 있습니다.
-        # 따라서, src/bin/ffmpeg 및 src/bin/ffprobe 파일이 리포지토리에 반드시 존재해야 합니다.
-      # --- 수정 끝: FFmpeg 바이너리 실행 권한 부여 ---
+      # --- 수정: FFmpeg 바이너리 실행 권한 부여 스텝 제거 (Dockerfile이 처리) ---
+      # 이전에 있었던 chmod +x 스텝은 이제 Dockerfile이 ffmpeg을 설치하므로 필요 없습니다.
+      # - name: ⚙️ Set execute permissions for ffmpeg binaries
+      #   run: |
+      #     chmod +x src/bin/ffmpeg
+      #     chmod +x src/bin/ffprobe
+      # --- 수정 끝 ---
 
       - name: 🔐 Authorize GCP Service Account # GCP 서비스 계정 인증
         id: auth
@@ -69,7 +67,7 @@ jobs:
       - name: ☁️ Set up gcloud CLI # gcloud CLI(명령어 도구) 설정
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: 🚀 Deploy Cloud Function # Cloud Function 배포
+      - name: 🚀 Deploy Cloud Function # Cloud Function 배포 (Dockerfile을 자동으로 사용하여 빌드 및 배포)
         run: |
           gcloud functions deploy ${{ env.FUNCTION_NAME }} \
             --runtime=python311 \
@@ -85,25 +83,25 @@ jobs:
             --set-env-vars="GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }},GCP_BUCKET_NAME=youtube-fully-automated_cloudbuild" \
             --set-secrets="YOUTUBE_CLIENT_ID=projects/${{ env.GCP_PROJECT_ID }}/secrets/YOUTUBE_CLIENT_ID:latest,YOUTUBE_CLIENT_SECRET=projects/${{ env.GCP_PROJECT_ID }}/secrets/YOUTUBE_CLIENT_SECRET:latest,YOUTUBE_REFRESH_TOKEN=projects/${{ env.GCP_PROJECT_ID }}/secrets/YOUTUBE_REFRESH_TOKEN:latest,ELEVENLABS_API_KEY=projects/${{ env.GCP_PROJECT_ID }}/secrets/ELEVENLABS_API_KEY:latest,OPENAI_API_KEYS=projects/${{ env.GCP_PROJECT_ID }}/secrets/OPENAI_API_KEYS:latest,GEMINI_API_KEY=projects/${{ env.GCP_PROJECT_ID }}/secrets/GEMINI_API_KEY:latest,NEWSAPI_API_KEY=projects/${{ env.GCP_PROJECT_ID }}/secrets/NEWSAPI_API_KEY:latest,PEXELS_API_KEY=projects/${{ env.GCP_PROJECT_ID }}/secrets/PEXELS_API_KEY:latest,ELEVENLABS_VOICE_ID=projects/${{ env.GCP_PROJECT_ID }}/secrets/ELEVENLABS_VOICE_ID:latest"
 
-      - name: 🌐 Invoke Cloud Function (Scheduled Run)
+      - name: 🌐 Invoke Cloud Function (Scheduled Run) # 배포된 Cloud Function 호출
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         run: |
           FUNCTION_URL=$(gcloud functions describe ${{ env.FUNCTION_NAME }} \
             --region=${{ env.REGION }} \
             --format="value(serviceConfig.uri)")
           echo "✅ Cloud Function URL: $FUNCTION_URL"
-
+          
           curl -X POST \
             -H "Content-Type: application/json" \
             -d '{"daily_run": true}' \
               "${FUNCTION_URL}"
 
-      - name: ⬆️ Upload output artifacts
+      - name: ⬆️ Upload output artifacts # 결과물(아티팩트) 업로드
         uses: actions/upload-artifact@v4
         with:
-          name: generated-shorts-output
-          path: ./output
-          retention-days: 7
+          name: generated-shorts-output # 아티팩트 이름
+          path: ./output # 업로드할 디렉토리 경로 (이 디렉토리가 존재하고 파일이 생성되어야 함)
+          retention-days: 7 # 아티팩트 보관 기간 (7일)
 
       - name: List src directory contents # 디버깅용 (src 폴더 내용 확인)
         run: ls -l src/
