@@ -47,7 +47,7 @@ try:
     from .config import Config
     from .youtube_uploader import upload_video
     from .ai_manager import generate_niche_content
-    from .tts_generator import generate_tts_audio
+    from tts_generator import generate_tts_audio
     from .video_creator import create_short_video
     from .video_editor import edit_video_for_shorts
     from .bg_downloader import download_background_video
