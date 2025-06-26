@@ -1,11 +1,7 @@
-# src/requirements.txt
-
-# Cloud Function 핵심 및 웹 프레임워크
-functions-framework==3.4.0 # Cloud Function 진입점 및 HTTP 트리거 핸들링
-Flask==2.3.3             # ⭐ 수정: functions-framework와의 호환성을 위해 Flask 버전을 2.x대로 낮춥니다.
-                         # functions-framework 3.4.0은 flask<3.0, >=1.0을 요구합니다.
-gunicorn
-gevent
+# Cloud Run 웹 프레임워크 및 WSGI 서버
+Flask==2.3.3              # functions-framework와 호환성을 위해 Flask 2.x대 유지
+gunicorn==22.0.0          # WSGI HTTP 서버
+gevent==22.10.2           # 비동기 처리를 위한 gunicorn 워커 (선택 사항이지만 안정성 향상)
 
 # Google Cloud 서비스 연동
 google-cloud-secret-manager==2.24.0 # GCP Secret Manager 접근
@@ -19,22 +15,16 @@ google-auth-oauthlib==1.2.0 # OAuth2 인증 지원 (YouTube Data API 인증 흐�
 
 # AI 및 미디어 처리
 openai==1.35.13 # OpenAI API 클라이언트 (GPT-4o 사용)
-elevenlabs==1.2.0 # ⭐ 확인: ElevenLabs TTS API 클라이언트 버전. tts_generator.py 코드와 호환되는 버전으로 설정.
+elevenlabs==1.2.0 # ElevenLabs TTS API 클라이언트
 moviepy==1.0.3 # 동영상 편집 (FFmpeg 필요)
 imageio-ffmpeg==0.4.9 # MoviePy가 FFmpeg 바이너리와 통신하기 위한 인터페이스
-Pillow==10.3.0 # 이미지 처리 (MoviePy 등에서 내부적으로 사용될 수 있음)
-pydub==0.25.1 # 오디오 처리 (FFmpeg 필요, TTS 결과물 처리 등에 사용될 수 있음)
+Pillow==10.3.0 # 이미지 처리
+pydub==0.25.1 # 오디오 처리 (FFmpeg 필요)
 
 # 기타 API 및 유틸리티
 newsapi-python==0.2.7 # NewsAPI 클라이언트
-requests==2.32.3 # HTTP 요청 (Pexels API 직접 호출 등 범용적으로 사용)
-python-slugify==8.0.4 # URL 친화적인 슬러그 생성 (선택 사항, 필요시 유지)
+requests==2.32.3 # HTTP 요청
+python-slugify==8.0.4 # URL 친화적인 슬러그 생성
 
-# 참고: 현재 코드에서 사용되지 않는 다음 라이브러리들은 제거되어 배포 크기를 최적화했습니다.
-# flask-pymongo
-# beautifulsoup4
-# python-dotenv
-# python-json-logger
-# numpy
-# pandas
-# setuptools
+# functions-framework는 Cloud Run에서는 필요하지 않습니다. (Cloud Functions에서만 사용)
+# 제거되었습니다.
