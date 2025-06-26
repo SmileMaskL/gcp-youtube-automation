@@ -40,7 +40,7 @@ jobs:
             
             2. GCP Workload Identity Provider '속성 조건(Attribute Condition)'에 설정할 CEL 조건문:
             attribute.sub == '${subClaim}'
-            (이 줄 전체를 GCP Workload Identity Provider '제공업체 수정' > '속성 조건' 필드에 복사/붙여넣기 하세요. 따옴표 포함.)
+            (이 줄 전체를 GCP Workload Identity Provider '제공업체 수정' > '속성 조건' 필드에 복사/붙여넣기 하세요. **반드시 작은따옴표 포함**.)
             
             3. GCP Workload Identity Provider '대상 (Audience)' URL:
             (이 URL은 GCP 콘솔에서 직접 복사하여 아래 'audience' 파라미터에 붙여넣어야 합니다.)
