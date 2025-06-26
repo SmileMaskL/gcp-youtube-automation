@@ -2,7 +2,7 @@
 
 import os
 import logging
-from elevenlabs import ElevenLabs # 변경: ElevenLabs 클라이언트 임포트
+from elevenlabs import play, generate, Voice, save # ElevenLabs 라이브러리의 올바른 함수와 클래스 임포트
 from elevenlabs.types import Voice, VoiceSettings # Voice, VoiceSettings는 그대로 유지
 
 logger = logging.getLogger(__name__)
