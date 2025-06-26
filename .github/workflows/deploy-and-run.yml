@@ -30,7 +30,7 @@ jobs:
         with:
           # ⚠️ Workload Identity Provider 이름을 GCP 콘솔과 정확히 일치시키세요!
           # 예: projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1
-          workload_identity_provider: 'projects/94662874801/locations/global/workloadIdentityPools/github-actions-poo/providers/github-provider-v1'
+          workload_identity_provider: 'projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1'
           service_account: '94662874801-compute@developer.gserviceaccount.com' # 당신의 서비스 계정
 
       - name: 'Terraform 초기화 및 적용'
