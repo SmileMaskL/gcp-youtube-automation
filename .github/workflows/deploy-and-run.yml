@@ -1,3 +1,5 @@
+# 수정된 파일: .github/workflows/deploy-and-run.yml
+
 name: Deploy and Run YouTube Shorts Automation
 
 on:
@@ -22,27 +24,6 @@ jobs:
     steps:
       - name: '코드 체크아웃'
         uses: 'actions/checkout@v4'
-
-      # --- ⭐️⭐️⭐️ GitHub OIDC 토큰 직접 가져오기 및 디코딩 스텝 ⭐️⭐️⭐️ ---
-      - name: 'GitHub OIDC 토큰 직접 가져오기 및 클레임 확인 (디버그용)'
-        id: 'github_oidc_token'
-        uses: 'actions/github-script@v7' # GitHub API와 상호작용
-        with:
-          script: |
-            const token = await core.getIDToken('https://token.actions.githubusercontent.com'); // GitHub OIDC Audience URL
-            core.setOutput('token', token);
-            console.log('Raw GitHub OIDC Token:', token); // 원본 토큰 출력
-            // 토큰을 디코딩하여 클레임 출력
-            const base64Url = token.split('.')[1];
-            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-            const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
-                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-            }).join(''));
-            const claims = JSON.parse(jsonPayload);
-            console.log('Decoded GitHub OIDC Token Claims:', claims); // 디코딩된 클레임 출력
-            // 'sub' 클레임 값을 별도의 출력으로 저장
-            core.setOutput('sub_claim', claims.sub);
-      # --- ⭐️⭐️⭐️ 여기까지입니다! ⭐️⭐️⭐️ ---
 
       - name: 'Google Cloud 인증'
         id: 'auth'
