@@ -1,27 +1,12 @@
-# Cloud Run 웹 프레임워크 및 WSGI 서버
-Flask==3.0.2              
-gunicorn==22.0.0          # WSGI HTTP 서버
-# gevent는 제거된 상태 유지 (이전 문제 해결)
-
-# Google Cloud 서비스 연동
-google-cloud-secret-manager==2.24.0 # GCP Secret Manager 접근
-google-cloud-storage==2.16.0 # GCP Cloud Storage 접근
-google-generativeai==0.8.5 # Google Gemini API 클라이언트
-google-api-python-client==2.136.0 # YouTube Data API v3
-
-# Google 인증 관련
-google-auth==2.29.0 # Google API 인증
-google-auth-oauthlib==1.2.0 # OAuth2 인증 지원
-
-# AI 및 미디어 처리
-openai==1.35.13 # OpenAI API 클라이언트 (GPT-4o 사용)
-elevenlabs==1.2.0 # ElevenLabs TTS API 클라이언트
-moviepy==1.0.3 # 동영상 편집 (FFmpeg 필요)
-imageio-ffmpeg==0.4.9 # MoviePy가 FFmpeg 바이너리와 통신하기 위한 인터페이스
-Pillow==10.3.0 # 이미지 처리
-pydub==0.25.1 # 오디오 처리 (FFmpeg 필요)
-
-# 기타 API 및 유틸리티
-newsapi-python==0.2.7 # NewsAPI 클라이언트
-requests==2.32.3 # HTTP 요청
-python-slugify==8.0.4 # URL 친화적인 슬러그 생성
+Flask==3.0.2
+gunicorn
+# 아래 라이브러리들은 실제 YouTube Shorts 생성 로직을 추가할 때 주석을 해제하고 설치합니다.
+# google-cloud-storage==2.10.0
+# google-api-python-client==2.95.0
+# google-auth-httplib2==0.1.0
+# google-auth-oauthlib==1.0.0
+# elevenlabs==0.2.14
+# openai==1.3.5
+# google-generativeai==0.3.0
+# newsapi-python==0.2.7
+# pexels-api-wrapper==0.1.0
