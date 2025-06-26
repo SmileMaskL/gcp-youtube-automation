@@ -33,13 +33,14 @@ jobs:
       - name: ✅ Checkout Repository # 리포지토리 체크아웃 (코드를 가져옴)
         uses: actions/checkout@v4
 
-      - name: 🐍 Set up Python # Python 환경 설정 (이 단계는 Dockerfile 사용 시 엄밀히 필요 없지만, 로컬 테스트나 Pipfile 등의 경우를 위해 유지 가능)
+      - name: 🐍 Set up Python # Python 환경 설정 (이 단계는 Dockerfile 사용 시 엄밀히 필요 없지만, 로컬 테스트나 린팅 등을 위해 유지 가능)
         uses: actions/setup-python@v5
         with:
           python-version: '3.11' # 사용할 Python 버전 지정
 
       - name: 📦 Install dependencies (for local testing/linting) # GitHub Actions 환경에서 의존성 설치 (Dockerfile이 실제 배포용 컨테이너에 설치)
         run: |
+          # 🚨 중요: src/requirements.txt의 경로가 올바른지 확인
           if [ -f src/requirements.txt ]; then
             pip install -r src/requirements.txt
           else
@@ -61,10 +62,11 @@ jobs:
 
       - name: 🚀 Deploy Cloud Function # Cloud Function 배포 (Dockerfile을 자동으로 사용하여 빌드 및 배포)
         run: |
+          # 🚨 중요: Dockerfile이 src/ 안에 있으므로 --source=./src 유지
           gcloud functions deploy ${{ env.FUNCTION_NAME }} \
             --runtime=python311 \
             --region=${{ env.REGION }} \
-            --source=. \
+            --source=./src \
             --entry-point=trigger_youtube_upload \
             --trigger-http \
             --allow-unauthenticated \
@@ -99,5 +101,5 @@ jobs:
         run: ls -l ./
       - name: List src directory contents # 디버깅용 (src 폴더 내용 확인)
         run: ls -l src/
-      - name: List fonts directory contents # 디버깅용 (fonts 폴더 내용 확인)
-        run: ls -l fonts/ || echo "fonts directory not found or empty."
+      - name: List src/fonts directory contents # 디버깅용 (src/fonts 폴더 내용 확인)
+        run: ls -l src/fonts/ || echo "src/fonts directory not found or empty."
