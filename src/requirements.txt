@@ -1,5 +1,5 @@
 # Cloud Run 웹 프레임워크 및 WSGI 서버
-Flask==3.0.2              # ⭐ 수정: Flask 버전을 3.0.2로 올렸습니다!
+Flask==3.0.2              
 gunicorn==22.0.0          # WSGI HTTP 서버
 # gevent는 제거된 상태 유지 (이전 문제 해결)
 
