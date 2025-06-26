@@ -57,7 +57,7 @@ jobs:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }} # GitHub Secrets에 저장된 WIF 제공자 ID
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }} # GitHub Secrets에 저장된 서비스 계정 이메일
           token_format: "access_token"
-          audience: "https://iam.googleapis.com/projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1"
+          # audience 필드를 제거했습니다. google-github-actions/auth 액션이 workload_identity_provider를 기반으로 자동으로 구성합니다.
 
       - name: ☁️ Set up gcloud CLI # gcloud CLI(명령어 도구) 설정
         uses: google-github-actions/setup-gcloud@v2
