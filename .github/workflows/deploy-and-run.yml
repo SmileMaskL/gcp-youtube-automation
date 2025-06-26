@@ -52,23 +52,12 @@ jobs:
         id: auth # 이 단계의 ID
         uses: google-github-actions/auth@v2 # Google 제공 GitHub Actions 인증 액션 사용
         with:
-          # 워크로드 아이덴티티 연동(Workload Identity Federation, WIF) 설정을 사용합니다.
-          # 이는 GitHub Actions가 GCP 리소스에 안전하게 접근하는 방식입니다.
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }} # GitHub Secrets에 저장된 WIF 제공자 ID
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }} # GitHub Secrets에 저장된 서비스 계정 이메일
           token_format: "access_token"
-          # ⭐⭐⭐ 이 부분이 가장 중요합니다! ⭐⭐⭐
-          # 여기에 'audience' 파라미터가 절대 없어야 합니다.
-          # google-github-actions/auth@v2는 workload_identity_provider를 사용하면
-          # 올바른 audience (https://token.actions.githubusercontent.com)를 자동으로 설정합니다.
-          # 만약 여기에 'audience: https://iam.googleapis.com/...' 같은 라인이 있다면 삭제하세요!
-          # 혹은 'audience: ${{ env.GCP_PROJECT_ID }}' 같은 라인도 삭제해야 합니다.
-          # 단순히 'audience:'만 있는 경우도 제거해야 합니다.
-          # 아래는 올바른 'with' 설정 예시입니다.
-          # with:
-          #   workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
-          #   service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
-          #   token_format: "access_token"
+          # ⭐⭐⭐ 가장 중요합니다! ⭐⭐⭐
+          # 여기에 'audience' 파라미터를 명시적으로 추가하여 GitHub Action이 올바른 Audience를 요청하도록 강제합니다.
+          audience: 'https://token.actions.githubusercontent.com'
 
       - name: ☁️ Set up gcloud CLI # gcloud CLI(명령어 도구) 설정
         uses: google-github-actions/setup-gcloud@v2
