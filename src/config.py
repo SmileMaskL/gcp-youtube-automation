@@ -1,7 +1,4 @@
-# src/config.py
-
 import os
-from google.cloud import secretmanager
 import logging
 import json
 
@@ -10,71 +7,62 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 
 class Config:
-    def __init__(self, project_id=None, bucket_name=None, env_vars=None):
+    def __init__(self, project_id=None, bucket_name=None):
+        # 환경 변수를 직접 읽어옵니다. Cloud Run이 Secret Manager의 값을 여기에 주입합니다.
         self.project_id = project_id if project_id else os.getenv("GCP_PROJECT_ID")
         self.bucket_name = bucket_name if bucket_name else os.getenv("GCP_BUCKET_NAME")
 
         if not self.project_id:
             logger.error("GCP_PROJECT_ID 환경 변수가 설정되지 않았습니다.")
             raise ValueError("GCP_PROJECT_ID 환경 변수를 설정해야 합니다.")
-
-        self.secret_manager_client = secretmanager.SecretManagerServiceClient()
-        self.project_path = f"projects/{self.project_id}"
-
+        
+        # ElevenLabs Voice ID는 환경 변수에서 기본값을 제공합니다.
         self.elevenlabs_voice_id = os.getenv("ELEVENLABS_VOICE_ID", "21m00Tcm4FnGU8l8FGzN")
 
-        self.env_vars = env_vars if env_vars else {}
-        self.load_env_vars()
+        # OpenAI API 키는 쉼표로 구분된 문자열로 환경 변수에 있을 것으로 예상합니다.
+        # 이를 리스트로 변환합니다.
+        openai_keys_str = os.getenv("OPENAI_API_KEYS", "")
+        self._openai_api_keys = [key.strip() for key in openai_keys_str.split(',') if key.strip()]
+        if not self._openai_api_keys:
+            logger.warning("OPENAI_API_KEYS 환경 변수가 설정되지 않았거나 비어 있습니다.")
 
-    def load_env_vars(self):
-        pass
+        # AI 모델 선택을 위한 기본값 (필요에 따라 변경)
+        self.default_ai_model_content = os.getenv("DEFAULT_AI_MODEL_CONTENT", "gemini") 
+        self.default_ai_model_summary = os.getenv("DEFAULT_AI_MODEL_SUMMARY", "openai") 
 
-    def _access_secret(self, secret_id):
-        """Secret Manager에서 특정 시크릿의 최신 버전을 가져옵니다."""
-        secret_name = f"{self.project_path}/secrets/{secret_id}/versions/latest"
-        try:
-            response = self.secret_manager_client.access_secret_version(request={"name": secret_name})
-            payload = response.payload.data.decode("UTF-8")
-            logger.info(f"Secret '{secret_id}' 로드 성공.")
-            return payload
-        except Exception as e:
-            logger.error(f"Secret '{secret_id}' 로드 실패: {e}", exc_info=True)
-            # E501 해결: 줄 길이를 79자 이하로 맞춤
-            raise ValueError(f"Secret '{secret_id}'를 가져올 수 없습니다. "
-                             f"권한 및 존재 여부를 확인하세요.")
+        # YouTube 관련 기본 설정
+        self.youtube_category_id = os.getenv("YOUTUBE_CATEGORY_ID", "28") # 예: 뉴스 & 정치
+        self.video_resolutions = {"shorts": (1080, 1920)} # 쇼츠 해상도
+        self.max_video_duration_seconds = 59 # 쇼츠 최대 길이
 
+        logger.info("Config 객체 초기화 완료. 환경 변수를 사용합니다.")
+
+    # Secret Manager에서 직접 가져오는 대신, 이미 환경 변수로 주입된 값을 반환합니다.
     def get_youtube_client_id(self):
-        return self._access_secret("YOUTUBE_CLIENT_ID")
+        return os.getenv("YOUTUBE_CLIENT_ID")
 
     def get_youtube_client_secret(self):
-        return self._access_secret("YOUTUBE_CLIENT_SECRET")
+        return os.getenv("YOUTUBE_CLIENT_SECRET")
 
     def get_youtube_refresh_token(self):
-        return self._access_secret("YOUTUBE_REFRESH_TOKEN")
+        return os.getenv("YOUTUBE_REFRESH_TOKEN")
 
     def get_elevenlabs_api_key(self):
-        return self._access_secret("ELEVENLABS_API_KEY")
+        return os.getenv("ELEVENLABS_API_KEY")
 
     def get_openai_api_keys(self):
-        """OPENAI_API_KEYS 시크릿에서 JSON 형태의 여러 OpenAI API 키를 가져옵니다."""
-        keys_json_str = self._access_secret("OPENAI_API_KEYS")
-        try:
-            keys = json.loads(keys_json_str)
-            if not isinstance(keys, list):
-                raise TypeError("OPENAI_API_KEYS 시크릿은 JSON 배열 형태여야 합니다.")
-            logger.info(f"OPENAI_API_KEYS에서 {len(keys)}개의 키 로드 완료.")
-            return keys
-        except (json.JSONDecodeError, TypeError) as e:
-            logger.error(f"OPENAI_API_KEYS 시크릿 파싱 실패: {e}", exc_info=True)
-            # E501 해결: 줄 길이를 79자 이하로 맞춤
-            raise ValueError("OPENAI_API_KEYS 시크릿 내용이 올바른 JSON 배열 형식이 아닙니다.")
+        # 이미 __init__에서 처리했으므로 저장된 리스트 반환
+        return self._openai_api_keys
 
     def get_gemini_api_key(self):
-        return self._access_secret("GEMINI_API_KEY")
+        return os.getenv("GEMINI_API_KEY")
 
     def get_newsapi_api_key(self):
-        return self._access_secret("NEWSAPI_API_KEY")
+        return os.getenv("NEWSAPI_API_KEY")
 
     def get_pexels_api_key(self):
-        return self._access_secret("PEXELS_API_KEY")
-    
+        return os.getenv("PEXELS_API_KEY")
+
+    def get_elevenlabs_voice_id(self):
+        # 이미 __init__에서 환경 변수 기본값과 함께 로드
+        return self.elevenlabs_voice_id
