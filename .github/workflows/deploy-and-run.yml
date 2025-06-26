@@ -34,6 +34,15 @@ jobs:
           # !!! GCP Workload Identity Provider의 '대상 (Audience)' 필드와 정확히 일치해야 합니다 !!!
           audience: 'https://iam.googleapis.com/projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1'
 
+      - name: 'OIDC 토큰 클레임 출력 (디버그용)'
+        run: |
+          ID_TOKEN=$(step_output=$(jq -r '.id_token' ${{ steps.auth.outputs.credentials_file_path }}); echo $ID_TOKEN)
+          echo "Full ID Token:"
+          echo $ID_TOKEN
+          echo "Decoded ID Token (Claims):"
+          echo $ID_TOKEN | awk -F'.' '{print $2}' | base64 -d 2>/dev/null | jq .
+        shell: bash
+
       - name: 'Terraform 설치 및 설정'
         uses: 'hashicorp/setup-terraform@v3'
         with:
