@@ -25,35 +25,17 @@ jobs:
       - name: '코드 체크아웃'
         uses: 'actions/checkout@v4'
 
-      # --- ⭐️⭐️⭐️ 중요: GCP Audience URL 및 SUB 클레임 값 확인 스텝 ⭐️⭐️⭐️ ---
+      # --- ⭐️⭐️⭐️ 중요: GCP Audience URL 및 SUB 클레임 값 확인 스텝 (가장 안전한 버전) ⭐️⭐️⭐️ ---
       # 이 스텝은 정확한 정보를 얻기 위한 디버그용입니다.
       # 이 스텝의 출력을 확인하고 GCP 설정을 마친 후에는 이 스텝을 제거할 수 있습니다.
       - name: 'GCP Workload Identity Provider Audience URL 및 GitHub OIDC SUB 클레임 값 출력'
         id: 'debug-output'
         uses: actions/github-script@v7
         with:
+          # 스크립트가 단일 라인으로 작성되어 YAML 파싱 오류를 최소화합니다.
+          # 모든 공백은 중요하므로 절대 변경하지 마세요.
           script: |
-            const githubOidcToken = await core.getIDToken('https://token.actions.githubusercontent.com');
-            const tokenPayload = JSON.parse(Buffer.from(githubOidcToken.split('.')[1], 'base64').toString('utf-8'));
-            const subClaim = tokenPayload.sub;
-
-            core.info(`
-            ⭐️⭐️⭐️ 중요 정보 확인 ⭐️⭐️⭐️
-            --------------------------------------------------------------------------------------------------
-            1. GitHub Actions에서 생성된 OIDC 토큰의 'sub' 클레임 값:
-            ${subClaim}
-            (이 값을 GCP Workload Identity Provider의 '액세스 권한 부여' > '속성 값' 필드에 입력하세요. 따옴표 없이.)
-
-            2. GCP Workload Identity Provider '속성 조건(Attribute Condition)'에 설정할 CEL 조건문:
-            attribute.sub == "${subClaim}"
-            (이 줄 전체를 GCP Workload Identity Provider '제공업체 수정' > '속성 조건' 필드에 복사/붙여넣기 하세요. 따옴표 포함.)
-
-            3. GCP Workload Identity Provider '대상 (Audience)' URL:
-            (이 URL은 GCP 콘솔에서 직접 복사하여 아래 'audience' 파라미터에 붙여넣어야 합니다.)
-            예시: https://iam.googleapis.com/projects/YOUR_PROJECT_NUMBER/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1
-            --------------------------------------------------------------------------------------------------
-            `);
-            core.setOutput('sub_claim_value', subClaim); # 다음 스텝에서 사용할 수도 있음 (여기서는 주로 출력용)
+            try { const githubOidcToken = await core.getIDToken('https://token.actions.githubusercontent.com'); const tokenPayload = JSON.parse(Buffer.from(githubOidcToken.split('.')[1], 'base64').toString('utf-8')); const subClaim = tokenPayload.sub; core.info(`\n⭐️⭐️⭐️ 중요 정보 확인 ⭐️⭐️⭐️\n--------------------------------------------------------------------------------------------------\n1. GitHub Actions에서 생성된 OIDC 토큰의 'sub' 클레임 값:\n${subClaim}\n(이 값을 GCP Workload Identity Provider의 '액세스 권한 부여' > '속성 값' 필드에 입력하세요. 따옴표 없이.)\n\n2. GCP Workload Identity Provider '속성 조건(Attribute Condition)'에 설정할 CEL 조건문:\nattribute.sub == "${subClaim}"\n(이 줄 전체를 GCP Workload Identity Provider '제공업체 수정' > '속성 조건' 필드에 복사/붙여넣기 하세요. 따옴표 포함.)\n\n3. GCP Workload Identity Provider '대상 (Audience)' URL:\n(이 URL은 GCP 콘솔에서 직접 복사하여 아래 'audience' 파라미터에 붙여넣어야 합니다.)\n예시: https://iam.googleapis.com/projects/YOUR_PROJECT_NUMBER/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1\n--------------------------------------------------------------------------------------------------\n`); core.setOutput('sub_claim_value', subClaim); } catch (error) { core.setFailed(`GitHub OIDC 토큰 추출 또는 출력 중 오류 발생: ${error.message}`); console.error(error); }
       # --- ⭐️⭐️⭐️ 여기까지입니다! ⭐️⭐️⭐️ ---
 
       - name: 'Google Cloud 인증'
