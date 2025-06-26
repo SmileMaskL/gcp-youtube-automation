@@ -2,7 +2,7 @@
 
 # Cloud Function 핵심 및 웹 프레임워크
 functions-framework==3.4.0 # Cloud Function 진입점 및 HTTP 트리거 핸들링
-Flask==3.0.2 # HTTP 요청 및 응답 처리를 위한 Flask (functions-framework가 내부적으로 사용)
+Flask==2.3.3 # HTTP 요청 및 응답 처리를 위한 Flask (functions-framework가 내부적으로 사용)
 
 # Google Cloud 서비스 연동
 google-cloud-secret-manager==2.24.0 # GCP Secret Manager 접근
