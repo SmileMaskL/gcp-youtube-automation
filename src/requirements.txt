@@ -1,7 +1,7 @@
 # Cloud Run 웹 프레임워크 및 WSGI 서버
-Flask==2.3.3              # functions-framework와 호환성을 위해 Flask 2.x대 유지
+Flask==2.3.3              # Flask 2.x대는 안정적이며, 대부분의 라이브러리와 호환됩니다.
 gunicorn==22.0.0          # WSGI HTTP 서버
-gevent==22.10.2           # 비동기 처리를 위한 gunicorn 워커 (선택 사항이지만 안정성 향상)
+gevent==22.10.2           # gunicorn의 비동기 워커. 안정성 향상을 위해 명시적으로 추가.
 
 # Google Cloud 서비스 연동
 google-cloud-secret-manager==2.24.0 # GCP Secret Manager 접근
@@ -25,6 +25,3 @@ pydub==0.25.1 # 오디오 처리 (FFmpeg 필요)
 newsapi-python==0.2.7 # NewsAPI 클라이언트
 requests==2.32.3 # HTTP 요청
 python-slugify==8.0.4 # URL 친화적인 슬러그 생성
-
-# functions-framework는 Cloud Run에서는 필요하지 않습니다. (Cloud Functions에서만 사용)
-# 제거되었습니다.
