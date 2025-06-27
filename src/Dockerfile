@@ -2,6 +2,12 @@
 # Python 3.11 Slim 이미지 사용 (경량)
 FROM python:3.11-slim-buster
 
+# ffmpeg 설치 (moviepy 사용을 위해 필수)
+# Cloud Run 환경에서 필요한 패키지들을 설치합니다.
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    --no-install-recommends && rm -rf /var/lib/apt/lists/*
+
 # 작업 디렉토리 설정
 WORKDIR /app
 
