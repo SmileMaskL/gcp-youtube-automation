@@ -21,11 +21,14 @@ jobs:
     timeout-minutes: 30 # 최대 30분 허용 (영상 생성 및 업로드 시간 고려)
     permissions:
       contents: 'read'
-      id-token: 'write' # OIDC 토큰 발급 필수 (Google Cloud 인증용)
-      actions: 'write'  # GitHub Actions API 사용 권한
-      # audience는 이제 id-token 하위가 아닌 별도 설정으로 이동
-    env:
-      WORKLOAD_IDENTITY_AUDIENCE: "https://iam.googleapis.com/projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v2"
+      # --- 수정된 부분 시작 ---
+      # GitHub Actions가 발행하는 OIDC ID 토큰의 'aud' (audience) 클레임을 명시적으로 설정합니다.
+      # 이 값은 GCP 워크로드 아이덴티티 풀 제공업체의 '대상' (allowed audiences)과 정확히 일치해야 합니다.
+      # 이전에 'YOUR_PROJECT_NUMBER'가 토큰에 포함되던 문제를 해결합니다.
+      actions: write # 이 줄은 기존에 없었다면 추가합니다.
+      id-token:
+        audience: "https://iam.googleapis.com/projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v2"
+      # --- 수정된 부분 끝 ---
 
     steps:
     - name: Checkout code
@@ -95,7 +98,7 @@ jobs:
         # GCP 인증 토큰을 사용하여 Cloud Run 서비스에 안전하게 호출합니다.
         # Cloud Run 서비스가 Public (allow-unauthenticated)이 아니라면 이 토큰이 필수입니다.
         # 현재 --allow-unauthenticated 플래그를 사용했으므로 이론적으로는 토큰 없이도 가능하지만,
-        # 보안을 위해 토큰을 사용하는 것이 좋습니다.
+        # 보안을 위해 토oken을 사용하는 것이 좋습니다.
         CALL_TOKEN=$(gcloud auth print-identity-token)
         curl -X POST "${{ env.SERVICE_URL }}" \
              -H "Content-Type: application/json" \
