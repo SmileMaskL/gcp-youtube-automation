@@ -5,12 +5,11 @@ import logging
 from flask import Flask, request, jsonify
 
 # 필요한 모듈 임포트
-# .을 사용하여 현재 패키지 내의 모듈을 임포트합니다.
 from .content_generator import generate_content_and_script
 from .tts_generator import generate_tts_audio
 from .video_creator import create_youtube_video
 from .youtube_uploader import YouTubeUploader # YouTubeUploader 클래스 임포트
-from .cleanup_manager import cleanup_local_files # 임시 파일 정리
+from .utils import cleanup_local_files # 임시 파일 정리를 위한 유틸리티 함수
 
 app = Flask(__name__)
 
@@ -25,30 +24,32 @@ def handle_request():
     """
     try:
         request_json = request.get_json(silent=True)
-        action = request_json.get('action', 'default_action') # 'action' 필드 없으면 기본값
+        # 기본 액션은 'create_and_upload_shorts'로 설정
+        action = request_json.get('action', 'create_and_upload_shorts') 
 
         logging.info(f"Received action: {action}")
 
         # 모든 필요한 환경 변수 로드
+        # Secret Manager에서 직접 가져오는 대신, GitHub Actions에서 Cloud Run으로 환경 변수로 전달됨
         project_id = os.environ.get('GCP_PROJECT_ID')
-        bucket_name = os.environ.get('GCP_BUCKET_NAME')
+        bucket_name = os.environ.get('GCP_BUCKET_NAME') # 현재 코드에서는 사용되지 않지만, 필요 시 GCS 활용
         elevenlabs_api_key = os.environ.get('ELEVENLABS_API_KEY')
         elevenlabs_voice_id = os.environ.get('ELEVENLABS_VOICE_ID')
         gemini_api_key = os.environ.get('GEMINI_API_KEY')
         news_api_key = os.environ.get('NEWS_API_KEY')
-        openai_api_keys_str = os.environ.get('OPENAI_API_KEYS')
+        openai_api_keys_str = os.environ.get('OPENAI_API_KEYS') # 쉼표로 구분된 문자열로 받음
         pexels_api_key = os.environ.get('PEXELS_API_KEY')
         youtube_client_id = os.environ.get('YOUTUBE_CLIENT_ID')
         youtube_client_secret = os.environ.get('YOUTUBE_CLIENT_SECRET')
         youtube_refresh_token = os.environ.get('YOUTUBE_REFRESH_TOKEN')
-        
+        # GCP_PROJECT_NUMBER는 Secret Manager에서 사용될 수 있지만, 현재는 main.py에서 직접 사용하지 않음
+
         # OpenAI API 키는 여러 개일 수 있으므로 쉼표로 분리하여 리스트로 만듭니다.
         openai_api_keys = [key.strip() for key in openai_api_keys_str.split(',') if key.strip()] if openai_api_keys_str else []
-
+        
         # 필수 환경 변수 누락 확인
         required_env_vars = {
             'GCP_PROJECT_ID': project_id,
-            'GCP_BUCKET_NAME': bucket_name,
             'ELEVENLABS_API_KEY': elevenlabs_api_key,
             'ELEVENLABS_VOICE_ID': elevenlabs_voice_id,
             'GEMINI_API_KEY': gemini_api_key,
@@ -65,11 +66,14 @@ def handle_request():
             logging.error(error_msg)
             return jsonify({'error': error_msg}), 500
 
+        # 임시 파일 경로를 저장할 리스트
+        temp_files_to_clean = []
+
         if action == 'create_and_upload_shorts':
             logging.info("Starting YouTube Shorts content generation and upload process...")
             
             # 1. 콘텐츠 및 스크립트 생성 (Gemini 및 News API 활용)
-            content_data = generate_content_and_script(gemini_api_key, news_api_key)
+            content_data = generate_content_and_script(gemini_api_key, news_api_key, openai_api_keys)
             title = content_data.get('title', "AI Generated Shorts")
             description = content_data.get('description', "Daily AI generated shorts content.")
             script = content_data.get('script', "Hello, welcome to AI Shorts.")
@@ -77,20 +81,20 @@ def handle_request():
 
             # 2. TTS 오디오 생성 (ElevenLabs API 활용)
             audio_file_path = generate_tts_audio(script, elevenlabs_api_key, elevenlabs_voice_id)
+            if audio_file_path:
+                temp_files_to_clean.append(audio_file_path)
 
             # 3. 비디오 생성 (Pexels API 및 기타 유틸리티 활용)
-            # video_creator 모듈에서 필요한 인자를 전달
             video_file_path = create_youtube_video(
                 pexels_api_key, 
                 audio_file_path, 
                 keywords # 비디오 생성에 키워드가 필요하다면 전달
-                # 추가 필요한 인자 여기에 전달
             )
             
             if not video_file_path or not os.path.exists(video_file_path):
                 logging.error("Video creation failed or video file does not exist.")
-                cleanup_local_files([audio_file_path]) # 오디오 파일만 정리
                 return jsonify({'error': 'Video creation failed'}), 500
+            temp_files_to_clean.append(video_file_path)
 
             # 4. YouTube에 비디오 업로드
             uploader = YouTubeUploader(youtube_client_id, youtube_client_secret, youtube_refresh_token)
@@ -99,7 +103,7 @@ def handle_request():
                 title,
                 description,
                 keywords,
-                privacy_status="private" # 처음에는 비공개로 업로드하여 검토
+                privacy_status="private" # 처음에는 비공개로 업로드하여 검토 권장
             )
             
             if uploaded_video_id:
@@ -127,12 +131,11 @@ def handle_request():
         return jsonify({'error': f'Internal server error: {str(e)}'}), 500
     finally:
         # 항상 임시 파일 정리 (오류 발생 여부와 관계없이)
-        # 생성될 수 있는 모든 임시 파일 경로를 cleanup_local_files 함수에 전달하도록 합니다.
-        # 실제 사용 시에는 이 리스트를 동적으로 관리해야 합니다.
-        # 예: cleanup_local_files([audio_file_path, video_file_path])
-        # 현재는 이 finally 블록에서 정확한 경로를 알 수 없으므로, 각 단계에서 실패 시 정리 로직을 포함하거나,
-        # cleanup_manager.py가 특정 디렉토리의 임시 파일을 주기적으로 정리하도록 구현하는 것이 좋습니다.
-        pass 
+        if temp_files_to_clean:
+            logging.info(f"Cleaning up {len(temp_files_to_clean)} temporary files...")
+            cleanup_local_files(temp_files_to_clean)
+        else:
+            logging.info("No temporary files to clean up.")
 
 if __name__ == '__main__':
     # Cloud Run 환경이 아닌 로컬에서 Flask 앱을 실행할 때 사용
