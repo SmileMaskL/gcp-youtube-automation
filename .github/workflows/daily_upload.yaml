@@ -41,7 +41,7 @@ jobs:
         # YOUR_POOL_ID는 보통 "github-actions-pool"
         # YOUR_PROVIDER_ID는 보통 "github-provider-v1" 또는 "github-provider"
         # 이 부분이 GCP 콘솔에 설정된 이름과 정확히 일치해야 합니다.
-        workload_identity_provider: 'projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1'
+        workload_identity_provider: 'projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v2'
         # 이 워크플로우가 GCP 리소스에 접근할 때 사용할 서비스 계정
         service_account: 'github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com'
 
