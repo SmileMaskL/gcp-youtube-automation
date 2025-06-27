@@ -29,6 +29,7 @@ jobs:
       with:
         workload_identity_provider: "projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v2"
         service_account: "github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com"
+        audience: "https://iam.googleapis.com/projects/YOUR_PROJECT_NUMBER/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v2"
 
     - name: Set up Google Cloud SDK
       uses: google-github-actions/setup-gcloud@v2
