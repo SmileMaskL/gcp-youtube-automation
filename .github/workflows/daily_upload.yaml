@@ -9,7 +9,7 @@ on:
 env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   GCP_BUCKET_NAME: ${{ secrets.GCP_BUCKET_NAME }}
-  GCP_REGION: asia-northeast3 # Cloud Run 서비스를 배포할 GCP 리전 (실제 리전으로 변경 필요)
+  GCP_REGION: us-central1 # Cloud Run 서비스를 배포할 GCP 리전 (실제 리전으로 변경 필요)
   # GitHub 사용자 이름과 리포지토리 이름을 여기에 직접 지정하여 워크로드 아이덴티티 제휴 속성 조건과 일치시킵니다.
   # 예를 들어, 사용자 이름이 'SmileMaskL'이고 리포지토리 이름이 'gcp-youtube-automation'이라면 다음과 같이 설정합니다.
   GH_REPOSITORY_OWNER: SmileMaskL
