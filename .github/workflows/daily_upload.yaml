@@ -22,6 +22,10 @@ jobs:
     permissions:
       contents: 'read'
       id-token: 'write' # OIDC 토큰 발급 필수 (Google Cloud 인증용)
+      actions: 'write'  # GitHub Actions API 사용 권한
+      # audience는 이제 id-token 하위가 아닌 별도 설정으로 이동
+    env:
+      WORKLOAD_IDENTITY_AUDIENCE: "https://iam.googleapis.com/projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v2"
 
     steps:
     - name: Checkout code
@@ -36,14 +40,12 @@ jobs:
       id: 'auth'
       uses: 'google-github-actions/auth@v2'
       with:
-        # 워크로드 아이덴티티 풀 및 제공업체 정보는 여기에 직접 명시
-        # projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/YOUR_POOL_ID/providers/YOUR_PROVIDER_ID
-        # YOUR_POOL_ID는 보통 "github-actions-pool"
-        # YOUR_PROVIDER_ID는 GCP 콘솔에 설정된 "github-provider-v2"와 정확히 일치해야 합니다.
-        workload_identity_provider: "projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v2"
+        # 이 `workload_identity_provider` 값은 GCP에서 정의한 공급업체의 전체 리소스 이름입니다.
+        # GitHub Secret에 저장된 `GCP_PROJECT_NUMBER`를 사용합니다.
+        workload_identity_provider: 'projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v2'
         # 이 워크플로우가 GCP 리소스에 접근할 때 사용할 서비스 계정
         # GitHub Secret에 'GCP_SERVICE_ACCOUNT'라는 이름으로 저장된 값을 사용합니다.
-        service_account: "github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com"
+        service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }} 
 
     - name: Set up Google Cloud SDK
       uses: google-github-actions/setup-gcloud@v2
