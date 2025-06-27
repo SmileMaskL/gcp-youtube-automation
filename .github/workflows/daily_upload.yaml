@@ -33,7 +33,7 @@ jobs:
       with:
         # workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
         # service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
-        workload_identity_provider: 'projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1'
+        workload_identity_provider: 'projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v2'
         service_account: 'github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com'
 
     - name: Set Google Application Credentials for Python
