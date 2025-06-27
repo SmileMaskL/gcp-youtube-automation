@@ -1,14 +1,20 @@
+# .github/workflows/daily_upload.yaml
 name: Daily YouTube Shorts Upload
 
 on:
   schedule:
-    - cron: '0 3,7,12,18,22 * * *'  # 하루 5회 실행
-  workflow_dispatch:
+    - cron: '0 3,7,12,18,22 * * *'  # 하루 5회 실행 (UTC 기준)
+  workflow_dispatch: # 수동 실행을 허용
+
+env:
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GCP_BUCKET_NAME: ${{ secrets.GCP_BUCKET_NAME }}
+  GCP_REGION: asia-northeast3 # Cloud Run 서비스를 배포할 GCP 리전
 
 jobs:
   generate-and-upload:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 30 # 최대 30분 허용 (영상 생성 및 업로드 시간 고려)
     permissions:
       contents: 'read'
       id-token: 'write' # OIDC 토큰 발급 필수 (Google Cloud 인증용)
@@ -17,39 +23,58 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5 # 최신 버전으로 변경 (v4도 가능)
-      with:
-        python-version: '3.11'
-
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r src/requirements.txt
-
-    - name: Authenticate to Google Cloud
+    - name: 'Authenticate to Google Cloud'
       id: 'auth' # ID 추가
       uses: 'google-github-actions/auth@v2'
       with:
-        # workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-        # service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
-        workload_identity_provider: 'projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v2'
+        # 워크로드 아이덴티티 풀 및 제공업체 정보는 여기에 직접 명시
+        workload_identity_provider: 'projects/${{ env.GCP_PROJECT_ID }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v1'
+        # 이 워크플로우가 GCP 리소스에 접근할 때 사용할 서비스 계정
         service_account: 'github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com'
 
-    - name: Set Google Application Credentials for Python
-      # `auth` 스텝에서 생성된 임시 서비스 계정 키 파일의 경로를 환경 변수로 설정합니다.
-      # 이 환경 변수는 Python의 google-auth 라이브러리가 기본 인증 정보를 찾는 데 사용됩니다.
-      run: |
-        echo "GOOGLE_APPLICATION_CREDENTIALS=${{ steps.auth.outputs.credentials_file_path }}" >> $GITHUB_ENV
+    - name: Set up Google Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
 
-    - name: Run YouTube Automation
-      env:
-        # Secret Manager를 통해 가져오므로, 여기에 직접 API 키를 환경 변수로 노출하지 않습니다.
-        # GCP_PROJECT_ID와 GCP_BUCKET_NAME만 필요하다면 여기에 추가할 수 있습니다.
-        GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-        GCP_BUCKET_NAME: ${{ secrets.GCP_BUCKET_NAME }}
+    - name: Configure Docker for Google Container Registry
+      run: gcloud auth configure-docker
+
+    - name: Build and Deploy Cloud Run Service
+      # 이 단계에서 src/ 폴더의 Dockerfile을 사용하여 컨테이너 이미지를 빌드하고 Cloud Run에 배포합니다.
+      # Cloud Run 서비스 이름은 youtube-shorts-automation으로 지정합니다.
       run: |
-        # `src/config.py`에서 Secret Manager를 통해 API 키를 가져오도록 설계되어 있다면
-        # 여기서는 추가적인 환경 변수를 설정할 필요가 없습니다.
-        # main.py에서 config.py의 Config 객체가 초기화될 때 Secret Manager 클라이언트가 사용됩니다.
-        python -m src.main
+        gcloud run deploy youtube-shorts-automation \
+          --source ./src \
+          --platform managed \
+          --region ${{ env.GCP_REGION }} \
+          --allow-unauthenticated \
+          --service-account github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com \
+          --set-env-vars \
+            GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }},\
+            GCP_BUCKET_NAME=${{ env.GCP_BUCKET_NAME }},\
+            ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }},\
+            ELEVENLABS_VOICE_ID=${{ secrets.ELEVENLABS_VOICE_ID }},\
+            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }},\
+            NEWS_API_KEY=${{ secrets.NEWS_API_KEY }},\
+            OPENAI_API_KEYS=${{ secrets.OPENAI_API_KEYS }},\
+            PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }},\
+            YOUTUBE_CLIENT_ID=${{ secrets.YOUTUBE_CLIENT_ID }},\
+            YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }},\
+            YOUTUBE_REFRESH_TOKEN=${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+        
+        # Cloud Run 서비스 URL 가져오기
+        SERVICE_URL=$(gcloud run services describe youtube-shorts-automation \
+                      --platform managed \
+                      --region ${{ env.GCP_REGION }} \
+                      --format="value(status.url)")
+        
+        echo "Cloud Run service URL: $SERVICE_URL"
+        echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_ENV
+
+    - name: Invoke Cloud Run Service
+      # 배포된 Cloud Run 서비스를 호출하여 콘텐츠 생성 및 업로드 작업을 시작합니다.
+      # 이 호출은 HTTP POST 요청이어야 하며, 필요한 페이로드를 전달합니다.
+      run: |
+        curl -X POST "${{ env.SERVICE_URL }}" \
+             -H "Content-Type: application/json" \
+             -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
+             -d '{"action": "create_and_upload_shorts"}'
