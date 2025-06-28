@@ -1,6 +1,7 @@
 Flask
 gunicorn
 google-cloud-storage # GCS를 통해 파일을 업로드/다운로드할 경우 필요
+google-cloud-logging # Cloud Logging 사용 시
 google-auth
 google-auth-oauthlib
 google-api-python-client
