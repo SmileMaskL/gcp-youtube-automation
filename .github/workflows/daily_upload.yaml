@@ -1,43 +1,122 @@
+# .github/workflows/daily_upload.yaml
+# 이 워크플로우는 이미 배포된 Cloud Run 서비스를 호출하여 매일 YouTube 쇼츠를 생성하고 업로드합니다.
+# 서비스 배포는 deploy-and-run.yml 워크플로우에서 담당합니다.
+
 name: Daily YouTube Shorts Upload
 
 on:
   schedule:
-    - cron: '0 3,7,12,18,22 * * *'  # UTC 기준 하루 5회
-  workflow_dispatch:
+    # UTC 기준, 매일 3시, 7시, 12시, 18시, 22시에 실행 (하루 5회)
+    # 이 스케줄은 Cloud Run의 무료 한도를 고려하여 설정되었습니다.
+    # 더 자주 실행하려면 '0 */4 * * *' (4시간마다) 등으로 변경할 수 있습니다.
+    - cron: '0 3,7,12,18,22 * * *'
+  workflow_dispatch: # 수동 실행 허용
 
 env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   GCP_PROJECT_NUMBER: ${{ secrets.GCP_PROJECT_NUMBER }}
-  GCP_REGION: asia-northeast3  # ⚠️ 반드시 한국 리전으로!
+  GCP_REGION: asia-northeast3 # Cloud Run 서비스를 배포할 GCP 리전 (deploy-and-run.yml과 통일)
+  SERVICE_ACCOUNT_EMAIL: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
 
 jobs:
   generate-and-upload:
     runs-on: ubuntu-latest
+    timeout-minutes: 30 # 최대 실행 시간 30분 설정 (무료 한도 내에서 적정)
     permissions:
       contents: 'read'
-      id-token: 'write'  # 🔑 자동문 키
+      id-token: 'write'  # OIDC 토큰 발급 필수
 
     steps:
-    - name: Checkout code
+    - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 1 # 저장소 전체 히스토리 대신 최신 커밋만 체크아웃
 
-    # ✅ 핵심! 자동문 센서로 인증
-    - name: Google Cloud 인증
+    - name: 'Google Cloud 인증 (Workload Identity)'
       id: auth
       uses: google-github-actions/auth@v2
       with:
+        # 워크로드 아이덴티티 풀과 프로바이더 경로를 env.GCP_PROJECT_NUMBER로 통일합니다.
         workload_identity_provider: "projects/${{ env.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01"
-        service_account: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
-        token_format: 'access_token'  # ✅ 로봇 전용 키
+        service_account: ${{ env.SERVICE_ACCOUNT_EMAIL }}
+        # ✅ 이 부분이 핵심: 액세스 토큰 자동 생성 요청
+        token_format: 'access_token'
+        access_token_lifetime: '600s' # 토큰 유효기간 10분 설정 (선택 사항이지만 권장)
 
-    - name: Set up Google Cloud SDK
+    - name: 'Google Cloud SDK 설정'
       uses: google-github-actions/setup-gcloud@v2
+      with:
+        project_id: ${{ env.GCP_PROJECT_ID }}
+        export_default_credentials: true # 기본 인증 정보 설정
 
-    # ✅ 자동문 키로 Cloud Run 호출
-    - name: Trigger Cloud Run
+    - name: 'Cloud Run 서비스 확인'
+      id: service_check
       run: |
-        SERVICE_URL="https://youtube-shorts-automation-94662874801.asia-northeast3.run.app"  # ⚠️ 당신의 URL로 변경!
-        curl -X POST "$SERVICE_URL" \
-          -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" \
+        # 서비스 상태 상세 확인
+        SERVICE_INFO=$(gcloud run services describe youtube-shorts-automation \
+          --platform managed \
+          --region ${{ env.GCP_REGION }} \
+          --format=json)
+        
+        # URL 추출
+        echo "SERVICE_URL=$(echo $SERVICE_INFO | jq -r '.status.url')" >> $GITHUB_ENV
+        
+        # 상태 확인
+        READY_STATUS=$(echo $SERVICE_INFO | jq -r '.status.conditions[] | select(.type=="Ready") | .status')
+        if [ "$READY_STATUS" != "True" ]; then
+          echo "::error::Cloud Run 서비스가 준비되지 않았습니다"
+          echo "::group::서비스 상태"
+          echo "$SERVICE_INFO" | jq .
+          echo "::endgroup::"
+          exit 1
+        fi
+        echo "✅ Cloud Run 서비스 정상 확인"
+
+    - name: 'YouTube 쇼츠 생성 및 업로드'
+      id: upload_shorts
+      run: |
+        # 요청 데이터 준비
+        REQUEST_BODY=$(cat <<EOF
+        {
+          "action": "create_and_upload_shorts",
+          "metadata": {
+            "workflow_run_id": "${{ github.run_id }}",
+            "trigger_time": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          }
+        }
+        EOF
+        )
+
+        echo "::group::요청 데이터"
+        echo "$REQUEST_BODY"
+        echo "::endgroup::"
+
+        # 서비스 호출 (타임아웃 300초 설정)
+        RESPONSE=$(curl --fail-with-body -sS -m 300 -X POST "${{ env.SERVICE_URL }}" \
           -H "Content-Type: application/json" \
-          -d '{"action": "create_and_upload_shorts"}'
+          -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" \
+          -d "$REQUEST_BODY") # ✅ 이 부분이 핵심 변경점입니다!
+
+        echo "::group::서비스 응답"
+        echo "$RESPONSE"
+        echo "::endgroup::"
+
+        # 응답 검증
+        if ! echo "$RESPONSE" | jq -e '.status == "success"' > /dev/null; then
+          echo "::error::서비스 응답 실패"
+          exit 1
+        fi
+
+        # 작업 ID 추출 (있는 경우)
+        JOB_ID=$(echo "$RESPONSE" | jq -r '.jobId // empty')
+        if [ -n "$JOB_ID" ]; then
+          echo "jobId=$JOB_ID" >> $GITHUB_OUTPUT
+        fi
+
+    - name: '결과 로깅'
+      if: always()
+      run: |
+        echo "=== 실행 결과 ==="
+        echo "워크플로우 상태: ${{ job.status }}"
+        echo "서비스 URL: ${{ env.SERVICE_URL }}"
+        echo "생성된 작업 ID: ${{ steps.upload_shorts.outputs.jobId || '없음' }}"
