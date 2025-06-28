@@ -29,4 +29,4 @@ ENV PORT 8080
 # --workers 1 : 단일 워커 (Cloud Run 인스턴스당 하나의 컨테이너 프로세스)
 # --timeout 0 : 요청 타임아웃을 무한대로 설정 (장시간 비동기 작업에 유용)
 # main:app : src/main.py 파일 내의 'app' Flask 인스턴스를 찾아 실행하라는 의미입니다.
-CMD exec gunicorn --bind :$PORT --workers 1 --timeout 0 main:app
+CMD exec gunicorn --bind :$PORT --workers 1 --timeout 0 main:app # ✅ 파일 이름이 app.py라면 app:app으로 변경해야 함
