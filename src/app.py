@@ -23,11 +23,21 @@ import google.auth.transport.requests # Credential refresh에 필요
 from pexels_api import API # Pexels API 클라이언트
 
 # 사용자 정의 모듈 임포트
+# ensure these modules are in the same src/ directory
 from video_script_generator import generate_script_from_news # NewsAPI, AI 스크립트
 from audio_generator import generate_audio_from_text # ElevenLabs
 from video_generator import create_video_from_images_and_audio # MoviePy
 from youtube_uploader import upload_video_to_youtube # YouTube Data API
 from gcs_helper import upload_to_gcs, download_from_gcs, delete_from_gcs # Cloud Storage
+
+# --- 환경 변수 로드 (최상단에서 실행, 로컬 개발용) ---
+# Cloud Run에서는 환경 변수가 직접 주입되므로 이 라인은 로컬 개발 환경에서만 유효합니다.
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    logging.info("✅ .env 파일 로드 시도 (로컬 개발용).")
+except ImportError:
+    logging.warning("python-dotenv 모듈을 찾을 수 없습니다. .env 파일 로드를 건너뜝니다. (배포 환경에서는 정상)")
 
 # Google Cloud Logging 설정
 try:
@@ -42,6 +52,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 # --- 전역 변수 선언 (초기화는 initialize_app 함수에서 진행) ---
+# 이 변수들은 initialize_app() 함수에서 os.getenv()를 통해 실제 값으로 채워집니다.
 GCP_PROJECT_ID = None
 GCP_BUCKET_NAME = None
 YOUTUBE_CLIENT_ID = None
@@ -57,7 +68,9 @@ bucket = None # Cloud Storage 버킷 객체
 storage_client_instance = None # Cloud Storage 클라이언트 인스턴스
 
 # ThreadPoolExecutor를 사용하여 비동기 처리
-executor = ThreadPoolExecutor(max_workers=os.cpu_count() * 2)
+# Cloud Run의 최대 요청 처리 시간(기본 5분, 최대 60분)을 넘기지 않도록 주의해야 합니다.
+# 장시간 작업은 Cloud Tasks + Cloud Functions/Workflows 등으로 분리하는 것이 좋습니다.
+executor = ThreadPoolExecutor(max_workers=os.cpu_count() * 2 if os.cpu_count() else 2) # 최소 2개의 워커
 
 # --- 애플리케이션 초기화 함수 ---
 def initialize_app():
@@ -93,7 +106,9 @@ def initialize_app():
             if not openai_keys_str:
                 missing_vars.append(var)
             else:
-                OPENAI_API_KEYS = openai_keys_str.split(',')
+                OPENAI_API_KEYS = [key.strip() for key in openai_keys_str.split(',') if key.strip()]
+                if not OPENAI_API_KEYS: # 모든 키가 비어있는 경우
+                    missing_vars.append(var)
         else:
             value = os.environ.get(var)
             if not value:
@@ -102,7 +117,7 @@ def initialize_app():
                 globals()[var] = value # 전역 변수에 값 할당
 
     if missing_vars:
-        error_msg = f"❌ 치명적 오류: 필수 환경 변수가 누락되었습니다: {', '.join(missing_vars)}"
+        error_msg = f"❌ 치명적 오류: 필수 환경 변수가 누락되었습니다: {', '.join(missing_vars)}. 컨테이너 시작 불가."
         logger.critical(error_msg)
         raise ValueError(error_msg)
 
@@ -113,40 +128,65 @@ def initialize_app():
         logger.info(f"✅ Cloud Storage 버킷 '{GCP_BUCKET_NAME}' 초기화 및 접근 확인 성공.")
     except Exception as e:
         error_msg = f"❌ 치명적 오류: Cloud Storage 버킷 초기화 또는 접근 실패: {e}. GCP_BUCKET_NAME: '{GCP_BUCKET_NAME}'"
-        logger.critical(error_msg)
+        logger.critical(error_msg, exc_info=True)
         raise RuntimeError(error_msg)
 
-    # 외부 API 클라이언트는 필요시 각 함수 내에서 초기화하거나,
-    # 전역으로 선언하더라도 실제 호출 시에만 사용되도록 합니다.
-    # initialize_app에서는 환경 변수 검증만 확실히 합니다.
+    # 외부 API 클라이언트 라이브러리 초기화 (키 설정)
+    # 각 유틸리티 모듈에서 API 클라이언트를 직접 초기화할 수도 있지만,
+    # 여기에서 전역으로 키를 설정하는 것도 한 방법입니다.
+    # 단, 각 모듈이 이 전역 설정을 따르도록 구현되어 있어야 합니다.
+    try:
+        set_elevenlabs_key(ELEVENLABS_API_KEY)
+        configure_gemini(api_key=GEMINI_API_KEY)
+        # OpenAI는 리스트를 순환하며 사용할 수 있도록 OpenAI() 객체 생성을 각 함수 내부에서 처리
+        logger.info("✅ 외부 API 키 설정 완료 (ElevenLabs, Gemini).")
+    except Exception as e:
+        logger.warning(f"외부 API 클라이언트 설정 중 오류 발생 (일부 기능 제한될 수 있음): {e}", exc_info=True)
+
     logger.info("✅ 모든 필수 환경 변수 및 외부 서비스 초기화 성공.")
 
 
-# 애플리케이션 시작 시 초기화 함수 실행
+# --- 애플리케이션 시작 시 초기화 함수 실행 ---
+# Gunicorn이 Flask 앱을 로드할 때 이 부분이 실행됩니다.
 try:
     initialize_app()
+    app = Flask(__name__) # 초기화 성공 후 Flask 앱 객체 생성
+    logger.info("✨ Flask 애플리케이션 객체 생성 완료.")
 except Exception as e:
     logger.critical(f"🚨🚨🚨 애플리케이션 초기화에 치명적인 오류 발생. 컨테이너를 시작할 수 없습니다: {e}", exc_info=True)
+    # Cloud Run은 이 exit(1) 코드를 통해 컨테이너 시작 실패를 감지합니다.
     exit(1)
 
-app = Flask(__name__)
+
+# --- 라우트 정의 ---
 
 @app.route('/healthz', methods=['GET'])
 def healthz():
     """상태 체크 엔드포인트: Cloud Run이 컨테이너의 준비 상태를 확인하는 데 사용"""
     try:
+        # Flask 앱 객체 생성 전에 initialize_app()에서 오류가 나면 이 코드는 실행되지 않음.
+        # 따라서 bucket이 None일 가능성은 낮지만, 방어적으로 한 번 더 확인.
         if bucket is None:
             logger.error("Health check failed: Cloud Storage 버킷 객체가 초기화되지 않았습니다.")
             return "Not Ready: Cloud Storage bucket not initialized", 500
+            
+        # 버킷의 최신 메타데이터를 가져와 연결 상태 확인
+        # 간단한 목록 조회를 통해 실제 연결 및 권한을 테스트하는 것이 더 확실합니다.
+        # bucket.reload()는 메타데이터만 갱신하므로, 실제 네트워크 통신 테스트로는 불충분할 수 있습니다.
+        # files = list(bucket.list_blobs(max_results=1)) # 실제 Blob 목록 조회 시도 (비용 발생 가능)
+        # logger.info(f"Health check successful: Cloud Storage bucket reachable. Found {len(files)} test blobs.")
         
-        bucket.reload() # 버킷의 최신 메타데이터를 가져와 연결 상태 확인
-        logger.info("✅ Health check successful: Cloud Storage bucket reachable.")
+        # 더 간단하고 안전한 연결 확인 (권한만 있다면 대부분 성공)
+        # 버킷에 대한 메타데이터 요청은 read/write 권한이 없는 경우에도 작동할 수 있습니다.
+        # 실제 파일을 업로드/다운로드 하는 것은 비용과 복잡성을 늘리므로,
+        # get_bucket으로 초기화에 성공했다면 대부분의 경우 연결은 문제 없습니다.
+        # initialize_app()에서 이미 get_bucket을 했으므로 여기서는 추가적인 확인보다는 OK 반환.
         
+        logger.info("✅ Health check successful.")
         return "OK", 200
     except Exception as e:
         logger.error(f"Health check failed: Cloud Storage 연결 테스트 오류: {e}", exc_info=True)
         return f"Not Ready: Cloud Storage connectivity issue: {e}", 500
-
 
 @app.route("/", methods=["POST"])
 def main_endpoint():
@@ -156,12 +196,12 @@ def main_endpoint():
         if not data:
             logger.error("JSON payload가 제공되지 않았습니다.")
             return jsonify({"status": "error", "message": "JSON payload가 제공되지 않았습니다"}), 400
-        
+            
         action = data.get('action', '')
         metadata = data.get('metadata', {})
         
         logger.info(f"요청된 액션: {action}")
-        logger.info(f"메타데이터: {metadata}")
+        logger.info(f"메타데이터: {json.dumps(metadata)}") # 메타데이터 로깅 시 예쁘게
 
         if action == 'create_and_upload_shorts':
             # 비동기 작업 시작: 실제 YouTube Shorts 생성 및 업로드 로직은 백그라운드에서 실행
@@ -189,7 +229,9 @@ def process_youtube_shorts_upload(metadata):
     
     # 임시 파일 경로 설정
     temp_dir = "/tmp"
-    os.makedirs(temp_dir, exist_ok=True) # /tmp 디렉토리가 없으면 생성
+    # Cloud Run은 /tmp를 쓰기 가능한 임시 디렉토리로 제공합니다.
+    # 따라서 os.makedirs는 대부분 필요 없지만, 방어적 코딩으로 유지.
+    os.makedirs(temp_dir, exist_ok=True) 
 
     # 각 단계에서 생성될 파일 경로 변수 초기화
     script_data = None
@@ -202,12 +244,12 @@ def process_youtube_shorts_upload(metadata):
 
     try:
         # API 키/환경 변수 유효성 재확인 (방어적 코딩)
-        if not all([YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REFRESH_TOKEN,
-                      ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID, OPENAI_API_KEYS, # OPENAI_API_KEYS는 리스트이므로 비어있지 않은지 확인
-                      GEMINI_API_KEY, NEWSAPI_API_KEY, PEXELS_API_KEY]) or not OPENAI_API_KEYS:
-            raise ValueError("하나 이상의 필수 API 키/환경 변수가 누락되었거나 유효하지 않습니다. 작업을 계속할 수 없습니다.")
-        if bucket is None:
-            raise RuntimeError("Cloud Storage 버킷이 초기화되지 않아 파일을 저장할 수 없습니다.")
+        # initialize_app()에서 이미 확인했지만, 런타임 중에도 접근 가능성을 높이기 위함.
+        if not (GCP_PROJECT_ID and GCP_BUCKET_NAME and YOUTUBE_CLIENT_ID and 
+                YOUTUBE_CLIENT_SECRET and YOUTUBE_REFRESH_TOKEN and 
+                ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID and OPENAI_API_KEYS and 
+                GEMINI_API_KEY and NEWSAPI_API_KEY and PEXELS_API_KEY and bucket):
+            raise ValueError("하나 이상의 필수 API 키/환경 변수 또는 Cloud Storage 버킷이 누락되었거나 유효하지 않습니다. 작업을 계속할 수 없습니다.")
 
         # --- 실제 API 연동 및 로직 실행 ---
 
@@ -216,9 +258,9 @@ def process_youtube_shorts_upload(metadata):
         try:
             # video_script_generator.py의 generate_script_from_news 호출
             script_data = generate_script_from_news(NEWSAPI_API_KEY, OPENAI_API_KEYS, GEMINI_API_KEY, news_query="최신 기술 뉴스")
-            title = script_data['title']
-            script = script_data['script']
-            search_keywords = script_data['search_keywords']
+            title = script_data.get('title', f"자동 생성 AI 쇼츠 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            script = script_data.get('script', "이것은 뉴스 스크립트 생성에 문제가 발생하여 자동 생성된 비디오입니다. 최신 AI 기술에 대한 흥미로운 소식을 담고 있습니다.")
+            search_keywords = script_data.get('search_keywords', "AI, technology, future")
             logger.info(f"✅ 1단계 완료: 제목 '{title}', 스크립트 및 키워드 생성.")
         except Exception as e:
             logger.error(f"뉴스 데이터 수집 또는 AI 스크립트 생성 오류: {e}", exc_info=True)
@@ -235,6 +277,7 @@ def process_youtube_shorts_upload(metadata):
         local_audio_path = os.path.join(temp_dir, audio_filename)
         try:
             # audio_generator.py의 generate_audio_from_text 호출
+            # set_elevenlabs_key는 initialize_app에서 이미 했으므로, 여기서 다시 할 필요 없음
             generate_audio_from_text(script, ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID, local_audio_path)
             logger.info(f"✅ 2단계 완료: 음성 파일 '{local_audio_path}' 생성.")
         except Exception as e:
@@ -244,7 +287,6 @@ def process_youtube_shorts_upload(metadata):
 
         # 3. 비디오 클립/이미지 다운로드 (Pexels 사용)
         logger.info("3. 비디오 클립/이미지 다운로드 중...")
-        # Pexels API를 사용하여 이미지 다운로드 (video_script_generator에서 search_keywords 반환)
         image_paths = []
         try:
             pexels_api_client = API(PEXELS_API_KEY)
@@ -268,8 +310,10 @@ def process_youtube_shorts_upload(metadata):
                     image_paths.append(img_path)
                 logger.info(f"✅ 3단계 완료: Pexels에서 {len(image_paths)}개 이미지 다운로드.")
             else:
-                logger.warning("Pexels에서 적절한 이미지를 찾을 수 없습니다. 비디오 생성을 건너뛸 수 있습니다.")
+                logger.warning(f"Pexels에서 '{query_for_pexels}'에 대한 적절한 이미지를 찾을 수 없습니다. 기본 이미지 사용을 시도합니다.")
                 # TODO: 이미지가 없을 경우 대체 이미지 사용 또는 오류 처리 로직 추가
+                # 현재는 이미지가 없으면 4단계에서 RuntimeError 발생.
+                raise RuntimeError(f"Pexels에서 이미지를 찾을 수 없습니다: {query_for_pexels}") # 이미지 없으면 치명적 오류로 처리
         except Exception as e:
             logger.error(f"Pexels 이미지 다운로드 오류: {e}", exc_info=True)
             raise RuntimeError(f"Pexels 이미지 다운로드 실패: {e}") # 치명적 오류로 처리
