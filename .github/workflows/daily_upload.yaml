@@ -10,7 +10,7 @@ on:
 env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   GCP_PROJECT_NUMBER: ${{ secrets.GCP_PROJECT_NUMBER }}
-  GCP_REGION: us-central1 # ✅ us-central1으로 통일
+  GCP_REGION: us-central1
   SERVICE_ACCOUNT_EMAIL: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com # 여러분의 서비스 계정 이메일 (예시)
   CLOUD_RUN_SERVICE_NAME: youtube-shorts-automation # Cloud Run 서비스 이름
 
@@ -26,12 +26,15 @@ jobs:
       id: auth
       uses: google-github-actions/auth@v2
       with:
-        # ✅ 여기! provider 이름이 'github-actions-provider-01'으로 변경되었습니다!
         workload_identity_provider: 'projects/${{ env.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01'
         service_account: ${{ env.SERVICE_ACCOUNT_EMAIL }}
 
     - name: 'gcloud CLI 설치 및 구성'
       uses: google-github-actions/setup-gcloud@v2
+
+    # ✅ 여기! 이 스텝을 추가하여 현재 인증된 계정을 확인합니다.
+    - name: '인증된 계정 확인'
+      run: gcloud auth list --format="value(account)"
 
     - name: 'Cloud Run 서비스 URL 가져오기'
       id: get_service_url
