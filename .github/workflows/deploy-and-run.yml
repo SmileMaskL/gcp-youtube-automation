@@ -9,15 +9,12 @@ on:
 
 env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  # GCP 프로젝트 번호 (Workload Identity Provider 경로에 사용됨)
-  GCP_PROJECT_NUMBER: ${{ secrets.GCP_PROJECT_NUMBER }} # << GitHub Secrets에 이 값을 추가해야 합니다!
+  GCP_PROJECT_NUMBER: ${{ secrets.GCP_PROJECT_NUMBER }} 
   GCP_BUCKET_NAME: ${{ secrets.GCP_BUCKET_NAME }}
   GCP_REGION: asia-northeast3 # Cloud Run 서비스를 배포할 GCP 리전
 
-  # GCP 실제 설정에 맞춰 Workload Identity Pool 및 Provider ID 명시 (매우 중요!)
-  # GCP 콘솔에서 확인한 정확한 Pool ID와 Provider ID를 사용합니다.
   WIF_POOL_ID: github-actions-pool 
-  WIF_PROVIDER_ID: github-actions-provider-01 # << 이 부분이 GCP 콘솔의 Provider ID와 정확히 일치해야 합니다!
+  WIF_PROVIDER_ID: github-actions-provider-01 
   SERVICE_ACCOUNT_EMAIL: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
 
 jobs:
@@ -37,15 +34,14 @@ jobs:
       with:
         # Workload Identity Provider 경로는 프로젝트 번호와 Pool ID, Provider ID가 정확히 일치해야 합니다.
         workload_identity_provider: "projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01"
-        # 서비스 계정 이메일 주소
         service_account: ${{ env.SERVICE_ACCOUNT_EMAIL }}
-        # audience는 일반적으로 서비스 계정 이메일 주소를 사용합니다.
-        audience: https://iam.googleapis.com/projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01
+        # audience는 GCP Workload Identity Provider의 기본 대상으로 설정합니다.
+        audience: "https://iam.googleapis.com/projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01"
 
     - name: Set up Google Cloud SDK
       uses: google-github-actions/setup-gcloud@v2
       with:
-        project_id: ${{ env.GCP_PROJECT_ID }} # setup-gcloud에도 프로젝트 ID를 전달합니다.
+        project_id: ${{ env.GCP_PROJECT_ID }}
 
     - name: Configure Docker for Google Container Registry
       run: gcloud auth configure-docker
@@ -53,8 +49,6 @@ jobs:
     - name: Build and Deploy Cloud Run Service
       id: deploy
       run: |
-        # Cloud Run 서비스 배포. Dockerfile을 기반으로 이미지를 빌드하고 배포합니다.
-        # 모든 필요한 Secret은 환경 변수로 Cloud Run 컨테이너에 전달됩니다.
         gcloud run deploy youtube-shorts-automation \
           --source ./src \
           --platform managed \
@@ -68,24 +62,23 @@ jobs:
             ELEVENLABS_VOICE_ID=${{ secrets.ELEVENLABS_VOICE_ID }},\
             GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }},\
             NEWS_API_KEY=${{ secrets.NEWS_API_KEY }},\
-            OPENAI_API_KEYS=${{ secrets.OPENAI_API_KEYS }},\
+            OPENAI_API_KEYS="${{ secrets.OPENAI_API_KEYS }}",\ # << 큰따옴표 추가
             PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }},\
             YOUTUBE_CLIENT_ID=${{ secrets.YOUTUBE_CLIENT_ID }},\
             YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }},\
-            YOUTUBE_REFRESH_TOKEN=${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+            YOUTUBE_REFRESH_TOKEN="${{ secrets.YOUTUBE_REFRESH_TOKEN }}" # << 큰따옴표 추가
         
-        # 배포된 서비스의 URL을 다음 스텝에서 사용하기 위해 출력
         SERVICE_URL=$(gcloud run services describe youtube-shorts-automation \
                       --platform managed \
                       --region ${{ env.GCP_REGION }} \
                       --format="value(status.url)")
         
         echo "Cloud Run service deployed at: $SERVICE_URL"
-        echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_ENV # 환경 변수로 등록하여 다음 스텝에서 사용
+        echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_ENV
 
     - name: Invoke Cloud Run Service for initial test (Optional)
       run: |
         curl -X POST "${{ env.SERVICE_URL }}" \
              -H "Content-Type: application/json" \
-             -d '{"action": "test_run"}' # 테스트용 액션
+             -d '{"action": "test_run"}'
       continue-on-error: true
