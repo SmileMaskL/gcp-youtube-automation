@@ -10,7 +10,7 @@ env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   GCP_PROJECT_NUMBER: ${{ secrets.GCP_PROJECT_NUMBER }}
   GCP_BUCKET_NAME: ${{ secrets.GCP_BUCKET_NAME }}
-  GCP_REGION: asia-northeast3
+  GCP_REGION: us-central1
   WIF_POOL_ID: github-actions-pool
   WIF_PROVIDER_ID: github-actions-provider-01
   SERVICE_ACCOUNT_EMAIL: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
