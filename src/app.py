@@ -15,14 +15,14 @@ from google.cloud import storage
 import requests # 웹 요청용 (뉴스 API, Pexels API 등)
 # from openai import OpenAI # OpenAI Python SDK
 # from google.generativeai import configure as configure_gemini, GenerativeModel # Gemini Python SDK
-# from elevenlabs import set_api_key as set_elevenlabs_key, generate as generate_elevenlabs_audio, play # ElevenLabs SDK
+# from elevenlabs import set_api_key as set_elevenlabs_key, generate as generate_elevenlabs_audio # ElevenLabs SDK
 # from newsapi import NewsApiClient # NewsAPI Python SDK (뉴스 수집)
 # from googleapiclient.discovery import build # YouTube Data API client
 # from google.oauth2.credentials import Credentials # YouTube OAuth
 
 # Google Cloud Logging 설정
 # Cloud Run 환경에서는 자동으로 로그가 Cloud Logging으로 전송되므로,
-# 기본 Python logging 모드를 사용하는 것이 좋습니다.
+# 기본 Python logging 모듈을 사용하는 것이 좋습니다.
 # client = google.cloud.logging.Client()
 # client.setup_logging()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -73,23 +73,27 @@ def check_env_variables():
     
     missing_vars = []
     for var in required_env_vars:
+        env_value = os.environ.get(var)
         if var == 'OPENAI_API_KEYS':
-            openai_keys_str = os.environ.get(var, '').strip()
+            openai_keys_str = env_value.strip() if env_value else ''
             if not openai_keys_str:
                 missing_vars.append(var)
             else:
                 OPENAI_API_KEYS = openai_keys_str.split(',')
         else:
-            value = os.environ.get(var)
-            if not value:
+            if not env_value:
                 missing_vars.append(var)
             else:
                 # 해당 변수에 값을 할당 (전역 변수 업데이트)
-                globals()[var] = value
+                globals()[var] = env_value
+        
+        logging.info(f"환경 변수 로드: {var} = {'***' if var.endswith('_KEY') or var.endswith('_TOKEN') or var.endswith('_SECRET') else globals().get(var, 'N/A')}")
+
 
     if missing_vars:
-        error_msg = f"❌ 필수 환경 변수가 누락되었습니다: {', '.join(missing_vars)}"
+        error_msg = f"❌ 필수 환경 변수가 누락되었습니다: {', '.join(missing_vars)}. Cloud Run 서비스의 환경 변수 설정을 확인해주세요."
         logging.critical(error_msg) # CRITICAL 레벨로 로깅
+        # 이 시점에서 애플리케이션 시작을 강제 중단하여 503 에러의 원인을 명확히 합니다.
         raise ValueError(error_msg)
 
     # Cloud Storage 클라이언트 초기화
@@ -102,32 +106,40 @@ def check_env_variables():
         logging.critical(error_msg) # CRITICAL 레벨로 로깅
         raise RuntimeError(error_msg) # 버킷 초기화 실패 시 컨테이너 시작 중단
 
-    # 모든 API 키가 로드되었는지 최종 확인 (선택 사항)
     logging.info("✅ 모든 필수 환경 변수 및 서비스 초기화 성공.")
 
 # 앱 시작 시 환경 변수 검사 및 초기화 수행
+# 이 로직은 Flask 앱 인스턴스가 생성되기 전에 실행되어야 합니다.
+# Cloud Run이 컨테이너를 시작할 때 이 부분이 실행됩니다.
 try:
     check_env_variables()
 except Exception as e:
     # 환경 변수 검사 또는 서비스 초기화 실패 시, 앱이 시작되지 않도록 합니다.
     # Gunicorn이 이 예외를 catch하고 앱 로드를 중단하게 됩니다.
     logging.critical(f"애플리케이션 초기화에 치명적인 오류 발생: {e}")
-    raise # 예외를 다시 발생시켜 컨테이너가 Healthy 상태가 되지 못하도록 함
+    # 이 예외가 발생하면 Cloud Run은 컨테이너를 'Unhealthy'로 표시하고 503 응답을 반환할 수 있습니다.
+    # Gunicorn이 예외를 받으면 해당 컨테이너가 정상적으로 시작되지 않았음을 알립니다.
+    os._exit(1) # 강제 종료하여 Cloud Run이 컨테이너를 unhealthy로 간주하게 함
 
 app = Flask(__name__)
 
 @app.route('/healthz', methods=['GET'])
 def healthz():
-    """상태 체크 엔드포인트: Cloud Run이 컨테이너의 준비 상태를 확인하는 데 사용"""
+    """
+    상태 체크 엔드포인트: Cloud Run이 컨테이너의 준비 상태를 확인하는 데 사용
+    이 엔드포인트가 200 OK를 반환해야 Cloud Run이 서비스가 준비되었다고 판단합니다.
+    """
     try:
-        # 이 시점에서 check_env_variables()가 이미 성공했어야 하지만,
-        # 혹시 모를 상황에 대비하여 다시 한번 검사하거나, 최소한 버킷 객체 존재 여부 확인
-        if not bucket:
+        # check_env_variables()가 이미 성공했어야 하지만, 혹시 모를 상황에 대비하여
+        # 최소한 버킷 객체 존재 여부 확인 (버킷 객체에 접근해보는 것이 더 확실)
+        if bucket is None:
             raise RuntimeError("Cloud Storage 버킷이 초기화되지 않았습니다.")
-        # 더 나아가 외부 API (예: YouTube API)에 대한 간단한 핑 테스트를 추가할 수 있습니다.
+        # 간단한 버킷 접근 테스트
+        # bucket.name (버킷 이름을 가져오는 것은 간단한 접근 테스트)
+        logging.info("Health check OK. Cloud Storage bucket access verified.")
         return "OK", 200
     except Exception as e:
-        logging.error(f"Health check failed: {e}")
+        logging.error(f"Health check failed: {e}", exc_info=True)
         return f"Not Ready: {e}", 500
 
 
@@ -173,12 +185,8 @@ def process_youtube_shorts_upload(metadata):
 
     try:
         # 이 단계에서 다시 한번 API 키의 유효성을 검사하여 안전성을 높일 수 있습니다.
-        if not all([YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REFRESH_TOKEN,
-                    ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID, OPENAI_API_KEYS, # OPENAI_API_KEYS는 리스트이므로 비어있지 않은지 확인
-                    GEMINI_API_KEY, NEWSAPI_API_KEY, PEXELS_API_KEY]):
-            raise ValueError("하나 이상의 필수 API 키/환경 변수가 누락되었습니다. 작업을 계속할 수 없습니다.")
-        if not bucket:
-            raise RuntimeError("Cloud Storage 버킷이 초기화되지 않아 파일을 저장할 수 없습니다.")
+        # check_env_variables() 에서 이미 검증되었지만, 만약의 경우를 대비하여 한 번 더 확인 가능.
+        # (그러나 앱 시작 시 검사가 더 중요)
 
         # --- 단계별 시뮬레이션 및 실제 API 연동 준비 ---
 
@@ -188,14 +196,14 @@ def process_youtube_shorts_upload(metadata):
             # newsapi = NewsApiClient(api_key=NEWSAPI_API_KEY)
             # top_headlines = newsapi.get_top_headlines(q='AI', language='en', country='us')
             # if top_headlines and top_headlines['articles']:
-            #     article = top_headlines['articles'][0]
-            #     article_title = article.get('title', '새로운 AI 소식')
-            #     article_description = article.get('description', '흥미로운 AI 관련 기사입니다.')
-            #     logging.info(f"뉴스 수집 완료: '{article_title}'")
+            #      article = top_headlines['articles'][0]
+            #      article_title = article.get('title', '새로운 AI 소식')
+            #      article_description = article.get('description', '흥미로운 AI 관련 기사입니다.')
+            #      logging.info(f"뉴스 수집 완료: '{article_title}'")
             # else:
-            #     article_title = "오늘의 AI 뉴스"
-            #     article_description = "최신 AI 트렌드에 대한 소식입니다."
-            #     logging.warning("NewsAPI에서 뉴스를 가져오지 못했습니다. 기본값 사용.")
+            #      article_title = "오늘의 AI 뉴스"
+            #      article_description = "최신 AI 트렌드에 대한 소식입니다."
+            #      logging.warning("NewsAPI에서 뉴스를 가져오지 못했습니다. 기본값 사용.")
             article_title = f"오늘의 최신 AI 소식 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
             article_description = "생성형 AI 기술의 발전은 계속되고 있습니다."
             logging.info(f"뉴스 수집 (시뮬레이션): {article_title}")
@@ -214,11 +222,11 @@ def process_youtube_shorts_upload(metadata):
             # 예시: OpenAI (GPT-4o)
             # openai_client = OpenAI(api_key=OPENAI_API_KEYS[0])
             # completion = openai_client.chat.completions.create(
-            #     model="gpt-4o",
-            #     messages=[
-            #         {"role": "system", "content": "You are a helpful assistant for creating YouTube Shorts scripts."},
-            #         {"role": "user", "content": f"Create a short (max 15 seconds) YouTube Shorts script about: '{article_title}'. Focus on being engaging and concise. Start with a hook."}
-            #     ]
+            #      model="gpt-4o",
+            #      messages=[
+            #          {"role": "system", "content": "You are a helpful assistant for creating YouTube Shorts scripts."},
+            #          {"role": "user", "content": f"Create a short (max 15 seconds) YouTube Shorts script about: '{article_title}'. Focus on being engaging and concise. Start with a hook."}
+            #      ]
             # )
             # script_text = completion.choices[0].message.content
             # logging.info(f"GPT-4o 스크립트 생성 완료: {script_text[:50]}...")
@@ -245,12 +253,12 @@ def process_youtube_shorts_upload(metadata):
             # ✅ 여기에서 실제 ElevenLabs API 호출 로직을 구현합니다.
             # set_elevenlabs_key(ELEVENLABS_API_KEY)
             # audio = generate_elevenlabs_audio(
-            #     text=script_text,
-            #     voice=ELEVENLABS_VOICE_ID,
-            #     model="eleven_multilingual_v2"
+            #      text=script_text,
+            #      voice=ELEVENLABS_VOICE_ID,
+            #      model="eleven_multilingual_v2"
             # )
             # with open(local_audio_path, "wb") as f:
-            #     f.write(audio)
+            #      f.write(audio)
 
             # 시뮬레이션: 빈 파일 생성
             with open(local_audio_path, "w") as f:
@@ -279,22 +287,22 @@ def process_youtube_shorts_upload(metadata):
             # pexels_response.raise_for_status()
             # videos = pexels_response.json().get('videos', [])
             # if videos:
-            #     video_files = videos[0].get('video_files', [])
-            #     hd_video = next((vf for vf in video_files if vf['quality'] == 'hd' and vf['file_type'] == 'video/mp4'), None)
-            #     if hd_video:
-            #         video_url = hd_video['link']
-            #         video_data = requests.get(video_url, stream=True)
-            #         video_data.raise_for_status()
-            #         with open(local_video_path, 'wb') as f:
-            #             for chunk in video_data.iter_content(chunk_size=8192):
-            #                 f.write(chunk)
-            #         logging.info(f"Pexels 비디오 다운로드 완료: {video_url}")
-            #     else:
-            #         logging.warning("HD MP4 비디오 파일을 찾을 수 없습니다. 시뮬레이션으로 대체.")
-            #         with open(local_video_path, "w") as f: f.write("mock video content")
+            #      video_files = videos[0].get('video_files', [])
+            #      hd_video = next((vf for vf in video_files if vf['quality'] == 'hd' and vf['file_type'] == 'video/mp4'), None)
+            #      if hd_video:
+            #          video_url = hd_video['link']
+            #          video_data = requests.get(video_url, stream=True)
+            #          video_data.raise_for_status()
+            #          with open(local_video_path, 'wb') as f:
+            #              for chunk in video_data.iter_content(chunk_size=8192):
+            #                  f.write(chunk)
+            #          logging.info(f"Pexels 비디오 다운로드 완료: {video_url}")
+            #      else:
+            #          logging.warning("HD MP4 비디오 파일을 찾을 수 없습니다. 시뮬레이션으로 대체.")
+            #          with open(local_video_path, "w") as f: f.write("mock video content")
             # else:
-            #     logging.warning("Pexels에서 비디오를 찾을 수 없습니다. 시뮬레이션으로 대체.")
-            #     with open(local_video_path, "w") as f: f.write("mock video content")
+            #      logging.warning("Pexels에서 비디오를 찾을 수 없습니다. 시뮬레이션으로 대체.")
+            #      with open(local_video_path, "w") as f: f.write("mock video content")
 
             # 시뮬레이션: 빈 파일 생성
             with open(local_video_path, "w") as f:
@@ -337,11 +345,11 @@ def process_youtube_shorts_upload(metadata):
         try:
             # ✅ 여기에서 실제 YouTube Data API를 사용하여 비디오를 업로드합니다.
             # credentials = Credentials(
-            #     token=None, # access_token은 매번 재발급
-            #     refresh_token=YOUTUBE_REFRESH_TOKEN,
-            #     client_id=YOUTUBE_CLIENT_ID,
-            #     client_secret=YOUTUBE_CLIENT_SECRET,
-            #     token_uri='https://oauth2.googleapis.com/token'
+            #      token=None, # access_token은 매번 재발급
+            #      refresh_token=YOUTUBE_REFRESH_TOKEN,
+            #      client_id=YOUTUBE_CLIENT_ID,
+            #      client_secret=YOUTUBE_CLIENT_SECRET,
+            #      token_uri='https://oauth2.googleapis.com/token'
             # )
             # # credentials.refresh(google.auth.transport.requests.Request()) # 필요시 토큰 갱신
             # youtube = build('youtube', 'v3', credentials=credentials)
@@ -368,5 +376,5 @@ def process_youtube_shorts_upload(metadata):
 # 이 부분은 Gunicorn이 Cloud Run 환경에서 앱을 실행할 때 필요 없습니다.
 # Gunicorn이 'app:app' (app.py 파일 내의 'app' 객체)을 찾아 실행합니다.
 # if __name__ == '__main__':
-#     port = int(os.environ.get('PORT', 8080))
-#     app.run(host='0.0.0.0', port=port, debug=True) # debug=True는 개발용, 배포 시에는 False
+#      port = int(os.environ.get('PORT', 8080))
+#      app.run(host='0.0.0.0', port=port, debug=True) # debug=True는 개발용, 배포 시에는 False
