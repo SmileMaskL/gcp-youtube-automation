@@ -7,12 +7,12 @@ on:
 
 env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  GCP_PROJECT_NUMBER: ${{ secrets.GCP_PROJECT_NUMBER }} # << GCP_PROJECT_NUMBER도 env에 추가 (deploy-and-run.yml과 통일)
+  GCP_PROJECT_NUMBER: ${{ secrets.GCP_PROJECT_NUMBER }} 
   GCP_BUCKET_NAME: ${{ secrets.GCP_BUCKET_NAME }}
-  GCP_REGION: asia-northeast3 # << deploy-and-run.yml과 통일 (필요 시 us-central1 유지)
+  GCP_REGION: asia-northeast3 # Cloud Run 서비스를 배포할 GCP 리전 (deploy-and-run.yml과 통일)
   GH_REPOSITORY_OWNER: SmileMaskL
   GH_REPOSITORY_NAME: gcp-youtube-automation
-  SERVICE_ACCOUNT_EMAIL: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com # << 서비스 계정 이메일 env에 추가
+  SERVICE_ACCOUNT_EMAIL: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
 
 jobs:
   generate-and-upload:
@@ -36,15 +36,14 @@ jobs:
       id: 'auth'
       uses: 'google-github-actions/auth@v2'
       with:
-        # Workload Identity Provider 경로를 deploy-and-run.yml과 동일하게 정확히 명시
         workload_identity_provider: "projects/${{ env.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01"
-        service_account: ${{ env.SERVICE_ACCOUNT_EMAIL }} # << env 변수 사용으로 통일
+        service_account: ${{ env.SERVICE_ACCOUNT_EMAIL }}
         audience: "https://iam.googleapis.com/projects/${{ env.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01"
 
     - name: Set up Google Cloud SDK
       uses: google-github-actions/setup-gcloud@v2
       with:
-        project_id: ${{ env.GCP_PROJECT_ID }} # setup-gcloud에도 프로젝트 ID를 전달합니다.
+        project_id: ${{ env.GCP_PROJECT_ID }}
 
     - name: Configure Docker for Google Container Registry
       run: gcloud auth configure-docker
@@ -52,24 +51,26 @@ jobs:
     - name: Build and Deploy Cloud Run Service
       id: deploy_cloud_run
       run: |
+        # 환경 변수 문자열을 미리 구성합니다.
+        ENV_VARS="GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }}"
+        ENV_VARS="${ENV_VARS},GCP_BUCKET_NAME=${{ env.GCP_BUCKET_NAME }}"
+        ENV_VARS="${ENV_VARS},ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }}"
+        ENV_VARS="${ENV_VARS},ELEVENLABS_VOICE_ID=${{ secrets.ELEVENLABS_VOICE_ID }}"
+        ENV_VARS="${ENV_VARS},GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}"
+        ENV_VARS="${ENV_VARS},NEWS_API_KEY=${{ secrets.NEWS_API_KEY }}"
+        ENV_VARS="${ENV_VARS},OPENAI_API_KEYS=\"${{ secrets.OPENAI_API_KEYS }}\"" # Secret 값은 이중 따옴표로 감쌈
+        ENV_VARS="${ENV_VARS},PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }}"
+        ENV_VARS="${ENV_VARS},YOUTUBE_CLIENT_ID=${{ secrets.YOUTUBE_CLIENT_ID }}"
+        ENV_VARS="${ENV_VARS},YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }}"
+        ENV_VARS="${ENV_VARS},YOUTUBE_REFRESH_TOKEN=\"${{ secrets.YOUTUBE_REFRESH_TOKEN }}\"" # Secret 값은 이중 따옴표로 감쌈
+        
         gcloud run deploy youtube-shorts-automation \
           --source ./src \
           --platform managed \
           --region ${{ env.GCP_REGION }} \
           --allow-unauthenticated \
           --service-account ${{ env.SERVICE_ACCOUNT_EMAIL }} \
-          --set-env-vars \
-            GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }},\
-            GCP_BUCKET_NAME=${{ env.GCP_BUCKET_NAME }},\
-            ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }},\
-            ELEVENLABS_VOICE_ID=${{ secrets.ELEVENLABS_VOICE_ID }},\
-            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }},\
-            NEWS_API_KEY=${{ secrets.NEWS_API_KEY }},\
-            OPENAI_API_KEYS="${{ secrets.OPENAI_API_KEYS }}",\ # << 큰따옴표 추가
-            PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }},\
-            YOUTUBE_CLIENT_ID=${{ secrets.YOUTUBE_CLIENT_ID }},\
-            YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }},\
-            YOUTUBE_REFRESH_TOKEN="${{ secrets.YOUTUBE_REFRESH_TOKEN }}" # << 큰따옴표 추가
+          --set-env-vars "$ENV_VARS" # 구성된 변수 전달 (이중 따옴표 필수)
         
         SERVICE_URL=$(gcloud run services describe youtube-shorts-automation \
                       --platform managed \
