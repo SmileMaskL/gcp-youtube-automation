@@ -9,8 +9,16 @@ on:
 
 env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  # GCP 프로젝트 번호 (Workload Identity Provider 경로에 사용됨)
+  GCP_PROJECT_NUMBER: ${{ secrets.GCP_PROJECT_NUMBER }} # << GitHub Secrets에 이 값을 추가해야 합니다!
   GCP_BUCKET_NAME: ${{ secrets.GCP_BUCKET_NAME }}
   GCP_REGION: asia-northeast3 # Cloud Run 서비스를 배포할 GCP 리전
+
+  # GCP 실제 설정에 맞춰 Workload Identity Pool 및 Provider ID 명시 (매우 중요!)
+  # GCP 콘솔에서 확인한 정확한 Pool ID와 Provider ID를 사용합니다.
+  WIF_POOL_ID: github-actions-pool 
+  WIF_PROVIDER_ID: github-actions-provider-01 # << 이 부분이 GCP 콘솔의 Provider ID와 정확히 일치해야 합니다!
+  SERVICE_ACCOUNT_EMAIL: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
 
 jobs:
   build-and-deploy:
@@ -27,12 +35,17 @@ jobs:
       id: 'auth'
       uses: 'google-github-actions/auth@v2'
       with:
-        workload_identity_provider: "projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01"
-        service_account: "github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com"
-        audience: "https://iam.googleapis.com/projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01"
+        # Workload Identity Provider 경로는 프로젝트 번호와 Pool ID, Provider ID가 정확히 일치해야 합니다.
+        workload_identity_provider: "projects/${{ env.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/${{ env.WIF_POOL_ID }}/providers/${{ env.WIF_PROVIDER_ID }}"
+        # 서비스 계정 이메일 주소
+        service_account: ${{ env.SERVICE_ACCOUNT_EMAIL }}
+        # audience는 일반적으로 서비스 계정 이메일 주소를 사용합니다.
+        audience: ${{ env.SERVICE_ACCOUNT_EMAIL }}
 
     - name: Set up Google Cloud SDK
       uses: google-github-actions/setup-gcloud@v2
+      with:
+        project_id: ${{ env.GCP_PROJECT_ID }} # setup-gcloud에도 프로젝트 ID를 전달합니다.
 
     - name: Configure Docker for Google Container Registry
       run: gcloud auth configure-docker
@@ -46,8 +59,8 @@ jobs:
           --source ./src \
           --platform managed \
           --region ${{ env.GCP_REGION }} \
-          --allow-unauthenticated \ # 외부에서 호출할 경우 필요, 내부 호출 시에는 JWT 인증
-          --service-account github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com \
+          --allow-unauthenticated \
+          --service-account ${{ env.SERVICE_ACCOUNT_EMAIL }} \
           --set-env-vars \
             GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }},\
             GCP_BUCKET_NAME=${{ env.GCP_BUCKET_NAME }},\
@@ -71,13 +84,8 @@ jobs:
         echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_ENV # 환경 변수로 등록하여 다음 스텝에서 사용
 
     - name: Invoke Cloud Run Service for initial test (Optional)
-      # 배포가 완료된 후, 간단한 테스트를 위해 Cloud Run 서비스를 호출합니다.
-      # 실제 프로덕션에서는 daily_upload.yaml이 스케줄에 따라 호출하게 됩니다.
       run: |
-        # Cloud Run 서비스는 인증된 호출만 허용할 수 있으므로, gcloud auth print-identity-token으로 토큰을 얻습니다.
-        # --allow-unauthenticated를 사용하지 않았다면 이 토큰이 필수입니다.
         curl -X POST "${{ env.SERVICE_URL }}" \
              -H "Content-Type: application/json" \
-             -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
              -d '{"action": "test_run"}' # 테스트용 액션
-      continue-on-error: true # 배포만 중요하고 이 호출은 테스트용이므로 오류 시 계속 진행
+      continue-on-error: true
