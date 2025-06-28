@@ -1,161 +1,136 @@
 # src/youtube_uploader.py
-import logging
 import os
-import http.client
-import httplib2
+import logging
+from google_auth_oauthlib.flow import InstalledAppFlow
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
-from oauth2client.client import OAuth2Credentials
 
-logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Constants
-YOUTUBE_API_SERVICE_NAME = "youtube"
-YOUTUBE_API_VERSION = "v3"
+SCOPES = ['https://www.googleapis.com/auth/youtube.upload']
 
 class YouTubeUploader:
-    def __init__(self, client_id, client_secret, refresh_token):
+    def __init__(self, client_id: str, client_secret: str, refresh_token: str):
         self.client_id = client_id
         self.client_secret = client_secret
         self.refresh_token = refresh_token
-        self.youtube_service = self._authenticate_youtube()
-        logger.info("YouTubeUploader initialized and authenticated.")
+        self.youtube = self._get_authenticated_service()
 
-    def _authenticate_youtube(self):
+    def _get_authenticated_service(self):
         """
-        OAuth 2.0 Refresh Token을 사용하여 YouTube API 서비스에 인증합니다.
+        YouTube API에 인증하고 서비스 객체를 반환합니다.
+        제공된 refresh_token을 사용하여 Access Token을 갱신합니다.
         """
-        if not all([self.client_id, self.client_secret, self.refresh_token]):
-            logger.error("Missing YouTube client ID, client secret, or refresh token.")
-            raise ValueError("YouTube authentication credentials missing.")
-
+        creds = None
+        # GitHub Actions에서 환경 변수를 통해 refresh_token을 받으므로, 별도의 credentials.json 파일은 필요 없습니다.
+        # 기존 refresh token으로 Credentials 객체를 직접 생성합니다.
         try:
-            # OAuth2Credentials 객체 생성
-            credentials = OAuth2Credentials(
-                access_token=None,  # refresh token으로 access token을 새로 받으므로 None
-                client_id=self.client_id,
-                client_secret=self.client_secret,
+            creds = Credentials(
+                token=None,  # Access token은 refresh_token으로 갱신될 것이므로 None으로 설정
                 refresh_token=self.refresh_token,
                 token_uri="https://oauth2.googleapis.com/token",
-                user_agent="YouTube-Automation-Script/1.0"
+                client_id=self.client_id,
+                client_secret=self.client_secret,
+                scopes=SCOPES
             )
             
-            # credentials.authorize(httplib2.Http())를 사용하여 access token 새로고침
-            # 이 과정에서 내부적으로 refresh token을 사용하여 새로운 access token을 얻습니다.
-            http = credentials.authorize(httplib2.Http())
-            
-            # 인증된 HTTP 클라이언트로 YouTube 서비스 빌드
-            youtube = build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION, http=http)
-            logger.info("YouTube service built successfully with refresh token.")
-            return youtube
-        except HttpError as e:
-            logger.error(f"HTTP error during YouTube authentication: {e.resp.status} - {e.content}", exc_info=True)
-            if e.resp.status == 401:
-                logger.error("Refresh token might be expired or invalid. Please re-authenticate.")
-            raise
-        except Exception as e:
-            logger.error(f"An unexpected error occurred during YouTube authentication: {e}", exc_info=True)
-            raise
+            # Access Token이 만료되었거나 없는 경우 refresh_token을 사용하여 갱신합니다.
+            if not creds.valid:
+                logging.info("Refreshing YouTube access token...")
+                creds.refresh(Request())
+                logging.info("YouTube access token refreshed successfully.")
 
-    def upload_video(self, file_path, title, description, keywords, privacy_status="private"):
-        """
-        YouTube에 비디오를 업로드합니다.
-        """
-        if not self.youtube_service:
-            logger.error("YouTube service not authenticated. Cannot upload video.")
+            return build('youtube', 'v3', credentials=creds)
+
+        except Exception as e:
+            logging.error(f"Error authenticating to YouTube API: {e}", exc_info=True)
             return None
 
+    def upload_video(self, file_path: str, title: str, description: str, tags: list, privacy_status: str = 'private'):
+        """
+        지정된 비디오 파일을 YouTube에 업로드합니다.
+        """
+        if not self.youtube:
+            logging.error("YouTube service not authenticated. Cannot upload video.")
+            return None
+        
         if not os.path.exists(file_path):
-            logger.error(f"Video file not found: {file_path}")
+            logging.error(f"Video file not found at: {file_path}")
             return None
 
         body = {
-            "snippet": {
-                "title": title,
-                "description": description,
-                "tags": keywords,
-                "categoryId": "22",  # Entertainment Category (Shorts usually fit here or People & Blogs)
-                "defaultLanguage": "ko" # 한국어
+            'snippet': {
+                'title': title,
+                'description': description,
+                'tags': tags,
+                'categoryId': '28',  # Technology category ID, YouTube Shorts는 보통 Category ID 28 또는 22 (People & Blogs)
+                'defaultLanguage': 'en'
             },
-            "status": {
-                "privacyStatus": privacy_status, # "public", "private", "unlisted"
-                "selfDeclaredMadeForKids": False # 아동용 콘텐츠가 아님을 선언
+            'status': {
+                'privacyStatus': privacy_status, # 'public', 'private', 'unlisted'
+                'madeForKids': False # Kids content 여부 (필수)
             },
-            "recordingDetails": {
-                "recordingDate": None # 선택 사항, 필요한 경우 추가
+            'recordingDetails': {
+                'recordingDate': '2024-01-01T00:00:00Z' # 샘플 날짜, 필요시 동적 생성
             }
         }
 
-        # 미디어 파일 업로드 설정
+        # MediaFileUpload를 사용하여 비디오 파일을 업로드 준비
         media_body = MediaFileUpload(file_path, chunksize=-1, resumable=True)
 
         try:
-            # YouTube API 호출하여 비디오 업로드
-            request = self.youtube_service.videos().insert(
-                part="snippet,status",
+            insert_request = self.youtube.videos().insert(
+                part=','.join(body.keys()),
                 body=body,
                 media_body=media_body
             )
             response = None
-            
-            # Resumable upload (큰 파일에 유용)
             while response is None:
-                status, response = request.next_chunk()
+                status, response = insert_request.next_chunk()
                 if status:
-                    logger.info(f"Uploaded {int(status.progress() * 100)}% of {file_path}")
+                    logging.info(f"Uploaded {int(status.progress() * 100)}%")
 
-            if response:
-                video_id = response.get("id")
-                logger.info(f"Video uploaded successfully! Video ID: {video_id}")
-                logger.info(f"Video URL: https://www.youtube.com/watch?v={video_id}")
-                return video_id
-            else:
-                logger.error("Video upload failed: No response received.")
-                return None
-
+            logging.info(f"Video upload successful! Video ID: {response['id']}")
+            return response['id']
         except HttpError as e:
-            logger.error(f"HTTP error during video upload: {e.resp.status} - {e.content}", exc_info=True)
+            logging.error(f"An HTTP error occurred: {e.resp.status} - {e.content}", exc_info=True)
             return None
         except Exception as e:
-            logger.error(f"An unexpected error occurred during video upload: {e}", exc_info=True)
+            logging.error(f"An unexpected error occurred during video upload: {e}", exc_info=True)
             return None
 
+# OAuth 인증 플로우를 로컬에서 실행하여 refresh_token을 얻는 스크립트
+# 이 스크립트는 한 번만 실행하여 YOUTUBE_REFRESH_TOKEN을 얻은 후 GitHub Secret에 저장해야 합니다.
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
-    # 로컬 테스트를 위한 환경 변수 로드 (실제 배포에서는 Cloud Run에서 전달됨)
-    TEST_CLIENT_ID = os.environ.get("YOUTUBE_CLIENT_ID")
-    TEST_CLIENT_SECRET = os.environ.get("YOUTUBE_CLIENT_SECRET")
-    TEST_REFRESH_TOKEN = os.environ.get("YOUTUBE_REFRESH_TOKEN")
+    
+    # 환경 변수에서 CLIENT_ID와 CLIENT_SECRET 로드
+    client_id = os.environ.get('YOUTUBE_CLIENT_ID')
+    client_secret = os.environ.get('YOUTUBE_CLIENT_SECRET')
 
-    if not all([TEST_CLIENT_ID, TEST_CLIENT_SECRET, TEST_REFRESH_TOKEN]):
-        logger.warning("YouTube API credentials not found in environment variables. Cannot run local test.")
-        logger.info("Please set YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REFRESH_TOKEN.")
-    else:
-        # 가상의 비디오 파일 생성 (실제 테스트 시에는 유효한 파일 경로로 변경)
-        dummy_video_path = "temp_shorts_video.mp4"
-        with open(dummy_video_path, "w") as f:
-            f.write("This is a dummy video file for testing.")
+    if not client_id or not client_secret:
+        logging.error("YOUTUBE_CLIENT_ID or YOUTUBE_CLIENT_SECRET environment variables are not set.")
+        logging.info("Please set these variables to run the OAuth flow.")
+        exit(1)
 
-        uploader = YouTubeUploader(TEST_CLIENT_ID, TEST_CLIENT_SECRET, TEST_REFRESH_TOKEN)
-        
-        test_title = "Test AI Shorts Upload"
-        test_description = "This is a test video uploaded by an automated AI script."
-        test_keywords = ["AI", "shorts", "automation", "test"]
+    flow = InstalledAppFlow.from_client_secrets_file(
+        # client_secrets.json 파일은 Google Cloud Console에서 다운로드한 OAuth 2.0 클라이언트 ID JSON 파일입니다.
+        # 이 파일은 로컬 실행 시에만 필요하며, 실제 워크플로우에서는 환경 변수로 직접 refresh_token을 사용합니다.
+        # client_secrets.json 파일이 없으면 이 스크립트는 실행될 수 없습니다.
+        # 실제 파일 경로에 맞게 수정해주세요.
+        # 예: 'client_secrets.json'
+        # 주의: 이 파일은 GitHub에 올리면 안 됩니다!
+        'path/to/your/client_secrets.json', # <--- 여기에 실제 client_secrets.json 파일 경로를 넣어주세요!
+        SCOPES
+    )
+    # 로컬 서버를 통해 인증을 진행합니다.
+    credentials = flow.run_local_server(port=0)
 
-        # 실제 업로드 실행 (privacy_status를 "private"으로 설정하여 비공개 업로드)
-        uploaded_video_id = uploader.upload_video(
-            dummy_video_path, 
-            test_title, 
-            test_description, 
-            test_keywords, 
-            privacy_status="private"
-        )
-        if uploaded_video_id:
-            logger.info(f"Dummy video uploaded with ID: {uploaded_video_id}")
-        else:
-            logger.error("Failed to upload dummy video.")
-        
-        # 테스트 파일 정리
-        if os.path.exists(dummy_video_path):
-            os.remove(dummy_video_path)
+    print(f"Credentials generated successfully. Save the following refresh token to your GitHub Secrets (YOUTUBE_REFRESH_TOKEN):\n")
+    print(credentials.refresh_token)
+
+    # 이 refresh_token을 GitHub Secrets에 YOUTUBE_REFRESH_TOKEN으로 저장합니다.
+    # 이후에는 이 스크립트를 다시 실행할 필요가 없습니다.
