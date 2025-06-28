@@ -1,0 +1,40 @@
+{
+  "bindings": [
+    {
+      "members": [
+        "principalSet://iam.googleapis.com/projects/94662874801/locations/global/workloadIdentityPools/github-pool-v2/attribute.repository/SmileMaskL/gcp-youtube-automation",
+        "user:blackhole826@gmail.com"
+      ],
+      "role": "roles/iam.serviceAccountAdmin"
+    },
+    {
+      "members": [
+        "principal://iam.googleapis.com/projects/94662874801/locations/global/workloadIdentityPools/github-pool-v2/subject/repo:SmileMaskL/gcp-youtube-automation:ref:refs/heads/*",
+        "principalSet://iam.googleapis.com/projects/94662874801/locations/global/workloadIdentityPools/github-pool-v2/attribute.repository/SmileMaskL/gcp-youtube-automation",
+        "serviceAccount:github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com"
+      ],
+      "role": "roles/iam.serviceAccountTokenCreator"
+    },
+    {
+      "members": [
+        "principalSet://iam.googleapis.com/projects/94662874801/locations/global/workloadIdentityPools/github-pool-v2/attribute.repository/SmileMaskL/gcp-youtube-automation",
+        "serviceAccount:github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com",
+        "user:blackhole826@gmail.com"
+      ],
+      "role": "roles/iam.serviceAccountUser"
+    },
+    {
+      "role": "roles/iam.workloadIdentityUser",
+      "members": [
+        "principal://iam.googleapis.com/projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/subject/repo:SmileMaskL/gcp-youtube-automation"
+      ],
+      "condition": {
+        "title": "GitHub Repo Access",
+        "description": "Allows access from SmileMaskL/gcp-youtube-automation GitHub repo",
+        "expression": "attribute.repository == 'SmileMaskL/gcp-youtube-automation' && google.subject == 'repo:SmileMaskL/gcp-youtube-automation'"
+      }
+    }
+  ],
+  "version": 1
+}
+
