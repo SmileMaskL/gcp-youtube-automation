@@ -2,47 +2,42 @@ name: Daily YouTube Shorts Upload
 
 on:
   schedule:
-    - cron: '0 3,7,12,18,22 * * *'  # UTC 기준 매일 5회 실행
-  workflow_dispatch:  # 수동 실행 허용
+    - cron: '0 3,7,12,18,22 * * *'  # UTC 기준 하루 5회
+  workflow_dispatch:
 
 env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   GCP_PROJECT_NUMBER: ${{ secrets.GCP_PROJECT_NUMBER }}
-  GCP_REGION: asia-northeast3
-  SERVICE_ACCOUNT_EMAIL: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
+  GCP_REGION: asia-northeast3  # ⚠️ 반드시 한국 리전으로!
 
 jobs:
   generate-and-upload:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
     permissions:
       contents: 'read'
-      id-token: 'write'  # OIDC 토큰 사용 허용
+      id-token: 'write'  # 🔑 자동문 키
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Google Cloud 인증 (Workload Identity Federation)
+    # ✅ 핵심! 자동문 센서로 인증
+    - name: Google Cloud 인증
       id: auth
       uses: google-github-actions/auth@v2
       with:
         workload_identity_provider: "projects/${{ env.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01"
-        service_account: ${{ env.SERVICE_ACCOUNT_EMAIL }}
-        token_format: 'access_token'  # ✅ 핵심 변경점
+        service_account: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
+        token_format: 'access_token'  # ✅ 로봇 전용 키
 
-    - name: Google Cloud SDK 설치
+    - name: Set up Google Cloud SDK
       uses: google-github-actions/setup-gcloud@v2
 
-    - name: Cloud Run 서비스 호출
+    # ✅ 자동문 키로 Cloud Run 호출
+    - name: Trigger Cloud Run
       run: |
-        # ✅ Cloud Run 서비스 URL 가져오기
-        SERVICE_URL=$(gcloud run services describe youtube-shorts-automation \
-          --region=${{ env.GCP_REGION }} \
-          --format="value(status.url)")
-
-        # ✅ 자동 생성된 액세스 토큰으로 Cloud Run 호출
+        SERVICE_URL="https://youtube-shorts-automation-94662874801.asia-northeast3.run.app"  # ⚠️ 당신의 URL로 변경!
         curl -X POST "$SERVICE_URL" \
-          -H "Content-Type: application/json" \
           -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" \
+          -H "Content-Type: application/json" \
           -d '{"action": "create_and_upload_shorts"}'
