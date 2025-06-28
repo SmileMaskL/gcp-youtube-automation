@@ -2,7 +2,7 @@ name: Daily YouTube Shorts Upload
 
 on:
   schedule:
-    - cron: '0 3,7,12,18,22 * * *'  # UTC 기준 3,7,12,18,22시 (하루 5회)
+    - cron: '0 3,7,12,18,22 * * *'  # UTC 기준 매일 5회 실행
   workflow_dispatch:  # 수동 실행 허용
 
 env:
@@ -17,33 +17,31 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: 'read'
-      id-token: 'write'  # 🔑 핵심! OIDC 토큰 사용 허용
+      id-token: 'write'  # OIDC 토큰 사용 허용
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    # ✅ 인증 단계 (새로운 표준 방식)
-    - name: 'Google Cloud 인증'
-      id: auth  # 이 ID로 토큰 사용!
+    - name: Google Cloud 인증 (Workload Identity Federation)
+      id: auth
       uses: google-github-actions/auth@v2
       with:
         workload_identity_provider: "projects/${{ env.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01"
         service_account: ${{ env.SERVICE_ACCOUNT_EMAIL }}
-        token_format: 'access_token'  # 액세스 토큰 자동 생성
+        token_format: 'access_token'  # ✅ 핵심 변경점: 자동 생성된 액세스 토큰 사용
 
-    - name: 'Google Cloud SDK 설정'
+    - name: Google Cloud SDK 설치
       uses: google-github-actions/setup-gcloud@v2
 
-    # ✅ 서비스 호출 (토큰 직접 사용)
-    - name: 'Cloud Run 서비스 실행'
+    - name: Cloud Run 서비스 호출
       run: |
-        # 서비스 URL 자동 조회
+        # Cloud Run 서비스 URL 가져오기
         SERVICE_URL=$(gcloud run services describe youtube-shorts-automation \
           --region=${{ env.GCP_REGION }} \
           --format="value(status.url)")
 
-        # 🔥 핵심 변경점: 자동 생성 토큰 사용
+        # ✅ 자동 생성된 액세스 토큰으로 Cloud Run 호출
         curl -X POST "$SERVICE_URL" \
           -H "Content-Type: application/json" \
           -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" \
