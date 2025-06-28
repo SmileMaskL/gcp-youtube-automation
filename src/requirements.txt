@@ -13,3 +13,4 @@ pexels-api
 newsapi-python # ✅ 추가!
 elevenlabs # ✅ 추가!
 jq # GitHub Actions 스크립트에서 사용 (파이썬 라이브러리 아님, 하지만 명시)
+gunicorn
