@@ -11,19 +11,25 @@ from concurrent.futures import ThreadPoolExecutor
 import google.cloud.logging
 from google.cloud import storage
 
-# Third-party API Clients (실제 서비스 연동 시 주석 해제 및 설치)
-# 주의: 이 파일은 시뮬레이션 로직이므로, 실제 API 사용 시에는 관련 라이브러리 설치 및 키 설정 필요
-# import requests # 웹 요청용 (뉴스 API, Pexels API 등)
-# from openai import OpenAI # OpenAI Python SDK
-# from google.generativeai import configure as configure_gemini, GenerativeModel # Gemini Python SDK
-# from elevenlabs import set_api_key as set_elevenlabs_key, generate as generate_elevenlabs_audio # ElevenLabs SDK
-# from newsapi import NewsApiClient # NewsAPI Python SDK (뉴스 수집)
-# from googleapiclient.discovery import build # YouTube Data API client
-# from google.oauth2.credentials import Credentials # YouTube OAuth
+# Third-party API Clients (실제 서비스 연동을 위해 주석 해제)
+import requests # 웹 요청용 (뉴스 API, Pexels API 등)
+from openai import OpenAI # OpenAI Python SDK
+from google.generativeai import configure as configure_gemini, GenerativeModel # Gemini Python SDK
+from elevenlabs import set_api_key as set_elevenlabs_key, generate as generate_elevenlabs_audio # ElevenLabs SDK
+from newsapi import NewsApiClient # NewsAPI Python SDK (뉴스 수집)
+from googleapiclient.discovery import build # YouTube Data API client
+from google.oauth2.credentials import Credentials # YouTube OAuth
+import google.auth.transport.requests # Credential refresh에 필요
+from pexels_api import API # Pexels API 클라이언트
+
+# 사용자 정의 모듈 임포트
+from video_script_generator import generate_script_from_news # NewsAPI, AI 스크립트
+from audio_generator import generate_audio_from_text # ElevenLabs
+from video_generator import create_video_from_images_and_audio # MoviePy
+from youtube_uploader import upload_video_to_youtube # YouTube Data API
+from gcs_helper import upload_to_gcs, download_from_gcs, delete_from_gcs # Cloud Storage
 
 # Google Cloud Logging 설정
-# Cloud Run 환경에서는 자동으로 로그가 Cloud Logging으로 전송되므로,
-# 기본 Python logging 모드를 사용하는 것이 좋습니다.
 try:
     logging_client = google.cloud.logging.Client()
     logging_client.setup_logging()
@@ -32,7 +38,7 @@ except Exception as e:
     logging.warning(f"Google Cloud Logging 설정 실패 (일반 로깅 사용): {e}")
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__) # 모듈별 로거 사용 권장
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 # --- 전역 변수 선언 (초기화는 initialize_app 함수에서 진행) ---
@@ -43,7 +49,7 @@ YOUTUBE_CLIENT_SECRET = None
 YOUTUBE_REFRESH_TOKEN = None
 ELEVENLABS_API_KEY = None
 ELEVENLABS_VOICE_ID = None
-OPENAI_API_KEYS = []
+OPENAI_API_KEYS = [] # 쉼표로 구분된 문자열을 리스트로 변환
 GEMINI_API_KEY = None
 NEWSAPI_API_KEY = None
 PEXELS_API_KEY = None
@@ -93,7 +99,7 @@ def initialize_app():
             if not value:
                 missing_vars.append(var)
             else:
-                globals()[var] = value
+                globals()[var] = value # 전역 변수에 값 할당
 
     if missing_vars:
         error_msg = f"❌ 치명적 오류: 필수 환경 변수가 누락되었습니다: {', '.join(missing_vars)}"
@@ -110,11 +116,11 @@ def initialize_app():
         logger.critical(error_msg)
         raise RuntimeError(error_msg)
 
-    try:
-        # 실제 API 클라이언트 초기화 (필요시 주석 해제)
-        logger.info("✅ 모든 필수 환경 변수 및 외부 서비스 초기화 성공.")
-    except Exception as e:
-        logger.warning(f"일부 외부 API 클라이언트 초기화 실패 (작업 중 다시 시도될 수 있음): {e}")
+    # 외부 API 클라이언트는 필요시 각 함수 내에서 초기화하거나,
+    # 전역으로 선언하더라도 실제 호출 시에만 사용되도록 합니다.
+    # initialize_app에서는 환경 변수 검증만 확실히 합니다.
+    logger.info("✅ 모든 필수 환경 변수 및 외부 서비스 초기화 성공.")
+
 
 # 애플리케이션 시작 시 초기화 함수 실행
 try:
@@ -159,6 +165,9 @@ def main_endpoint():
 
         if action == 'create_and_upload_shorts':
             # 비동기 작업 시작: 실제 YouTube Shorts 생성 및 업로드 로직은 백그라운드에서 실행
+            # Cloud Run은 요청을 빠르게 처리하고 응답을 반환해야 하므로,
+            # 장시간 작업은 ThreadPoolExecutor로 분리합니다.
+            # 작업이 Cloud Run의 요청 타임아웃(기본 5분, 최대 60분)을 초과하지 않도록 주의.
             future = executor.submit(process_youtube_shorts_upload, metadata)
             logger.info("YouTube Shorts 업로드 프로세스가 백그라운드에서 시작되었습니다.")
             return jsonify({"status": "processing", "message": "YouTube Shorts 업로드 프로세스가 시작됨", "jobId": f"shorts-task-{datetime.now().timestamp()}"}), 202
@@ -177,117 +186,179 @@ def process_youtube_shorts_upload(metadata):
     """
     logger.info(f'--- YouTube Shorts 업로드 프로세스 시작 (metadata: {metadata}) ---')
     start_time = time.time()
+    
+    # 임시 파일 경로 설정
+    temp_dir = "/tmp"
+    os.makedirs(temp_dir, exist_ok=True) # /tmp 디렉토리가 없으면 생성
+
+    # 각 단계에서 생성될 파일 경로 변수 초기화
+    script_data = None
+    audio_filename = None
+    local_audio_path = None
+    image_paths = []
+    output_video_filename = None
+    local_final_shorts_path = None
+    downloaded_video_path = None
 
     try:
+        # API 키/환경 변수 유효성 재확인 (방어적 코딩)
         if not all([YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REFRESH_TOKEN,
-                      ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID, OPENAI_API_KEYS,
-                      GEMINI_API_KEY, NEWSAPI_API_KEY, PEXELS_API_KEY]):
-            raise ValueError("하나 이상의 필수 API 키/환경 변수가 누락되었습니다. 작업을 계속할 수 없습니다.")
+                      ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID, OPENAI_API_KEYS, # OPENAI_API_KEYS는 리스트이므로 비어있지 않은지 확인
+                      GEMINI_API_KEY, NEWSAPI_API_KEY, PEXELS_API_KEY]) or not OPENAI_API_KEYS:
+            raise ValueError("하나 이상의 필수 API 키/환경 변수가 누락되었거나 유효하지 않습니다. 작업을 계속할 수 없습니다.")
         if bucket is None:
             raise RuntimeError("Cloud Storage 버킷이 초기화되지 않아 파일을 저장할 수 없습니다.")
 
-        # --- 단계별 시뮬레이션 및 실제 API 연동 준비 ---
+        # --- 실제 API 연동 및 로직 실행 ---
 
-        # 1. 뉴스 데이터 수집 (NewsAPI 사용 예시)
-        logger.info("1. 뉴스 데이터 수집 중...")
+        # 1. 뉴스 데이터 수집 및 AI 스크립트 생성
+        logger.info("1. 뉴스 데이터 수집 및 AI 스크립트 생성 중...")
         try:
-            # newsapi = NewsApiClient(api_key=NEWSAPI_API_KEY)
-            # top_headlines = newsapi.get_top_headlines(q='AI', language='en', country='us')
-            # if top_headlines and top_headlines['articles']:
-            #       article = top_headlines['articles'][0]
-            #       article_title = article.get('title', '새로운 AI 소식')
-            #       article_description = article.get('description', '흥미로운 AI 관련 기사입니다.')
-            #       logger.info(f"뉴스 수집 완료: '{article_title}'")
-            # else:
-            #       article_title = "오늘의 AI 뉴스"
-            #       article_description = "최신 AI 트렌드에 대한 소식입니다."
-            #       logger.warning("NewsAPI에서 뉴스를 가져오지 못했습니다. 기본값 사용.")
-            article_title = f"오늘의 최신 AI 소식 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-            article_description = "생성형 AI 기술의 발전은 계속되고 있습니다."
-            logger.info(f"뉴스 수집 (시뮬레이션): {article_title}")
-            time.sleep(2)
+            # video_script_generator.py의 generate_script_from_news 호출
+            script_data = generate_script_from_news(NEWSAPI_API_KEY, OPENAI_API_KEYS, GEMINI_API_KEY, news_query="최신 기술 뉴스")
+            title = script_data['title']
+            script = script_data['script']
+            search_keywords = script_data['search_keywords']
+            logger.info(f"✅ 1단계 완료: 제목 '{title}', 스크립트 및 키워드 생성.")
         except Exception as e:
-            logger.error(f"뉴스 데이터 수집 오류: {e}")
-            article_title = "뉴스 없음"
-            article_description = "뉴스 수집 실패."
+            logger.error(f"뉴스 데이터 수집 또는 AI 스크립트 생성 오류: {e}", exc_info=True)
+            # 오류 발생 시 기본값으로 대체 (완전히 실패하지 않도록)
+            title = f"자동 생성 AI 쇼츠 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            script = "이것은 뉴스 스크립트 생성에 문제가 발생하여 자동 생성된 비디오입니다. 최신 AI 기술에 대한 흥미로운 소식을 담고 있습니다."
+            search_keywords = "AI, technology, future"
+            logger.warning("뉴스/스크립트 생성 실패: 기본값 사용.")
 
-        # 2. AI 스크립트 생성 (GPT-4o 또는 Gemini 사용 예시)
-        logger.info("2. AI 스크립트 생성 중...")
-        script_text = ""
+
+        # 2. 음성 생성
+        logger.info("2. 음성 생성 중...")
+        audio_filename = f"audio_{datetime.now().strftime('%Y%m%d%H%M%S')}.mp3"
+        local_audio_path = os.path.join(temp_dir, audio_filename)
         try:
-            script_text = f"✨ 긴급 속보! {article_title}! AI 기술이 또 한 번 세상을 놀라게 했습니다. 자세한 내용은 쇼츠에서 확인하세요! (ID: {metadata.get('workflow_run_id')})"
-            logger.info(f"AI 스크립트 생성 (시뮬레이션): {script_text}")
-            time.sleep(3)
+            # audio_generator.py의 generate_audio_from_text 호출
+            generate_audio_from_text(script, ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID, local_audio_path)
+            logger.info(f"✅ 2단계 완료: 음성 파일 '{local_audio_path}' 생성.")
         except Exception as e:
-            logger.error(f"AI 스크립트 생성 오류: {e}")
-            script_text = f"AI 스크립트 생성 실패: {article_title}에 대한 자동화된 쇼츠입니다."
+            logger.error(f"음성 생성 오류: {e}", exc_info=True)
+            raise RuntimeError(f"음성 생성 실패: {e}") # 치명적 오류로 처리
 
-        # 3. 음성 생성 및 저장 (ElevenLabs 사용 예시)
-        logger.info("3. 음성 생성 및 Cloud Storage 저장 중...")
-        audio_file_name = f"audio_{datetime.now().strftime('%Y%m%d%H%M%S')}.mp3"
-        local_audio_path = f"/tmp/{audio_file_name}"
+
+        # 3. 비디오 클립/이미지 다운로드 (Pexels 사용)
+        logger.info("3. 비디오 클립/이미지 다운로드 중...")
+        # Pexels API를 사용하여 이미지 다운로드 (video_script_generator에서 search_keywords 반환)
+        image_paths = []
         try:
-            with open(local_audio_path, "w") as f:
-                f.write("mock audio content for shorts")
-            logger.info(f"음성 파일 생성 (시뮬레이션): {local_audio_path}")
-
-            blob = bucket.blob(f"audio/{audio_file_name}")
-            blob.upload_from_filename(local_audio_path)
-            logger.info(f"✅ 음성 파일 '{audio_file_name}'이 Cloud Storage에 업로드되었습니다.")
-            os.remove(local_audio_path)
-            time.sleep(2)
+            pexels_api_client = API(PEXELS_API_KEY)
+            # search_keywords가 쉼표로 구분된 문자열일 경우, 첫 번째 키워드만 사용하거나 분리하여 사용
+            query_for_pexels = search_keywords.split(',')[0].strip() if search_keywords else "technology"
+            
+            # Pexels에서 가로(landscape) 이미지 10개 검색
+            photos = pexels_api_client.search(query=query_for_pexels, per_page=10, orientation='landscape')
+            
+            if photos.entries:
+                for i, photo in enumerate(photos.entries):
+                    img_url = photo.src['original'] # 고화질 이미지
+                    img_filename = f"image_{i}_{datetime.now().strftime('%Y%m%d%H%M%S')}.jpg"
+                    img_path = os.path.join(temp_dir, img_filename)
+                    
+                    response = requests.get(img_url, stream=True)
+                    response.raise_for_status()
+                    with open(img_path, 'wb') as f:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            f.write(chunk)
+                    image_paths.append(img_path)
+                logger.info(f"✅ 3단계 완료: Pexels에서 {len(image_paths)}개 이미지 다운로드.")
+            else:
+                logger.warning("Pexels에서 적절한 이미지를 찾을 수 없습니다. 비디오 생성을 건너뛸 수 있습니다.")
+                # TODO: 이미지가 없을 경우 대체 이미지 사용 또는 오류 처리 로직 추가
         except Exception as e:
-            logger.error(f"음성 생성 및 저장 오류: {e}")
-            if os.path.exists(local_audio_path): os.remove(local_audio_path)
+            logger.error(f"Pexels 이미지 다운로드 오류: {e}", exc_info=True)
+            raise RuntimeError(f"Pexels 이미지 다운로드 실패: {e}") # 치명적 오류로 처리
 
-        # 4. 비디오 클립 다운로드 및 저장 (Pexels API 사용 예시)
-        logger.info("4. 비디오 클립 다운로드 및 Cloud Storage 저장 중...")
-        video_file_name = f"video_{datetime.now().strftime('%Y%m%d%H%M%S')}.mp4"
-        local_video_path = f"/tmp/{video_file_name}"
+
+        # 4. 쇼츠 비디오 최종 생성 (MoviePy 등 활용)
+        logger.info("4. 쇼츠 비디오 최종 생성 중...")
+        output_video_filename = f"final_youtube_shorts_{datetime.now().strftime('%Y%m%d%H%M%S')}.mp4"
+        local_final_shorts_path = os.path.join(temp_dir, output_video_filename)
+        
+        if not image_paths:
+            logger.error("다운로드된 이미지가 없어 비디오 생성을 건너뜁니다.")
+            raise RuntimeError("비디오 생성을 위한 이미지가 없습니다. Pexels API 및 쿼리 확인 필요.")
+
         try:
-            with open(local_video_path, "w") as f:
-                f.write("mock video content for shorts")
-            logger.info(f"비디오 파일 생성 (시뮬레이션): {local_video_path}")
-
-            blob = bucket.blob(f"video/{video_file_name}")
-            blob.upload_from_filename(local_video_path)
-            logger.info(f"✅ 비디오 파일 '{video_file_name}'이 Cloud Storage에 업로드되었습니다.")
-            os.remove(local_video_path)
-            time.sleep(3)
+            # video_generator.py의 create_video_from_images_and_audio 호출
+            create_video_from_images_and_audio(image_paths, local_audio_path, local_final_shorts_path)
+            logger.info(f"✅ 4단계 완료: 최종 비디오 '{local_final_shorts_path}' 생성.")
         except Exception as e:
-            logger.error(f"비디오 다운로드 및 저장 오류: {e}")
-            if os.path.exists(local_video_path): os.remove(local_video_path)
+            logger.error(f"쇼츠 비디오 최종 생성 오류: {e}", exc_info=True)
+            raise RuntimeError(f"비디오 생성 실패: {e}") # 치명적 오류로 처리
 
-        # 5. 쇼츠 비디오 최종 생성 (MoviePy 등 활용 예정)
-        logger.info("5. 쇼츠 비디오 최종 생성 중...")
-        final_shorts_name = f"youtube_shorts_{datetime.now().strftime('%Y%m%d%H%M%S')}.mp4"
-        local_final_shorts_path = f"/tmp/{final_shorts_name}"
+
+        # 5. 생성된 비디오를 Cloud Storage에 업로드
+        logger.info("5. 생성된 비디오를 Cloud Storage에 업로드 중...")
+        gcs_video_path = f"shorts/{output_video_filename}"
         try:
-            with open(local_final_shorts_path, "w") as f:
-                f.write("mock final shorts video")
-            logger.info(f"최종 쇼츠 비디오 생성 (시뮬레이션): {local_final_shorts_path}")
-
-            blob = bucket.blob(f"shorts/{final_shorts_name}")
-            blob.upload_from_filename(local_final_shorts_path)
-            logger.info(f"✅ 최종 쇼츠 '{final_shorts_name}'이 Cloud Storage에 업로드되었습니다.")
-            os.remove(local_final_shorts_path)
-            time.sleep(4)
+            # gcs_helper.py의 upload_to_gcs 호출
+            upload_to_gcs(GCP_BUCKET_NAME, local_final_shorts_path, gcs_video_path, GCP_PROJECT_ID)
+            logger.info(f"✅ 5단계 완료: 비디오 '{gcs_video_path}'를 Cloud Storage에 업로드 완료.")
         except Exception as e:
-            logger.error(f"쇼츠 비디오 최종 생성 오류: {e}")
-            if os.path.exists(local_final_shorts_path): os.remove(local_final_shorts_path)
+            logger.error(f"Cloud Storage 업로드 오류: {e}", exc_info=True)
+            raise RuntimeError(f"Cloud Storage 업로드 실패: {e}") # 치명적 오류로 처리
 
-        # 6. YouTube 업로드 (YouTube Data API 사용 예시)
+
+        # 6. YouTube에 업로드
         logger.info("6. YouTube Data API를 사용하여 쇼츠 업로드 중...")
+        video_title = title # 뉴스 스크립트에서 생성된 제목 사용
+        video_description = script[:4900] + "..." if len(script) > 5000 else script # 스크립트 사용, 최대 5000자
+        
+        # Cloud Storage에서 비디오 다운로드하여 YouTube Uploader에 전달 (필수)
+        downloaded_video_path = os.path.join(temp_dir, f"downloaded_{output_video_filename}")
         try:
-            logger.info(f"YouTube 업로드 (시뮬레이션): 제목='{article_title}', 설명='{script_text}'")
-            time.sleep(5)
-            logger.info(f'✅ YouTube Shorts 업로드 프로세스 완료 (시뮬레이션)')
+            download_from_gcs(GCP_BUCKET_NAME, gcs_video_path, downloaded_video_path, GCP_PROJECT_ID)
+            logger.info(f"✅ 비디오 '{gcs_video_path}'를 GCS에서 임시 경로 '{downloaded_video_path}'로 다운로드 완료.")
+        except Exception as e:
+            logger.error(f"Cloud Storage에서 최종 비디오 다운로드 오류: {e}", exc_info=True)
+            raise RuntimeError(f"GCS에서 비디오 다운로드 실패: {e}")
+
+
+        try:
+            # youtube_uploader.py의 upload_video_to_youtube 호출
+            youtube_uploader_response = upload_video_to_youtube(
+                YOUTUBE_CLIENT_ID,
+                YOUTUBE_CLIENT_SECRET,
+                YOUTUBE_REFRESH_TOKEN,
+                downloaded_video_path, # 다운로드된 로컬 비디오 파일 경로
+                video_title,
+                video_description,
+                ["AI", "shorts", "news", "automation", "tech", "trending"] # 관련 태그
+            )
+            logger.info(f"✅ 6단계 완료: YouTube 업로드 성공! 비디오 ID: {youtube_uploader_response.get('id')}")
+            # 수익 창출 로직은 YouTube 업로드 후 설정하는 부분에 해당합니다.
+            # 이는 YouTube API 사용 정책과 계정 상태에 따라 달라지며,
+            # YouTube Studio에서 직접 설정하거나 추가 API 호출을 해야 합니다.
 
         except Exception as e:
-            logger.error(f"YouTube 업로드 오류: {e}")
+            logger.error(f"YouTube 업로드 오류: {e}", exc_info=True)
+            raise RuntimeError(f"YouTube 업로드 실패: {e}")
 
     except Exception as e:
         logger.error(f"❌ YouTube Shorts 업로드 프로세스 전체 오류: {e}", exc_info=True)
+        # 이 오류는 Cloud Run 로그에서 명확하게 보일 것입니다.
+        # 외부 시스템에 알림을 보내는 로직을 추가할 수 있습니다.
     finally:
         end_time = time.time()
         logger.info(f"⏱ 총 처리 시간: {end_time - start_time:.2f} 초")
+        
+        # 임시 파일 정리 (항상 실행)
+        for f in [local_audio_path, local_final_shorts_path, downloaded_video_path] + image_paths:
+            if f and os.path.exists(f):
+                try:
+                    os.remove(f)
+                    logger.info(f"임시 파일 삭제 완료: {f}")
+                except Exception as e:
+                    logger.warning(f"임시 파일 삭제 실패 {f}: {e}")
+
+# 이 부분은 Gunicorn이 Cloud Run 환경에서 앱을 실행할 때 필요 없습니다.
+# Gunicorn이 'app:app' (app.py 파일 내의 'app' 객체)을 찾아 실행합니다.
+# if __name__ == '__main__':
+#     port = int(os.environ.get('PORT', 8080))
+#     app.run(host='0.0.0.0', port=port, debug=True) # debug=True는 개발용, 배포 시에는 False
