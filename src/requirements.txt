@@ -1,21 +1,20 @@
+# requirements.txt
 Flask
 gunicorn
-google-cloud-storage # GCS를 통해 파일을 업로드/다운로드할 경우 필요
-google-cloud-logging # Cloud Logging 사용 시
-google-auth
-google-auth-oauthlib
+google-cloud-storage
+google-cloud-logging
+# google-cloud-pubsub # 현재 app.py에서 사용되지 않으므로 필요 시 추가
+
+# YouTube API (google-api-python-client 포함)
 google-api-python-client
-oauth2client
-httplib2==0.20.0 # oauth2client 호환성을 위해 특정 버전으로 고정
-requests
-Pillow
-moviepy
-openai # GPT-4o 사용을 위해
-google-generativeai # Google Gemini 사용을 위해
-newsapi-python
+google-auth-httplib2
+google-auth-oauthlib
+
+# AI/뉴스/비디오 관련 API 클라이언트
+openai
 elevenlabs
-decorator==5.1.1 # moviepy 충돌 회피
-imageio==2.34.0 # moviepy 충돌 회피
-fastapi
-uvicorn[standard]
-python-pexels
+newsapi-python
+# pexels 라이브러리는 공식 Python 라이브러리가 명확하지 않으므로, 
+# requests 등을 사용하여 직접 API 호출하는 경우가 많습니다. 
+# 만약 특정 pexels 라이브러리를 사용한다면 여기에 추가하세요.
+requests # API 직접 호출 시 유용
