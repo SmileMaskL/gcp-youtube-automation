@@ -1,23 +1,15 @@
-# requirements.txt
 Flask
-gunicorn
 google-cloud-storage
-google-cloud-logging
-
-# YouTube Data API (Google API Client Libraries)
-google-api-python-client
-google-auth-httplib2
 google-auth-oauthlib
-
-# AI API Clients
-openai # OpenAI Python SDK (GPT-4o 등)
-google-generativeai # Google Gemini Python SDK
-elevenlabs # ElevenLabs TTS SDK
-
-# News API Client
-newsapi-python # NewsAPI 공식 Python Wrapper (뉴스 수집)
-
-# Video/Image Assets (Pexels, MoviePy 등)
-requests # Pexels API 등 HTTP 요청에 사용
-# moviepy # 비디오 편집 라이브러리 (ffmpeg 설치 필수)
-# Pillow # 이미지 처리 라이브러리 (MoviePy가 의존할 수 있음)
+google-api-python-client
+moviepy
+requests
+python-dotenv
+beautifulsoup4
+openai
+google-generativeai
+Pillow
+pexels-api
+newsapi-python # ✅ 추가!
+elevenlabs # ✅ 추가!
+jq # GitHub Actions 스크립트에서 사용 (파이썬 라이브러리 아님, 하지만 명시)
