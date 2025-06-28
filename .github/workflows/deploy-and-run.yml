@@ -67,7 +67,7 @@ jobs:
           --platform managed \
           --region ${{ env.GCP_REGION }} \
           --allow-unauthenticated \
-          --service-account github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com \ # ✅ 여기도 하드코딩
+          --service-account github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com \
           --cpu 1 \
           --memory 512Mi \
           --min-instances 0 \
