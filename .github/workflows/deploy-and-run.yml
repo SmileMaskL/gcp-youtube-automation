@@ -32,10 +32,8 @@ jobs:
       id: 'auth'
       uses: 'google-github-actions/auth@v2'
       with:
-        # Workload Identity Provider 경로는 프로젝트 번호와 Pool ID, Provider ID가 정확히 일치해야 합니다.
         workload_identity_provider: "projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01"
         service_account: ${{ env.SERVICE_ACCOUNT_EMAIL }}
-        # audience는 GCP Workload Identity Provider의 기본 대상으로 설정합니다.
         audience: "https://iam.googleapis.com/projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01"
 
     - name: Set up Google Cloud SDK
@@ -49,24 +47,27 @@ jobs:
     - name: Build and Deploy Cloud Run Service
       id: deploy
       run: |
+        # 환경 변수 문자열을 미리 구성합니다.
+        # 이렇게 하면 YAML 파싱이나 쉘 줄바꿈 문제 없이 정확하게 전달됩니다.
+        ENV_VARS="GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }}"
+        ENV_VARS="${ENV_VARS},GCP_BUCKET_NAME=${{ env.GCP_BUCKET_NAME }}"
+        ENV_VARS="${ENV_VARS},ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }}"
+        ENV_VARS="${ENV_VARS},ELEVENLABS_VOICE_ID=${{ secrets.ELEVENLABS_VOICE_ID }}"
+        ENV_VARS="${ENV_VARS},GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}"
+        ENV_VARS="${ENV_VARS},NEWS_API_KEY=${{ secrets.NEWS_API_KEY }}"
+        ENV_VARS="${ENV_VARS},OPENAI_API_KEYS=\"${{ secrets.OPENAI_API_KEYS }}\"" # Secret 값은 이중 따옴표로 감쌈
+        ENV_VARS="${ENV_VARS},PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }}"
+        ENV_VARS="${ENV_VARS},YOUTUBE_CLIENT_ID=${{ secrets.YOUTUBE_CLIENT_ID }}"
+        ENV_VARS="${ENV_VARS},YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }}"
+        ENV_VARS="${ENV_VARS},YOUTUBE_REFRESH_TOKEN=\"${{ secrets.YOUTUBE_REFRESH_TOKEN }}\"" # Secret 값은 이중 따옴표로 감쌈
+
         gcloud run deploy youtube-shorts-automation \
           --source ./src \
           --platform managed \
           --region ${{ env.GCP_REGION }} \
           --allow-unauthenticated \
           --service-account ${{ env.SERVICE_ACCOUNT_EMAIL }} \
-          --set-env-vars \
-            GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }},\
-            GCP_BUCKET_NAME=${{ env.GCP_BUCKET_NAME }},\
-            ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }},\
-            ELEVENLABS_VOICE_ID=${{ secrets.ELEVENLABS_VOICE_ID }},\
-            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }},\
-            NEWS_API_KEY=${{ secrets.NEWS_API_KEY }},\
-            OPENAI_API_KEYS="${{ secrets.OPENAI_API_KEYS }}",\ # << 큰따옴표 추가
-            PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }},\
-            YOUTUBE_CLIENT_ID=${{ secrets.YOUTUBE_CLIENT_ID }},\
-            YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }},\
-            YOUTUBE_REFRESH_TOKEN="${{ secrets.YOUTUBE_REFRESH_TOKEN }}" # << 큰따옴표 추가
+          --set-env-vars "$ENV_VARS" # 구성된 변수 전달 (이중 따옴표 필수)
         
         SERVICE_URL=$(gcloud run services describe youtube-shorts-automation \
                       --platform managed \
