@@ -107,6 +107,6 @@ def process_youtube_shorts_upload():
         end_time = time.time()
         logging.info(f"⏱ 총 처리 시간: {end_time - start_time:.2f} 초")
 
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 8080))
-    app.run(host='0.0.0.0', port=port, debug=False)
+# if __name__ == '__main__':
+#    port = int(os.environ.get('PORT', 8080))
+#    app.run(host='0.0.0.0', port=port, debug=False)
