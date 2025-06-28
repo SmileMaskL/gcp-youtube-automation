@@ -15,7 +15,7 @@ on:
 env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   GCP_PROJECT_NUMBER: ${{ secrets.GCP_PROJECT_NUMBER }}
-  GCP_REGION: us-central1 # Cloud Run 서비스를 배포할 GCP 리전 (deploy-and-run.yml과 통일)
+  GCP_REGION: asia-northeast3 # Cloud Run 서비스를 배포할 GCP 리전 (deploy-and-run.yml과 통일)
   SERVICE_ACCOUNT_EMAIL: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
 
 jobs:
