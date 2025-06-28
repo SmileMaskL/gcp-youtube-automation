@@ -2,22 +2,22 @@ name: Daily YouTube Shorts Upload
 
 on:
   schedule:
-    - cron: '0 3,7,12,18,22 * * *'  # UTC 기준 하루 5회 실행 (3AM, 7AM, 12PM, 6PM, 10PM)
+    - cron: '0 3,7,12,18,22 * * *'  # UTC 기준 하루 5회 (3AM, 7AM, 12PM, 6PM, 10PM)
   workflow_dispatch:  # 수동 실행 허용
 
 env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   GCP_PROJECT_NUMBER: ${{ secrets.GCP_PROJECT_NUMBER }}
-  GCP_REGION: asia-northeast3  # Cloud Run 서비스가 배포된 리전
+  GCP_REGION: asia-northeast3
   SERVICE_ACCOUNT_EMAIL: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
 
 jobs:
   generate-and-upload:
     runs-on: ubuntu-latest
-    timeout-minutes: 30  # 최대 실행 시간 설정
+    timeout-minutes: 30
     permissions:
       contents: 'read'
-      id-token: 'write'  # OIDC 토큰 발급 필수
+      id-token: 'write'  # OIDC 토큰 필수
 
     steps:
     - name: Checkout repository
@@ -25,7 +25,7 @@ jobs:
       with:
         fetch-depth: 1  # 저장소 전체 히스토리 대신 최신 커밋만 체크아웃
 
-    - name: 'Google Cloud 인증 (Workload Identity Federation)'
+    - name: 'Google Cloud 인증 (Workload Identity)'
       id: auth
       uses: google-github-actions/auth@v2
       with:
@@ -40,7 +40,7 @@ jobs:
         project_id: ${{ env.GCP_PROJECT_ID }}
         export_default_credentials: true  # 기본 인증 정보 설정
 
-    - name: 'Cloud Run 서비스 상태 확인'
+    - name: 'Cloud Run 서비스 확인'
       id: service_check
       run: |
         # 서비스 상태 상세 확인
@@ -53,90 +53,61 @@ jobs:
         echo "SERVICE_URL=$(echo $SERVICE_INFO | jq -r '.status.url')" >> $GITHUB_ENV
         
         # 상태 확인
-        SERVICE_READY=$(echo $SERVICE_INFO | jq -r '.status.conditions[] | select(.type=="Ready") | .status')
-        SERVICE_ACTIVE=$(echo $SERVICE_INFO | jq -r '.status.conditions[] | select(.type=="Active") | .status')
-        
-        if [ "$SERVICE_READY" != "True" ] || [ "$SERVICE_ACTIVE" != "True" ]; then
-          echo "::error::Cloud Run 서비스가 정상 상태가 아닙니다 - Ready: $SERVICE_READY, Active: $SERVICE_ACTIVE"
-          echo "::group::서비스 상세 정보"
-          echo "$SERVICE_INFO"
+        READY_STATUS=$(echo $SERVICE_INFO | jq -r '.status.conditions[] | select(.type=="Ready") | .status')
+        if [ "$READY_STATUS" != "True" ]; then
+          echo "::error::Cloud Run 서비스가 준비되지 않았습니다"
+          echo "::group::서비스 상태"
+          echo "$SERVICE_INFO" | jq .
           echo "::endgroup::"
           exit 1
         fi
+        echo "✅ Cloud Run 서비스 정상 확인"
 
-        echo "Cloud Run 서비스가 정상적으로 준비되었습니다"
-
-    - name: 'YouTube 쇼츠 생성 요청 (재시도 포함)'
-      id: create_shorts
-      timeout-minutes: 5
-      env:
-        MAX_RETRIES: 3
-        RETRY_DELAY: 15
+    - name: 'YouTube 쇼츠 생성 및 업로드'
+      id: upload_shorts
       run: |
-        attempt=1
-        while [ $attempt -le $MAX_RETRIES ]; do
-          echo "▶️ 시도 $attempt/$MAX_RETRIES"
-          
-          # 요청 본문 데이터 준비
-          REQUEST_DATA=$(cat <<EOF
-          {
-            "action": "create_and_upload_shorts",
-            "metadata": {
-              "workflow_run_id": "${{ github.run_id }}",
-              "run_number": "${{ github.run_number }}",
-              "trigger_time": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')",
-              "commit_sha": "${{ github.sha }}"
-            }
+        # 요청 데이터 준비
+        REQUEST_BODY=$(cat <<EOF
+        {
+          "action": "create_and_upload_shorts",
+          "metadata": {
+            "workflow_run_id": "${{ github.run_id }}",
+            "trigger_time": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           }
-          EOF
-          )
+        }
+        EOF
+        )
 
-          echo "::group::요청 데이터 (시도 $attempt)"
-          echo "$REQUEST_DATA"
-          echo "::endgroup::"
+        echo "::group::요청 데이터"
+        echo "$REQUEST_BODY"
+        echo "::endgroup::"
 
-          # 서비스 호출
-          RESPONSE=$(curl --fail-with-body -sS -m 300 -X POST "${{ env.SERVICE_URL }}" \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" \
-            -d "$REQUEST_DATA") || {
-              echo "⚠️ curl 명령 실패"
-              RESPONSE='{"status":"failed"}'
-            }
+        # 서비스 호출 (타임아웃 300초 설정)
+        RESPONSE=$(curl --fail-with-body -sS -m 300 -X POST "${{ env.SERVICE_URL }}" \
+          -H "Content-Type: application/json" \
+          -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" \
+          -d "$REQUEST_BODY")
 
-          echo "::group::서비스 응답 (시도 $attempt)"
-          echo "$RESPONSE"
-          echo "::endgroup::"
-          
-          # JSON 응답 파싱
-          STATUS=$(echo "$RESPONSE" | jq -r '.status // empty')
-          JOB_ID=$(echo "$RESPONSE" | jq -r '.jobId // empty')
-          
-          if [ "$STATUS" == "success" ]; then
-            echo "✅ 성공!"
-            if [ -n "$JOB_ID" ]; then
-              echo "jobId=$JOB_ID" >> $GITHUB_OUTPUT
-            fi
-            exit 0
-          fi
-          
-          echo "⚠️ 시도 $attempt 실패: $STATUS"
-          if [ $attempt -lt $MAX_RETRIES ]; then
-            echo "⏳ $RETRY_DELAY초 후 재시도..."
-            sleep $RETRY_DELAY
-          fi
-          
-          attempt=$((attempt + 1))
-        done
-        
-        echo "::error::❌ 모든 재시도 실패 (최종 상태: $STATUS)"
-        exit 1
+        echo "::group::서비스 응답"
+        echo "$RESPONSE"
+        echo "::endgroup::"
 
-    - name: '작업 결과 로깅'
+        # 응답 검증
+        if ! echo "$RESPONSE" | jq -e '.status == "success"' > /dev/null; then
+          echo "::error::서비스 응답 실패"
+          exit 1
+        fi
+
+        # 작업 ID 추출 (있는 경우)
+        JOB_ID=$(echo "$RESPONSE" | jq -r '.jobId // empty')
+        if [ -n "$JOB_ID" ]; then
+          echo "jobId=$JOB_ID" >> $GITHUB_OUTPUT
+        fi
+
+    - name: '결과 로깅'
       if: always()
       run: |
-        echo "워크플로우 실행 상태: ${{ job.status }}"
-        echo "서비스 엔드포인트: ${{ env.SERVICE_URL }}"
-        echo "생성된 작업 ID: ${{ steps.create_shorts.outputs.jobId || '없음' }}"
-        echo "최종 응답:"
-        echo "$RESPONSE" | jq . 2>/dev/null || echo "응답 데이터 없음"
+        echo "=== 실행 결과 ==="
+        echo "워크플로우 상태: ${{ job.status }}"
+        echo "서비스 URL: ${{ env.SERVICE_URL }}"
+        echo "생성된 작업 ID: ${{ steps.upload_shorts.outputs.jobId || '없음' }}"
