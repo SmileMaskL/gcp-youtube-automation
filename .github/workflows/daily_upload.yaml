@@ -36,7 +36,7 @@ jobs:
 
     - name: Cloud Run 서비스 호출
       run: |
-        # Cloud Run 서비스 URL 가져오기
+        # ✅ Cloud Run 서비스 URL 가져오기
         SERVICE_URL=$(gcloud run services describe youtube-shorts-automation \
           --region=${{ env.GCP_REGION }} \
           --format="value(status.url)")
