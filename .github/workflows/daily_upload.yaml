@@ -1,32 +1,41 @@
+# .github/workflows/daily_upload.yaml
+# 이 워크플로우는 이미 배포된 Cloud Run 서비스를 호출하여 매일 YouTube 쇼츠를 생성하고 업로드합니다.
+# 서비스 배포는 deploy-and-run.yml 워크플로우에서 담당합니다.
+
 name: Daily YouTube Shorts Upload
 
 on:
   schedule:
-    - cron: '0 3,7,12,18,22 * * *'  # 하루 5회 실행 (UTC 기준)
+    # UTC 기준, 매일 3시, 7시, 12시, 18시, 22시에 실행 (하루 5회)
+    # 이 스케줄은 Cloud Run의 무료 한도를 고려하여 설정되었습니다.
+    # 더 자주 실행하려면 '0 */4 * * *' (4시간마다) 등으로 변경할 수 있습니다.
+    - cron: '0 3,7,12,18,22 * * *'
   workflow_dispatch: # 수동 실행 허용
 
 env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  GCP_PROJECT_NUMBER: ${{ secrets.GCP_PROJECT_NUMBER }} 
-  GCP_BUCKET_NAME: ${{ secrets.GCP_BUCKET_NAME }}
+  GCP_PROJECT_NUMBER: ${{ secrets.GCP_PROJECT_NUMBER }}
+  # GCP_BUCKET_NAME은 이 워크플로우에서 직접 사용되지 않으므로 제거하거나 그대로 두셔도 됩니다.
+  # Cloud Run 서비스 내부에서만 사용됩니다.
+  # GCP_BUCKET_NAME: ${{ secrets.GCP_BUCKET_NAME }} 
   GCP_REGION: asia-northeast3 # Cloud Run 서비스를 배포할 GCP 리전 (deploy-and-run.yml과 통일)
-  GH_REPOSITORY_OWNER: SmileMaskL
-  GH_REPOSITORY_NAME: gcp-youtube-automation
   SERVICE_ACCOUNT_EMAIL: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
 
 jobs:
   generate-and-upload:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 30 # 최대 실행 시간 30분 설정 (무료 한도 내에서 적정)
     permissions:
       contents: 'read'
-      actions: 'write'  # GitHub Actions 권한 추가
+      actions: 'write'  # GitHub Actions 권한 추가 (워크플로우 관련 작업용)
       id-token: 'write'  # OIDC 토큰 발급 필수
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    # Python 설치 스텝은 Cloud Run 서비스 호출에는 필수는 아니지만,
+    # 혹시 모를 로컬 스크립트 실행을 위해 남겨두는 것은 무방합니다.
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
@@ -45,44 +54,64 @@ jobs:
       with:
         project_id: ${{ env.GCP_PROJECT_ID }}
 
-    - name: Configure Docker for Google Container Registry
-      run: gcloud auth configure-docker
+    # ▼▼▼▼▼▼▼ 이 아래의 배포 관련 스텝들은 모두 제거되었습니다! ▼▼▼▼▼▼▼
+    # - name: Configure Docker for Google Container Registry
+    #   run: gcloud auth configure-docker
 
-    - name: Build and Deploy Cloud Run Service
-      id: deploy_cloud_run
+    # - name: Build and Deploy Cloud Run Service
+    #   id: deploy_cloud_run
+    #   run: |
+    #     ENV_VARS="GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }}"
+    #     ENV_VARS="${ENV_VARS},GCP_BUCKET_NAME=${{ env.GCP_BUCKET_NAME }}"
+    #     ENV_VARS="${ENV_VARS},ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }}"
+    #     ENV_VARS="${ENV_VARS},ELEVENLABS_VOICE_ID=${{ secrets.ELEVENLABS_VOICE_ID }}"
+    #     ENV_VARS="${ENV_VARS},GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}"
+    #     ENV_VARS="${ENV_VARS},NEWS_API_KEY=${{ secrets.NEWS_API_KEY }}"
+    #     ENV_VARS="${ENV_VARS},OPENAI_API_KEYS=\"${{ secrets.OPENAI_API_KEYS }}\""
+    #     ENV_VARS="${ENV_VARS},PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }}"
+    #     ENV_VARS="${ENV_VARS},YOUTUBE_CLIENT_ID=${{ secrets.YOUTUBE_CLIENT_ID }}"
+    #     ENV_VARS="${ENV_VARS},YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }}"
+    #     ENV_VARS="${ENV_VARS},YOUTUBE_REFRESH_TOKEN=\"${{ secrets.YOUTUBE_REFRESH_TOKEN }}\""
+    #     
+    #     gcloud run deploy youtube-shorts-automation \
+    #       --source ./src \
+    #       --platform managed \
+    #       --region ${{ env.GCP_REGION }} \
+    #       --allow-unauthenticated \
+    #       --service-account ${{ env.SERVICE_ACCOUNT_EMAIL }} \
+    #       --set-env-vars "$ENV_VARS"
+    #     
+    #     SERVICE_URL=$(gcloud run services describe youtube-shorts-automation \
+    #                   --platform managed \
+    #                   --region ${{ env.GCP_REGION }} \
+    #                   --format="value(status.url)")
+    #     
+    #     echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_ENV
+    # ▲▲▲▲▲▲▲ 위의 배포 관련 스텝들은 모두 제거되었습니다! ▲▲▲▲▲▲▲
+
+    - name: Get Cloud Run Service URL
+      id: get_service_url
       run: |
-        # 환경 변수 문자열을 미리 구성합니다.
-        ENV_VARS="GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }}"
-        ENV_VARS="${ENV_VARS},GCP_BUCKET_NAME=${{ env.GCP_BUCKET_NAME }}"
-        ENV_VARS="${ENV_VARS},ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }}"
-        ENV_VARS="${ENV_VARS},ELEVENLABS_VOICE_ID=${{ secrets.ELEVENLABS_VOICE_ID }}"
-        ENV_VARS="${ENV_VARS},GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}"
-        ENV_VARS="${ENV_VARS},NEWS_API_KEY=${{ secrets.NEWS_API_KEY }}"
-        ENV_VARS="${ENV_VARS},OPENAI_API_KEYS=\"${{ secrets.OPENAI_API_KEYS }}\"" # Secret 값은 이중 따옴표로 감쌈
-        ENV_VARS="${ENV_VARS},PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }}"
-        ENV_VARS="${ENV_VARS},YOUTUBE_CLIENT_ID=${{ secrets.YOUTUBE_CLIENT_ID }}"
-        ENV_VARS="${ENV_VARS},YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }}"
-        ENV_VARS="${ENV_VARS},YOUTUBE_REFRESH_TOKEN=\"${{ secrets.YOUTUBE_REFRESH_TOKEN }}\"" # Secret 값은 이중 따옴표로 감쌈
-        
-        gcloud run deploy youtube-shorts-automation \
-          --source ./src \
-          --platform managed \
-          --region ${{ env.GCP_REGION }} \
-          --allow-unauthenticated \
-          --service-account ${{ env.SERVICE_ACCOUNT_EMAIL }} \
-          --set-env-vars "$ENV_VARS" # 구성된 변수 전달 (이중 따옴표 필수)
-        
+        # 이미 deploy-and-run.yml에서 배포된 Cloud Run 서비스의 URL을 가져옵니다.
+        # 이 워크플로우는 배포하지 않고, 기존 서비스를 사용합니다.
         SERVICE_URL=$(gcloud run services describe youtube-shorts-automation \
                       --platform managed \
                       --region ${{ env.GCP_REGION }} \
                       --format="value(status.url)")
-        
+        # 이 URL을 다음 스텝에서 사용할 수 있도록 환경 변수에 저장합니다.
         echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_ENV
-
+        echo "Cloud Run service URL: $SERVICE_URL"
+      
     - name: Invoke Cloud Run Service
+      # SERVICE_URL 환경 변수가 이제 이 스텝에서 사용 가능합니다.
       run: |
+        # Cloud Run 서비스 호출 시 인증 토큰을 생성합니다.
+        # --allow-unauthenticated 설정했더라도, 서비스 계정을 통한 인증은 보안상 좋은 습관입니다.
         CALL_TOKEN=$(gcloud auth print-identity-token)
         curl -X POST "${{ env.SERVICE_URL }}" \
              -H "Content-Type: application/json" \
              -H "Authorization: Bearer $CALL_TOKEN" \
              -d '{"action": "create_and_upload_shorts"}'
+
+    # 스크립트 실행 후 남은 로컬 파일 정리 (Cloud Run 내부에서 처리되므로 여기서는 필요 없음)
+    # Cloud Run 인스턴스는 각 요청 처리 후 초기화되므로, 워크플로우에서 별도로 파일을 정리할 필요가 없습니다.
