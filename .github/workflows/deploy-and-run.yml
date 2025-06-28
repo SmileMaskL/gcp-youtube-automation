@@ -32,9 +32,9 @@ jobs:
       id: 'auth'
       uses: 'google-github-actions/auth@v2'
       with:
-        workload_identity_provider: "projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01"
+        workload_identity_provider: "projects/${{ env.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/${{ env.WIF_POOL_ID }}/providers/${{ env.WIF_PROVIDER_ID }}"
         service_account: ${{ env.SERVICE_ACCOUNT_EMAIL }}
-        audience: "https://iam.googleapis.com/projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01"
+        audience: "https://iam.googleapis.com/projects/${{ env.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/${{ env.WIF_POOL_ID }}/providers/${{ env.WIF_PROVIDER_ID }}"
 
     - name: Set up Google Cloud SDK
       uses: google-github-actions/setup-gcloud@v2
