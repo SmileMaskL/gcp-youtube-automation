@@ -27,7 +27,7 @@ jobs:
       # 이전에 'YOUR_PROJECT_NUMBER'가 토큰에 포함되던 문제를 해결합니다.
       actions: write # 이 줄은 기존에 없었다면 추가합니다.
       id-token:
-        audience: "https://iam.googleapis.com/projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v3"
+        audience: "https://iam.googleapis.com/projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01"
       # --- 수정된 부분 끝 ---
 
     steps:
@@ -45,7 +45,7 @@ jobs:
       with:
         # 이 `workload_identity_provider` 값은 GCP에서 정의한 공급업체의 전체 리소스 이름입니다.
         # GitHub Secret에 저장된 `GCP_PROJECT_NUMBER`를 사용합니다.
-        workload_identity_provider: 'projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider-v3'
+        workload_identity_provider: 'projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01'
         # 이 워크플로우가 GCP 리소스에 접근할 때 사용할 서비스 계정
         # GitHub Secret에 'GCP_SERVICE_ACCOUNT'라는 이름으로 저장된 값을 사용합니다.
         service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }} 
