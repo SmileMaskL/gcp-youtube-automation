@@ -3,18 +3,21 @@ Flask
 gunicorn
 google-cloud-storage
 google-cloud-logging
-# google-cloud-pubsub # 현재 app.py에서 사용되지 않으므로 필요 시 추가
 
-# YouTube API (google-api-python-client 포함)
+# YouTube Data API (Google API Client Libraries)
 google-api-python-client
 google-auth-httplib2
 google-auth-oauthlib
 
-# AI/뉴스/비디오 관련 API 클라이언트
-openai
-elevenlabs
-newsapi-python
-# pexels 라이브러리는 공식 Python 라이브러리가 명확하지 않으므로, 
-# requests 등을 사용하여 직접 API 호출하는 경우가 많습니다. 
-# 만약 특정 pexels 라이브러리를 사용한다면 여기에 추가하세요.
-requests # API 직접 호출 시 유용
+# AI API Clients
+openai # OpenAI Python SDK (GPT-4o 등)
+google-generativeai # Google Gemini Python SDK
+elevenlabs # ElevenLabs TTS SDK
+
+# News API Client
+newsapi-python # NewsAPI 공식 Python Wrapper (뉴스 수집)
+
+# Video/Image Assets (Pexels, MoviePy 등)
+requests # Pexels API 등 HTTP 요청에 사용
+# moviepy # 비디오 편집 라이브러리 (ffmpeg 설치 필수)
+# Pillow # 이미지 처리 라이브러리 (MoviePy가 의존할 수 있음)
