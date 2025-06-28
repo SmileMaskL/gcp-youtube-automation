@@ -10,7 +10,8 @@ env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   GCP_PROJECT_NUMBER: ${{ secrets.GCP_PROJECT_NUMBER }}
   GCP_REGION: us-central1 # us-central1으로 통일
-  SERVICE_ACCOUNT_EMAIL: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com # 여러분의 서비스 계정 이메일 (예시)
+  # ✅ SERVICE_ACCOUNT_EMAIL 환경 변수를 여기서 제거합니다.
+  # SERVICE_ACCOUNT_EMAIL: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com # 여러분의 서비스 계정 이메일 (예시)
   CLOUD_RUN_SERVICE_NAME: youtube-shorts-automation # Cloud Run 서비스 이름
   ARTIFACT_REGISTRY_REPO: youtube-shorts-automation-repo # Artifact Registry 리포지토리 이름 (이미 있다면 그대로)
   GCP_BUCKET_NAME: youtube-shorts-media-us-central1 # 새로 만든 버킷 이름
@@ -30,12 +31,14 @@ jobs:
       id: auth
       uses: google-github-actions/auth@v2
       with:
-        # ✅ 여기! provider 이름이 'github-actions-provider-01'으로 변경되었습니다!
         workload_identity_provider: 'projects/${{ env.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01'
-        service_account: ${{ env.SERVICE_ACCOUNT_EMAIL }}
+        # ✅ 서비스 계정 이메일을 여기에 직접 하드코딩합니다.
+        service_account: 'github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com'
 
     - name: 'gcloud CLI 설치 및 구성'
       uses: google-github-actions/setup-gcloud@v2
+      with:
+        project_id: ${{ env.GCP_PROJECT_ID }} # ✅ 명시적으로 프로젝트 ID 설정
 
     - name: 'Artifact Registry 리포지토리 생성 (이미 있다면 스킵)'
       run: |
@@ -64,7 +67,7 @@ jobs:
           --platform managed \
           --region ${{ env.GCP_REGION }} \
           --allow-unauthenticated \
-          --service-account ${{ env.SERVICE_ACCOUNT_EMAIL }} \
+          --service-account github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com \ # ✅ 여기도 하드코딩
           --cpu 1 \
           --memory 512Mi \
           --min-instances 0 \
