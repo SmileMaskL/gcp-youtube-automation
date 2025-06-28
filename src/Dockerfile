@@ -30,8 +30,7 @@ ENV PORT 8080
 # Gunicorn을 사용하여 Flask 애플리케이션 실행
 # --bind :$PORT : 0.0.0.0:${PORT}와 동일, 모든 네트워크 인터페이스에서 포트를 리스닝합니다.
 # --workers 1 : 단일 워커 (Cloud Run 인스턴스당 하나의 컨테이너 프로세스)
-# --timeout 0 : 요청 타임아웃을 무한대로 설정 (장시간 비동기 작업에 유용)
-# ✅ --graceful-timeout 30 : 앱이 완전히 로드될 때까지 30초 대기. 이 시간 내에 시작되지 않으면 종료.
-# 로봇이 준비 운동을 충분히 할 수 있는 시간을 주는 것과 같아요!
-# 'app:app'으로 변경: src/app.py 파일 내의 'app' Flask 인스턴스를 찾아 실행합니다.
-CMD exec gunicorn --bind :$PORT --workers 1 --timeout 0 --graceful-timeout 30 app:app
+# --timeout 0 : 요청 타임아웃을 무한대로 설정 (장시간 비동기 작업에 유용).
+#               다만, Cloud Run의 최대 요청 타임아웃(60분)을 초과할 수 없습니다.
+# ✅ 'app:app'으로 변경: src/app.py 파일 내의 'app' Flask 인스턴스를 찾아 실행합니다.
+CMD exec gunicorn --bind :$PORT --workers 1 --timeout 0 app:app
