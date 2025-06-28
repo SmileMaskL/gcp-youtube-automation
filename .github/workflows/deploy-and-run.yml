@@ -36,11 +36,11 @@ jobs:
       uses: 'google-github-actions/auth@v2'
       with:
         # Workload Identity Provider 경로는 프로젝트 번호와 Pool ID, Provider ID가 정확히 일치해야 합니다.
-        workload_identity_provider: "projects/${{ env.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/${{ env.WIF_POOL_ID }}/providers/${{ env.WIF_PROVIDER_ID }}"
+        workload_identity_provider: "projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01"
         # 서비스 계정 이메일 주소
         service_account: ${{ env.SERVICE_ACCOUNT_EMAIL }}
         # audience는 일반적으로 서비스 계정 이메일 주소를 사용합니다.
-        audience: ${{ env.SERVICE_ACCOUNT_EMAIL }}
+        audience: https://iam.googleapis.com/projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01
 
     - name: Set up Google Cloud SDK
       uses: google-github-actions/setup-gcloud@v2
