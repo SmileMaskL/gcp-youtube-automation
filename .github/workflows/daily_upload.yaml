@@ -47,7 +47,8 @@ jobs:
       uses: google-github-actions/setup-gcloud@v2
       with:
         project_id: ${{ env.GCP_PROJECT_ID }}
-        export_default_credentials: true # 기본 인증 정보 설정
+        # ✅ 이곳에서 'export_default_credentials: true' 줄을 삭제합니다!
+        # 더 이상 이 옵션은 필요하지 않으며, 오히려 오류를 발생시킵니다.
 
     - name: 'Cloud Run 서비스 확인'
       id: service_check
@@ -64,7 +65,7 @@ jobs:
         # 상태 확인
         READY_STATUS=$(echo $SERVICE_INFO | jq -r '.status.conditions[] | select(.type=="Ready") | .status')
         if [ "$READY_STATUS" != "True" ]; then
-          echo "::error::Cloud Run 서비스가 준비되지 않았습니다"
+          echo "::error::Cloud Run 서비스가 준비되지 않았습니다."
           echo "::group::서비스 상태"
           echo "$SERVICE_INFO" | jq .
           echo "::endgroup::"
@@ -92,18 +93,22 @@ jobs:
         echo "::endgroup::"
 
         # 서비스 호출 (타임아웃 300초 설정)
+        # --fail-with-body: HTTP 에러 발생 시 응답 본문 출력
+        # -sS: 진행 상황 막대와 에러 메시지를 숨기지 않고 출력
+        # -m 300: 300초(5분) 안에 응답이 없으면 타임아웃
         RESPONSE=$(curl --fail-with-body -sS -m 300 -X POST "${{ env.SERVICE_URL }}" \
           -H "Content-Type: application/json" \
           -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" \
-          -d "$REQUEST_BODY") # ✅ 이 부분이 핵심 변경점입니다!
+          -d "$REQUEST_BODY")
 
         echo "::group::서비스 응답"
         echo "$RESPONSE"
         echo "::endgroup::"
 
-        # 응답 검증
-        if ! echo "$RESPONSE" | jq -e '.status == "success"' > /dev/null; then
-          echo "::error::서비스 응답 실패"
+        # 응답 검증: Cloud Run 서비스에서 'status: "success"' 또는 'status: "processing"'을 반환하는지 확인
+        # Cloud Run 서비스가 비동기 작업을 시작하고 202 Accepted를 반환하므로, "processing"도 성공으로 간주
+        if ! echo "$RESPONSE" | jq -e '.status == "success" or .status == "processing"' > /dev/null; then
+          echo "::error::서비스 응답 실패 또는 예상치 못한 상태: $RESPONSE"
           exit 1
         fi
 
