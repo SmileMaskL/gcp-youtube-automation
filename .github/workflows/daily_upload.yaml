@@ -14,39 +14,37 @@ env:
 jobs:
   generate-and-upload:
     runs-on: ubuntu-latest
-    timeout-minutes: 30  # 무료 한도 내 최적화
+    timeout-minutes: 30
     permissions:
       contents: 'read'
-      id-token: 'write'  # OIDC 토큰 필수!
+      id-token: 'write'  # 🔑 핵심! OIDC 토큰 사용 허용
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    # ✅ 인증 단계 (새로운 표준 방식)
     - name: 'Google Cloud 인증'
-      id: auth  # ID 필수! (토큰 사용을 위해)
+      id: auth  # 이 ID로 토큰 사용!
       uses: google-github-actions/auth@v2
       with:
         workload_identity_provider: "projects/${{ env.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01"
         service_account: ${{ env.SERVICE_ACCOUNT_EMAIL }}
-        token_format: 'access_token'  # ★ 액세스 토큰 자동 생성
+        token_format: 'access_token'  # 액세스 토큰 자동 생성
 
     - name: 'Google Cloud SDK 설정'
       uses: google-github-actions/setup-gcloud@v2
-      with:
-        project_id: ${{ env.GCP_PROJECT_ID }}
 
-    - name: 'Cloud Run 서비스 URL 가져오기'
+    # ✅ 서비스 호출 (토큰 직접 사용)
+    - name: 'Cloud Run 서비스 실행'
       run: |
+        # 서비스 URL 자동 조회
         SERVICE_URL=$(gcloud run services describe youtube-shorts-automation \
-          --platform managed \
-          --region ${{ env.GCP_REGION }} \
+          --region=${{ env.GCP_REGION }} \
           --format="value(status.url)")
-        echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_ENV
 
-    - name: 'Cloud Run 서비스 실행 (자동 업로드)'
-      run: |
-        curl -X POST "${{ env.SERVICE_URL }}" \
+        # 🔥 핵심 변경점: 자동 생성 토큰 사용
+        curl -X POST "$SERVICE_URL" \
           -H "Content-Type: application/json" \
-          -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" \ # ★ 통합 인증 토큰
-          -d '{"action": "create_and_upload_shorts"}' # 트리거 명령
+          -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" \
+          -d '{"action": "create_and_upload_shorts"}'
