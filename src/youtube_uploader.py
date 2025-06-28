@@ -1,136 +1,128 @@
-# src/youtube_uploader.py
-import os
+# src/video_generator.py
+from moviepy.editor import ImageClip, AudioFileClip, CompositeVideoClip, concatenate_videoclips
 import logging
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
-from googleapiclient.http import MediaFileUpload
+import os
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__) # 모듈별 로거 사용 권장
+logger.setLevel(logging.INFO)
 
-SCOPES = ['https://www.googleapis.com/auth/youtube.upload']
+def create_video_from_images_and_audio(image_paths, audio_path, output_video_path):
+    """
+    여러 이미지와 오디오 파일을 합쳐 비디오를 생성합니다.
+    쇼츠는 세로형(9:16 비율)에 최적화됩니다.
+    :param image_paths: 사용할 이미지 파일 경로 리스트 (JPEG, PNG 등)
+    :param audio_path: 배경 오디오 파일 경로 (MP3 등)
+    :param output_video_path: 출력 비디오 파일 경로 (MP4)
+    """
+    logger.info(f"비디오 생성 시작. 이미지: {len(image_paths)}개, 오디오: {audio_path}")
 
-class YouTubeUploader:
-    def __init__(self, client_id: str, client_secret: str, refresh_token: str):
-        self.client_id = client_id
-        self.client_secret = client_secret
-        self.refresh_token = refresh_token
-        self.youtube = self._get_authenticated_service()
-
-    def _get_authenticated_service(self):
-        """
-        YouTube API에 인증하고 서비스 객체를 반환합니다.
-        제공된 refresh_token을 사용하여 Access Token을 갱신합니다.
-        """
-        creds = None
-        # GitHub Actions에서 환경 변수를 통해 refresh_token을 받으므로, 별도의 credentials.json 파일은 필요 없습니다.
-        # 기존 refresh token으로 Credentials 객체를 직접 생성합니다.
-        try:
-            creds = Credentials(
-                token=None,  # Access token은 refresh_token으로 갱신될 것이므로 None으로 설정
-                refresh_token=self.refresh_token,
-                token_uri="https://oauth2.googleapis.com/token",
-                client_id=self.client_id,
-                client_secret=self.client_secret,
-                scopes=SCOPES
-            )
-            
-            # Access Token이 만료되었거나 없는 경우 refresh_token을 사용하여 갱신합니다.
-            if not creds.valid:
-                logging.info("Refreshing YouTube access token...")
-                creds.refresh(Request())
-                logging.info("YouTube access token refreshed successfully.")
-
-            return build('youtube', 'v3', credentials=creds)
-
-        except Exception as e:
-            logging.error(f"Error authenticating to YouTube API: {e}", exc_info=True)
-            return None
-
-    def upload_video(self, file_path: str, title: str, description: str, tags: list, privacy_status: str = 'private'):
-        """
-        지정된 비디오 파일을 YouTube에 업로드합니다.
-        """
-        if not self.youtube:
-            logging.error("YouTube service not authenticated. Cannot upload video.")
-            return None
-        
-        if not os.path.exists(file_path):
-            logging.error(f"Video file not found at: {file_path}")
-            return None
-
-        body = {
-            'snippet': {
-                'title': title,
-                'description': description,
-                'tags': tags,
-                'categoryId': '28',  # Technology category ID, YouTube Shorts는 보통 Category ID 28 또는 22 (People & Blogs)
-                'defaultLanguage': 'en'
-            },
-            'status': {
-                'privacyStatus': privacy_status, # 'public', 'private', 'unlisted'
-                'madeForKids': False # Kids content 여부 (필수)
-            },
-            'recordingDetails': {
-                'recordingDate': '2024-01-01T00:00:00Z' # 샘플 날짜, 필요시 동적 생성
-            }
-        }
-
-        # MediaFileUpload를 사용하여 비디오 파일을 업로드 준비
-        media_body = MediaFileUpload(file_path, chunksize=-1, resumable=True)
-
-        try:
-            insert_request = self.youtube.videos().insert(
-                part=','.join(body.keys()),
-                body=body,
-                media_body=media_body
-            )
-            response = None
-            while response is None:
-                status, response = insert_request.next_chunk()
-                if status:
-                    logging.info(f"Uploaded {int(status.progress() * 100)}%")
-
-            logging.info(f"Video upload successful! Video ID: {response['id']}")
-            return response['id']
-        except HttpError as e:
-            logging.error(f"An HTTP error occurred: {e.resp.status} - {e.content}", exc_info=True)
-            return None
-        except Exception as e:
-            logging.error(f"An unexpected error occurred during video upload: {e}", exc_info=True)
-            return None
-
-# OAuth 인증 플로우를 로컬에서 실행하여 refresh_token을 얻는 스크립트
-# 이 스크립트는 한 번만 실행하여 YOUTUBE_REFRESH_TOKEN을 얻은 후 GitHub Secret에 저장해야 합니다.
-if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO)
+    if not image_paths:
+        logger.error("이미지 경로 목록이 비어있어 비디오를 생성할 수 없습니다.")
+        raise ValueError("비디오 생성을 위한 이미지가 없습니다.")
     
-    # 환경 변수에서 CLIENT_ID와 CLIENT_SECRET 로드
-    client_id = os.environ.get('YOUTUBE_CLIENT_ID')
-    client_secret = os.environ.get('YOUTUBE_CLIENT_SECRET')
+    audio_clip = None
+    img_clip = None
+    final_video_clip = None
 
-    if not client_id or not client_secret:
-        logging.error("YOUTUBE_CLIENT_ID or YOUTUBE_CLIENT_SECRET environment variables are not set.")
-        logging.info("Please set these variables to run the OAuth flow.")
-        exit(1)
+    try:
+        # 오디오 파일 로드하여 비디오 길이 결정
+        audio_clip = AudioFileClip(audio_path)
+        video_duration = audio_clip.duration
+        logger.info(f"오디오 길이: {video_duration:.2f}초")
 
-    flow = InstalledAppFlow.from_client_secrets_file(
-        # client_secrets.json 파일은 Google Cloud Console에서 다운로드한 OAuth 2.0 클라이언트 ID JSON 파일입니다.
-        # 이 파일은 로컬 실행 시에만 필요하며, 실제 워크플로우에서는 환경 변수로 직접 refresh_token을 사용합니다.
-        # client_secrets.json 파일이 없으면 이 스크립트는 실행될 수 없습니다.
-        # 실제 파일 경로에 맞게 수정해주세요.
-        # 예: 'client_secrets.json'
-        # 주의: 이 파일은 GitHub에 올리면 안 됩니다!
-        'path/to/your/client_secrets.json', # <--- 여기에 실제 client_secrets.json 파일 경로를 넣어주세요!
-        SCOPES
-    )
-    # 로컬 서버를 통해 인증을 진행합니다.
-    credentials = flow.run_local_server(port=0)
+        # 각 이미지 클립 생성
+        clips = []
+        # 이미지당 지속 시간 = 전체 오디오 길이 / 이미지 개수
+        # 단, 이미지당 최소 1초 이상은 보여지도록 조정
+        img_duration_per_clip = max(1, video_duration / len(image_paths))
 
-    print(f"Credentials generated successfully. Save the following refresh token to your GitHub Secrets (YOUTUBE_REFRESH_TOKEN):\n")
-    print(credentials.refresh_token)
+        for img_path in image_paths:
+            img_clip = ImageClip(img_path)
+            
+            # 원본 이미지 비율 계산
+            original_width, original_height = img_clip.size
+            target_aspect_ratio = 1080 / 1920 # 9:16 세로형 비율
 
-    # 이 refresh_token을 GitHub Secrets에 YOUTUBE_REFRESH_TOKEN으로 저장합니다.
-    # 이후에는 이 스크립트를 다시 실행할 필요가 없습니다.
+            if original_width / original_height > target_aspect_ratio:
+                # 이미지가 너무 넓은 경우 (가로가 더 김), 세로 중앙 기준으로 가로를 자름
+                new_width = int(original_height * target_aspect_ratio)
+                x_center = original_width / 2
+                img_clip = img_clip.crop(x_center=x_center, width=new_width)
+            else:
+                # 이미지가 너무 긴 경우 (세로가 더 김), 가로 중앙 기준으로 세로를 자름
+                new_height = int(original_width / target_aspect_ratio)
+                y_center = original_height / 2
+                img_clip = img_clip.crop(y_center=y_center, height=new_height)
+
+            # 최종 비디오 해상도에 맞게 리사이즈
+            img_clip = img_clip.resize(newsize=(1080, 1920))
+            
+            # 각 이미지 클립의 지속 시간 설정
+            clips.append(img_clip.set_duration(img_duration_per_clip))
+
+        # 모든 이미지 클립 연결
+        final_video_clip = concatenate_videoclips(clips, method="compose") # compose는 해상도 유지
+
+        # 최종 비디오 클립의 길이를 오디오 길이와 정확히 일치시킵니다.
+        if final_video_clip.duration > video_duration:
+            final_video_clip = final_video_clip.subclip(0, video_duration)
+        else:
+            logger.warning("비디오 길이가 오디오 길이보다 짧습니다. 마지막 이미지를 늘립니다.")
+            final_video_clip = final_video_clip.set_duration(video_duration)
+
+
+        # 오디오를 비디오에 추가
+        final_video_clip = final_video_clip.set_audio(audio_clip)
+
+        # 결과 비디오 파일 저장 (최대 60초)
+        final_video_clip.write_videofile(
+            output_video_path,
+            fps=24, # 프레임 속도 (YouTube Shorts 권장 24~30fps)
+            codec="libx264",
+            audio_codec="aac",
+            preset="medium", # 인코딩 속도 vs 파일 크기 (medium은 균형)
+            threads=4, # 인코딩 스레드 수 (CPU 사용량에 따라 조절)
+            logger=None # MoviePy 로그를 표시하지 않음
+        )
+        logger.info(f"비디오 생성 완료 및 저장: {output_video_path}")
+        
+    except Exception as e:
+        logger.error(f"비디오 생성 중 오류 발생: {e}")
+        raise
+    finally:
+        # 사용된 클립 메모리 해제 (항상 실행)
+        if audio_clip:
+            audio_clip.close()
+        # img_clip은 clips 리스트에 포함되어 있으므로 개별 close 불필요
+        if final_video_clip:
+            final_video_clip.close()
+
+
+if __name__ == '__main__':
+    # 로컬 테스트용 더미 파일 생성
+    # 테스트를 위해 dummy_images 폴더에 test_image1.jpg, test_image2.jpg 등을 넣어두세요.
+    # dummy_audio.mp3 파일도 필요합니다.
+    dummy_image_dir = "dummy_images"
+    dummy_audio_file = "dummy_audio.mp3"
+    output_test_video = "test_output_shorts.mp4"
+
+    if not os.path.exists(dummy_image_dir) or not os.path.exists(dummy_audio_file):
+        print("테스트를 위해 'dummy_images' 폴더와 'dummy_audio.mp3' 파일이 필요합니다.")
+        print("dummy_images 폴더에 이미지 파일을 몇 개 넣어주세요.")
+        print("Eleven Labs로 짧은 오디오 파일을 만들어서 'dummy_audio.mp3'로 저장해주세요.")
+    else:
+        # 더미 이미지 경로 목록 생성
+        dummy_image_paths = [os.path.join(dummy_image_dir, f) for f in os.listdir(dummy_image_dir) if f.endswith(('.jpg', '.png'))]
+        dummy_image_paths.sort() # 순서대로 처리되도록 정렬 (선택 사항)
+
+        if not dummy_image_paths:
+            print(f"'{dummy_image_dir}' 폴더에 이미지 파일이 없습니다.")
+        else:
+            try:
+                print(f"더미 이미지: {dummy_image_paths}")
+                print(f"더미 오디오: {dummy_audio_file}")
+                create_video_from_images_and_audio(dummy_image_paths, dummy_audio_file, output_test_video)
+                print(f"테스트 비디오 '{output_test_video}'가 성공적으로 생성되었습니다.")
+            except Exception as e:
+                print(f"테스트 비디오 생성 중 오류 발생: {e}")
