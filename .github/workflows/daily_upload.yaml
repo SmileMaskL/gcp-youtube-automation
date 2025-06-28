@@ -1,116 +1,59 @@
 # .github/workflows/daily_upload.yaml
-# 이 워크플로우는 이미 배포된 Cloud Run 서비스를 호출하여 매일 YouTube 쇼츠를 생성하고 업로드합니다.
-# 서비스 배포는 deploy-and-run.yml 워크플로우에서 담당합니다.
-
 name: Daily YouTube Shorts Upload
 
 on:
   schedule:
-    # UTC 기준, 매일 3시, 7시, 12시, 18시, 22시에 실행 (하루 5회)
-    # 이 스케줄은 Cloud Run의 무료 한도를 고려하여 설정되었습니다.
-    # 더 자주 실행하려면 '0 */4 * * *' (4시간마다) 등으로 변경할 수 있습니다.
-    - cron: '0 3,7,12,18,22 * * *'
-  workflow_dispatch: # 수동 실행 허용
+    # 매일 한국 시간 오전 9시 (UTC 0시)에 실행
+    # 0 0 * * *는 UTC 기준이므로, 한국 시간 오전 9시 = UTC 자정 (00:00)입니다.
+    - cron: '0 0 * * *'
+  workflow_dispatch: # ✅ 이 부분이 있어야 GitHub Actions에서 수동 실행 버튼이 나타납니다.
 
 env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   GCP_PROJECT_NUMBER: ${{ secrets.GCP_PROJECT_NUMBER }}
-  GCP_REGION: asia-northeast3 # Cloud Run 서비스를 배포할 GCP 리전 (deploy-and-run.yml과 통일)
-  SERVICE_ACCOUNT_EMAIL: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
+  GCP_REGION: us-central1 # ✅ 이 부분도 us-central1으로 변경 확인!
+  SERVICE_ACCOUNT_EMAIL: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com # 여러분의 서비스 계정 이메일
+  CLOUD_RUN_SERVICE_NAME: youtube-shorts-automation # Cloud Run 서비스 이름
 
 jobs:
-  generate-and-upload:
+  run-shorts-automation:
     runs-on: ubuntu-latest
-    timeout-minutes: 30 # 최대 실행 시간 30분 설정 (무료 한도 내에서 적정)
     permissions:
       contents: 'read'
-      id-token: 'write' # OIDC 토큰 발급 필수
+      id-token: 'write' # OIDC를 통해 GCP에 인증하기 위한 권한
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 1 # 저장소 전체 히스토리 대신 최신 커밋만 체크아웃
-
-    - name: 'Google Cloud 인증 (Workload Identity)'
+    - name: 'Google Cloud 인증'
       id: auth
       uses: google-github-actions/auth@v2
       with:
-        # 워크로드 아이덴티티 풀과 프로바이더 경로를 env.GCP_PROJECT_NUMBER로 통일합니다.
-        workload_identity_provider: "projects/${{ env.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01"
+        workload_identity_provider: 'projects/${{ env.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
         service_account: ${{ env.SERVICE_ACCOUNT_EMAIL }}
-        # ✅ 이 부분이 핵심: 액세스 토큰 자동 생성 요청
-        token_format: 'access_token'
-        access_token_lifetime: '600s' # 토큰 유효기간 10분 설정 (선택 사항이지만 권장)
 
-    - name: 'Google Cloud SDK 설정'
+    - name: 'gcloud CLI 설치 및 구성'
       uses: google-github-actions/setup-gcloud@v2
-      with:
-        project_id: ${{ env.GCP_PROJECT_ID }}
-        # 'export_default_credentials: true' 줄은 이미 삭제되었으므로 그대로 둡니다.
 
-    - name: 'Cloud Run 서비스 URL 확인'
-      id: service_url_check
+    - name: 'Cloud Run 서비스 URL 가져오기'
+      id: get_service_url
       run: |
-        # 서비스 정보에서 URL을 추출합니다.
-        SERVICE_URL=$(gcloud run services describe youtube-shorts-automation \
+        SERVICE_URL=$(gcloud run services describe ${{ env.CLOUD_RUN_SERVICE_NAME }} \
           --platform managed \
           --region ${{ env.GCP_REGION }} \
           --format='value(status.url)')
-        if [ -z "$SERVICE_URL" ]; then
-          echo "::error::Cloud Run 서비스 URL을 찾을 수 없습니다. 서비스가 배포되지 않았거나 이름이 잘못되었습니다."
-          exit 1
-        fi
         echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_ENV
-        echo "✅ Cloud Run 서비스 URL 확인 완료: $SERVICE_URL"
-
-    - name: 'Cloud Run 서비스 준비 상태 확인 (재시도 포함)'
-      # ✅ 재시도 로직을 추가하여 서비스가 완전히 준비될 때까지 기다립니다.
-      # 로봇이 잠에서 깨어나 신발을 신을 시간을 주는 것과 같아요!
-      run: |
-        SERVICE_READY=false
-        RETRY_COUNT=0
-        MAX_RETRIES=5
-        SLEEP_TIME=10 # 10초 대기
-        
-        while [ "$SERVICE_READY" = false ] && [ "$RETRY_COUNT" -lt "$MAX_RETRIES" ]; do
-          echo "Cloud Run 서비스 준비 상태 확인 중... (시도: $((RETRY_COUNT+1)) / $MAX_RETRIES)"
-          # healthz 엔드포인트를 호출하여 서비스의 준비 상태를 확인합니다.
-          HEALTH_CHECK_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "${{ env.SERVICE_URL }}/healthz")
-          
-          if [ "$HEALTH_CHECK_RESPONSE" == "200" ]; then
-            SERVICE_READY=true
-            echo "✅ Cloud Run 서비스가 준비되었습니다! (HTTP 200 OK)"
-          else
-            echo "❌ Cloud Run 서비스가 아직 준비되지 않았습니다. HTTP 코드: $HEALTH_CHECK_RESPONSE"
-            echo "Cloud Run 로그에서 자세한 오류를 확인하세요."
-            RETRY_COUNT=$((RETRY_COUNT+1))
-            if [ "$RETRY_COUNT" -lt "$MAX_RETRIES" ]; then
-              echo "잠시 후 다시 시도합니다... ($SLEEP_TIME 초 대기)"
-              sleep $SLEPTIME
-            fi
-          fi
-        done
-
-        if [ "$SERVICE_READY" = false ]; then
-          echo "::error::Cloud Run 서비스가 지정된 시간 내에 준비되지 않았습니다. 수동으로 로그를 확인하고 조치해 주세요."
-          exit 1
-        fi
+        echo "Cloud Run Service URL: $SERVICE_URL"
 
     - name: 'YouTube 쇼츠 생성 및 업로드'
-      id: upload_shorts
       run: |
+        if [ -z "${{ env.SERVICE_URL }}" ]; then
+          echo "::error::Cloud Run 서비스 URL을 찾을 수 없습니다. 배포가 제대로 되었는지 확인하세요."
+          exit 1
+        fi
+
         # 요청 데이터 준비
-        REQUEST_BODY=$(cat <<EOF
-        {
-          "action": "create_and_upload_shorts",
-          "metadata": {
-            "workflow_run_id": "${{ github.run_id }}",
-            "trigger_time": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-          }
-        }
-        EOF
-        )
+        REQUEST_BODY='{
+          "message": "Start YouTube Shorts Automation"
+        }'
 
         echo "::group::요청 데이터"
         echo "$REQUEST_BODY"
@@ -120,13 +63,10 @@ jobs:
         # --fail-with-body: HTTP 에러 발생 시 응답 본문 출력
         # -sS: 진행 상황 막대와 에러 메시지를 숨기지 않고 출력
         # -m 300: 300초(5분) 안에 응답이 없으면 타임아웃
-        # ✅ --retry 3 --retry-delay 10: 503 에러 등 일시적인 문제에 대해 3번 재시도, 10초 간격으로.
-        # 로봇이 한 번 넘어졌다고 포기하지 않고, 세 번 더 일어나서 시도하는 것과 같아요!
         RESPONSE=$(curl --fail-with-body -sS -m 300 -X POST "${{ env.SERVICE_URL }}" \
           -H "Content-Type: application/json" \
-          -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" \
-          -d "$REQUEST_BODY" \
-          --retry 3 --retry-delay 10)
+          -H "Authorization: Bearer $(gcloud auth print-identity-token --audiences=${{ env.SERVICE_URL }})" \
+          -d "$REQUEST_BODY")
 
         echo "::group::서비스 응답"
         echo "$RESPONSE"
@@ -144,11 +84,3 @@ jobs:
         if [ -n "$JOB_ID" ]; then
           echo "jobId=$JOB_ID" >> $GITHUB_OUTPUT
         fi
-
-    - name: '결과 로깅'
-      if: always()
-      run: |
-        echo "=== 실행 결과 ==="
-        echo "워크플로우 상태: ${{ job.status }}"
-        echo "서비스 URL: ${{ env.SERVICE_URL }}"
-        echo "생성된 작업 ID: ${{ steps.upload_shorts.outputs.jobId || '없음' }}"
