@@ -1,175 +1,148 @@
-# src/main.py
+# app.py (또는 main.py)
 import os
-import json
-import logging
-import itertools # 키 로테이션을 위한 모듈 추가
 from flask import Flask, request, jsonify
+from concurrent.futures import ThreadPoolExecutor
+import logging
+import google.cloud.logging
+from google.cloud import storage, pubsub_v1
+import json
+import time
+from datetime import datetime
 
-# 필요한 모듈 임포트
-from .content_generator import generate_content_and_script
-from .tts_generator import generate_tts_audio
-from .video_creator import create_youtube_video
-from .youtube_uploader import YouTubeUploader # YouTubeUploader 클래스 임포트
-from .utils import cleanup_local_files # 임시 파일 정리를 위한 유틸리티 함수
+# Google Cloud Logging 설정
+client = google.cloud.logging.Client()
+client.setup_logging()
+logging.basicConfig(level=logging.INFO)
+
+# ThreadPoolExecutor를 사용하여 비동기 처리 (Cloud Run의 컨테이너 동시성 고려)
+# 단일 컨테이너 내에서 여러 요청을 처리할 때 유용하지만,
+# Cloud Run의 인스턴스 동시성을 활용한다면 굳이 필요 없을 수 있습니다.
+# 일단은 그대로 둡니다.
+executor = ThreadPoolExecutor(max_workers=os.cpu_count() * 2) 
+
+# 환경 변수 로드
+GCP_PROJECT_ID = os.environ.get('GCP_PROJECT_ID')
+GCP_BUCKET_NAME = os.environ.get('GCP_BUCKET_NAME')
+YOUTUBE_CLIENT_ID = os.environ.get('YOUTUBE_CLIENT_ID')
+YOUTUBE_CLIENT_SECRET = os.environ.get('YOUTUBE_CLIENT_SECRET')
+YOUTUBE_REFRESH_TOKEN = os.environ.get('YOUTUBE_REFRESH_TOKEN')
+ELEVENLABS_API_KEY = os.environ.get('ELEVENLABS_API_KEY')
+ELEVENLABS_VOICE_ID = os.environ.get('ELEVENLABS_VOICE_ID')
+OPENAI_API_KEYS = os.environ.get('OPENAI_API_KEYS', '').split(',')
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
+NEWSAPI_API_KEY = os.environ.get('NEWSAPI_API_KEY')
+PEXELS_API_KEY = os.environ.get('PEXELS_API_KEY')
+
+# Cloud Storage 클라이언트 초기화 (환경 변수 확인 후 초기화)
+if GCP_BUCKET_NAME:
+    try:
+        storage_client = storage.Client()
+        bucket = storage_client.get_bucket(GCP_BUCKET_NAME)
+    except Exception as e:
+        logging.error(f"Cloud Storage 버킷 초기화 실패: {e}")
+        bucket = None # 초기화 실패 시 None으로 설정
+else:
+    logging.warning("GCP_BUCKET_NAME 환경 변수가 설정되지 않았습니다. Cloud Storage 관련 기능이 제한될 수 있습니다.")
+    bucket = None
 
 app = Flask(__name__)
 
-# 로깅 설정
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+@app.route('/healthz', methods=['GET'])
+def healthz():
+    """상태 체크 엔드포인트"""
+    return "OK", 200
 
-# 전역 변수로 OpenAI API 키 목록과 이터레이터를 초기화합니다.
-# 이들은 애플리케이션 시작 시 한 번만 로드됩니다.
-OPENAI_API_KEYS = []
-api_key_iterator = None
-
-# 애플리케이션 컨텍스트 외부에서 환경 변수를 미리 로드합니다.
-# Flask 앱이 로드될 때 한 번 실행됩니다.
-def load_openai_keys():
-    global OPENAI_API_KEYS, api_key_iterator
-    openai_api_keys_str = os.environ.get('OPENAI_API_KEYS')
-    # GitHub Secrets에 저장할 때 사용한 구분자(세미콜론 ';')로 분리합니다.
-    OPENAI_API_KEYS = [key.strip() for key in openai_api_keys_str.split(';') if key.strip()] if openai_api_keys_str else []
-    
-    if not OPENAI_API_KEYS:
-        logging.warning("OPENAI_API_KEYS 환경 변수가 설정되지 않았거나 비어 있습니다.")
-    else:
-        api_key_iterator = itertools.cycle(OPENAI_API_KEYS)
-        logging.info(f"Loaded {len(OPENAI_API_KEYS)} OpenAI API keys.")
-
-load_openai_keys() # 앱 시작 시 키 로드
-
-def get_next_openai_key():
-    """
-    로테이션 방식으로 다음 OpenAI API 키를 반환합니다.
-    """
-    if not api_key_iterator:
-        # 키가 로드되지 않았거나 비어 있는 경우
-        logging.error("OpenAI API 키 이터레이터가 초기화되지 않았습니다.")
-        raise ValueError("OpenAI API 키가 설정되지 않았습니다.")
-    
-    return next(api_key_iterator)
-
-
-@app.route('/', methods=['POST'])
-def handle_request():
-    """
-    Cloud Run 서비스의 HTTP 트리거 진입점.
-    요청을 받아 콘텐츠 생성 및 업로드 워크플로우를 시작합니다.
-    """
+@app.route("/", methods=["POST"])
+def main_endpoint(): # 함수명 변경: main() -> main_endpoint() (충돌 방지 및 명확성)
+    """기본 엔드포인트 (Cloud Scheduler 또는 GitHub Actions 호출용)"""
     try:
-        request_json = request.get_json(silent=True)
-        action = request_json.get('action', 'create_and_upload_shorts') # 기본 액션 설정
-
+        data = request.get_json()
+        if not data:
+            logging.error("No JSON payload provided.")
+            return jsonify({"status": "error", "message": "No JSON payload provided"}), 400
+        
+        action = data.get('action', '')
+        metadata = data.get('metadata', {})
+        
         logging.info(f"Received action: {action}")
-
-        # 모든 필요한 환경 변수 로드
-        project_id = os.environ.get('GCP_PROJECT_ID')
-        bucket_name = os.environ.get('GCP_BUCKET_NAME')
-        elevenlabs_api_key = os.environ.get('ELEVENLABS_API_KEY')
-        elevenlabs_voice_id = os.environ.get('ELEVENLABS_VOICE_ID')
-        gemini_api_key = os.environ.get('GEMINI_API_KEY')
-        news_api_key = os.environ.get('NEWS_API_KEY')
-        pexels_api_key = os.environ.get('PEXELS_API_KEY')
-        youtube_client_id = os.environ.get('YOUTUBE_CLIENT_ID')
-        youtube_client_secret = os.environ.get('YOUTUBE_CLIENT_SECRET')
-        youtube_refresh_token = os.environ.get('YOUTUBE_REFRESH_TOKEN')
-        
-        # 필수 환경 변수 누락 확인
-        required_env_vars = {
-            'GCP_PROJECT_ID': project_id,
-            'ELEVENLABS_API_KEY': elevenlabs_api_key,
-            'ELEVENLABS_VOICE_ID': elevenlabs_voice_id,
-            'GEMINI_API_KEY': gemini_api_key,
-            'NEWS_API_KEY': news_api_key,
-            'PEXELS_API_KEY': pexels_api_key,
-            'YOUTUBE_CLIENT_ID': youtube_client_id,
-            'YOUTUBE_CLIENT_SECRET': youtube_client_secret,
-            'YOUTUBE_REFRESH_TOKEN': youtube_refresh_token
-        }
-        
-        missing_vars = [name for name, value in required_env_vars.items() if not value]
-        if not OPENAI_API_KEYS: # OpenAI API 키도 필수 확인
-            missing_vars.append('OPENAI_API_KEYS')
-
-        if missing_vars:
-            error_msg = f"Missing one or more required environment variables: {', '.join(missing_vars)}"
-            logging.error(error_msg)
-            return jsonify({'error': error_msg}), 500
-
-        # 임시 파일 경로를 저장할 리스트
-        temp_files_to_clean = []
+        logging.info(f"Metadata: {metadata}")
 
         if action == 'create_and_upload_shorts':
-            logging.info("Starting YouTube Shorts content generation and upload process...")
-            
-            # 1. 콘텐츠 및 스크립트 생성 (Gemini 및 News API 활용)
-            # OpenAI API 키는 로테이션 방식으로 하나씩 전달합니다.
-            current_openai_key = get_next_openai_key() 
-            content_data = generate_content_and_script(gemini_api_key, news_api_key, current_openai_key) # << 단일 키 전달
-            
-            title = content_data.get('title', "AI Generated Shorts")
-            description = content_data.get('description', "Daily AI generated shorts content.")
-            script = content_data.get('script', "Hello, welcome to AI Shorts.")
-            keywords = content_data.get('keywords', ["AI Shorts", "Daily Update"])
-
-            # 2. TTS 오디오 생성 (ElevenLabs API 활용)
-            audio_file_path = generate_tts_audio(script, elevenlabs_api_key, elevenlabs_voice_id)
-            if audio_file_path:
-                temp_files_to_clean.append(audio_file_path)
-
-            # 3. 비디오 생성 (Pexels API 및 기타 유틸리티 활용)
-            video_file_path = create_youtube_video(
-                pexels_api_key, 
-                audio_file_path, 
-                keywords # 비디오 생성에 키워드가 필요하다면 전달
-            )
-            
-            if not video_file_path or not os.path.exists(video_file_path):
-                logging.error("Video creation failed or video file does not exist.")
-                return jsonify({'error': 'Video creation failed'}), 500
-            temp_files_to_clean.append(video_file_path)
-
-            # 4. YouTube에 비디오 업로드
-            uploader = YouTubeUploader(youtube_client_id, youtube_client_secret, youtube_refresh_token)
-            uploaded_video_id = uploader.upload_video(
-                video_file_path,
-                title,
-                description,
-                keywords,
-                privacy_status="private" # 처음에는 비공개로 업로드하여 검토 권장
-            )
-            
-            if uploaded_video_id:
-                logging.info(f"Video uploaded successfully! ID: {uploaded_video_id}")
-                return jsonify({
-                    'status': 'success',
-                    'message': 'YouTube Shorts content created and uploaded!',
-                    'video_id': uploaded_video_id,
-                    'video_url': f"https://www.youtube.com/watch?v={uploaded_video_id}"
-                }), 200
-            else:
-                logging.error("Failed to upload video to YouTube.")
-                return jsonify({'error': 'Failed to upload video to YouTube'}), 500
-
-        elif action == 'test_run':
-            logging.info("Test run initiated. All environment variables loaded.")
-            # 테스트 시 현재 로드된 OpenAI 키 개수도 확인할 수 있습니다.
-            return jsonify({'status': 'success', 'message': 'Cloud Run service is reachable and environment variables loaded for test.', 'openai_keys_loaded': len(OPENAI_API_KEYS)}), 200
-
+            # 비동기 작업 시작
+            # Cloud Run 컨테이너의 Request Timeout을 충분히 확보해야 합니다. (최대 60분)
+            # 현재 워크플로우에서 300초(5분) 타임아웃을 사용하므로, 
+            # 이 백그라운드 작업이 5분 안에 완료되어야 합니다.
+            future = executor.submit(process_youtube_shorts_upload, metadata) # metadata 전달
+            logging.info("YouTube Shorts 업로드 프로세스 백그라운드 시작됨.")
+            return jsonify({"status": "processing", "message": "YouTube Shorts 업로드 프로세스 시작됨", "jobId": f"shorts-task-{datetime.now().timestamp()}"}), 202
         else:
-            logging.warning(f"Unknown action: {action}")
-            return jsonify({'error': 'Unknown action specified'}), 400
+            logging.warning(f"Unsupported action: {action}")
+            return jsonify({"status": "error", "message": f"지원되지 않는 액션: {action}"}), 400
+    except Exception as e:
+        logging.error(f"메인 엔드포인트 처리 오류: {e}", exc_info=True)
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+# @app.route('/upload-youtube-shorts', methods=['POST']) # 이 엔드포인트는 /와 기능 중복이므로 제거하거나,
+# def upload_youtube_shorts_trigger(): # 특별한 목적이 없다면 사용하지 않는 것이 좋습니다.
+#     """Cloud Scheduler 또는 다른 HTTP 트리거에 의해 호출되는 엔드포인트"""
+#     logging.info('YouTube Shorts 업로드 프로세스 시작 요청 수신.')
+#     try:
+#         future = executor.submit(process_youtube_shorts_upload)
+#         return jsonify({"status": "processing", "message": "YouTube Shorts 업로드 프로세스가 백그라운드에서 시작되었습니다."}), 202
+#     except Exception as e:
+#         logging.error(f"YouTube Shorts 업로드 프로세스 시작 실패: {e}")
+#         return jsonify({"status": "error", "message": f"업로드 프로세스 시작 중 오류 발생: {e}"}), 500
+
+# def process_youtube_shorts_upload(): # 인자 추가: metadata
+def process_youtube_shorts_upload(metadata):
+    """실제 YouTube Shorts 생성 및 업로드 로직"""
+    logging.info(f'YouTube Shorts 업로드 프로세스 시작 (백그라운드, metadata: {metadata})')
+    start_time = time.time()
+
+    try:
+        # 실제 API 키 환경 변수 사용 여부 확인 (예시)
+        if not OPENAI_API_KEYS[0] or not GEMINI_API_KEY:
+            logging.error("API 키가 설정되지 않았습니다. AI 스크립트 생성이 불가능합니다.")
+            # return 대신 raise Exception 또는 처리 로직 추가
+            raise ValueError("필수 API 키가 설정되지 않았습니다.")
+
+        # 1. 뉴스 데이터 수집 (시뮬레이션 -> 실제 구현 예정)
+        logging.info("1. 뉴스 데이터 수집 (시뮬레이션)")
+        article_title = f"오늘의 AI 뉴스 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        time.sleep(1)
+
+        # 2. AI 스크립트 생성 (시뮬레이션 -> 실제 구현 예정)
+        logging.info("2. AI 스크립트 생성 (시뮬레이션)")
+        script_text = f"여러분, {article_title}! AI로 생성된 이 쇼츠를 즐겨보세요! (Workflow ID: {metadata.get('workflow_run_id')})"
+        time.sleep(2)
+
+        # 3. 음성 생성 및 저장 (시뮬레이션 -> 실제 구현 예정)
+        logging.info("3. 음성 생성 및 Cloud Storage 저장 (시뮬레이션)")
+        # 실제 저장 로직 필요 (예: blob.upload_from_filename)
+        time.sleep(3)
+
+        # 4. 비디오 클립 다운로드 및 저장 (시뮬레이션 -> 실제 구현 예정)
+        logging.info("4. 비디오 클립 다운로드 및 Cloud Storage 저장 (시뮬레이션)")
+        time.sleep(4)
+
+        # 5. 쇼츠 비디오 최종 생성 (시뮬레이션 -> 실제 구현 예정)
+        logging.info("5. 쇼츠 비디오 최종 생성 (시뮬레이션)")
+        time.sleep(5)
+
+        # 6. YouTube 업로드 (시뮬레이션 -> 실제 구현 예정)
+        logging.info("6. YouTube Data API를 사용하여 쇼츠 업로드 (시뮬레이션)")
+        time.sleep(6)
+
+        logging.info(f'✅ YouTube Shorts 업로드 프로세스 완료 (시뮬레이션)')
 
     except Exception as e:
-        logging.error(f"An error occurred during process: {e}", exc_info=True)
-        return jsonify({'error': f'Internal server error: {str(e)}'}), 500
+        logging.error(f"❌ YouTube Shorts 업로드 프로세스 오류: {e}", exc_info=True)
+        # 실제 서비스에서는 이 오류를 사용자에게 알리거나, 재시도 로직을 구현해야 합니다.
     finally:
-        if temp_files_to_clean:
-            logging.info(f"Cleaning up {len(temp_files_to_clean)} temporary files...")
-            cleanup_local_files(temp_files_to_clean)
-        else:
-            logging.info("No temporary files to clean up.")
+        end_time = time.time()
+        logging.info(f"⏱ 총 처리 시간: {end_time - start_time:.2f} 초")
 
-if __name__ == '__main__':
-    PORT = int(os.environ.get('PORT', 8080))
-    app.run(host='0.0.0.0', port=PORT, debug=True)
+# 이 부분을 삭제하거나 주석 처리해야 합니다! Gunicorn이 앱을 실행합니다.
+# if __name__ == '__main__':
+#     port = int(os.environ.get('PORT', 8080))
+#     app.run(host='0.0.0.0', port=port, debug=False)
