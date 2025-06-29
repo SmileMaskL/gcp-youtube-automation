@@ -23,21 +23,22 @@ import google.auth.transport.requests
 from pexels_api import API
 
 # 사용자 정의 모듈 임포트 (src/ 디렉토리에 있는지 확인 필요)
-# 이 모듈들이 올바른 경로에 있고, import 오류가 없는지 다시 한번 확인해주세요.
+# 혹시 여기서 ImportError가 발생하면, Cloud Run 로그에 명확히 남도록 처리합니다.
+MODULE_IMPORT_FAILED = False # 모듈 임포트 성공 여부 플래그
+INITIALIZATION_ERROR = None # 초기화 시 발생하는 에러 메시지 저장용
+
 try:
+    # 이 부분에서 오류가 나면 아래 catch 블록으로 이동합니다.
     from video_script_generator import generate_script_from_news
     from audio_generator import generate_audio_from_text
     from video_generator import create_video_from_images_and_audio
     from youtube_uploader import upload_video_to_youtube
     from gcs_helper import upload_to_gcs, download_from_gcs, delete_from_gcs
 except ImportError as e:
-    # 모듈 임포트 실패는 치명적이므로, 명확하게 로깅하고 앱을 시작하지 못하게 합니다.
-    # 하지만 Cloud Run이 health check를 할 수 있도록, 완전히 종료시키지는 않습니다.
-    logging.critical(f"❌ 핵심 모듈 임포트 실패: {e}. 애플리케이션이 정상 작동하지 않을 것입니다.", exc_info=True)
-    # 이 플래그를 사용하여 앱의 상태를 알립니다.
+    logging.critical(f"❌ 치명적 오류: 핵심 모듈 임포트 실패. 애플리케이션 시작 불가: {e}", exc_info=True)
     MODULE_IMPORT_FAILED = True
-else:
-    MODULE_IMPORT_FAILED = False
+    INITIALIZATION_ERROR = f"핵심 모듈 임포트 실패: {e}"
+
 
 # --- 환경 변수 로드 (로컬 개발용) ---
 # Cloud Run에서는 환경 변수가 직접 주입되므로 이 부분은 로컬 개발에서만 작동합니다.
@@ -48,8 +49,7 @@ try:
 except ImportError:
     logging.warning("python-dotenv 모듈을 찾을 수 없습니다. .env 파일 로드를 건너뛰는 중. (배포 환경에서는 정상)")
 
-# Google Cloud Logging 설정
-# initialize_app()에서 GCP_PROJECT_ID가 로드된 후 다시 설정될 수 있습니다.
+# Google Cloud Logging 설정 (프로젝트 ID는 initialize_app_logic에서 설정됨)
 try:
     logging_client = google.cloud.logging.Client()
     logging_client.setup_logging()
@@ -61,12 +61,12 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-# --- Flask 애플리케이션 객체 선언 (이 부분이 가장 중요! 파일 최상단에 위치해야 함) ---
-# Gunicorn이 이 'app' 객체를 찾아서 실행합니다.
+# --- Flask 애플리케이션 객체 선언 (⭐가장 중요! Gunicorn이 가장 먼저 찾습니다⭐) ---
+# 이 'app' 객체가 파일 로드 시점에 정의되어 있어야 Gunicorn이 앱을 시작할 수 있습니다.
 app = Flask(__name__)
 
-# --- 전역 변수 선언 (초기화는 initialize_app 함수에서 진행) ---
-# 이 변수들은 initialize_app() 함수에서 os.getenv()를 통해 실제 값으로 채워집니다.
+# --- 전역 변수 선언 (초기화는 initialize_app_logic 함수에서 진행) ---
+# 이 변수들은 initialize_app_logic() 함수에서 os.getenv()를 통해 실제 값으로 채워집니다.
 GCP_PROJECT_ID = None
 GCP_BUCKET_NAME = None
 YOUTUBE_CLIENT_ID = None
@@ -82,66 +82,69 @@ bucket = None # Cloud Storage 버킷 객체
 storage_client_instance = None # Cloud Storage 클라이언트 인스턴스
 
 # 애플리케이션 초기화 성공 여부를 추적하는 플래그
-APP_INITIALIZED_SUCCESSFULLY = False
-INITIALIZATION_ERROR = None
+APP_INITIALIZED_SUCCESSFULLY = False # 앱의 모든 핵심 요소가 정상적으로 초기화되었는지 여부
+
 
 # ThreadPoolExecutor를 사용하여 비동기 처리
 executor = ThreadPoolExecutor(max_workers=os.cpu_count() * 2 if os.cpu_count() else 2)
 
-# --- 애플리케이션 초기화 함수 ---
-def initialize_app():
+# --- 애플리케이션 초기화 로직 함수 ---
+# 이 함수는 Flask 앱이 완전히 로드된 후에 호출됩니다.
+# 여기서 문제가 발생해도 앱이 완전히 종료되지 않고, health check로 상태를 알릴 수 있도록 합니다.
+def initialize_app_logic():
     """
     애플리케이션 시작 시 필요한 모든 환경 변수를 로드하고,
     외부 서비스(Cloud Storage 등)를 초기화합니다.
-    이 함수에서 실패하면 애플리케이션이 정상적으로 시작되지 않습니다.
+    이 함수에서 실패해도 Flask 앱 자체는 계속 실행될 수 있도록 합니다.
     """
     global GCP_PROJECT_ID, GCP_BUCKET_NAME, YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, \
            YOUTUBE_REFRESH_TOKEN, ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID, OPENAI_API_KEYS, \
            GEMINI_API_KEY, NEWSAPI_API_KEY, PEXELS_API_KEY, bucket, storage_client_instance, \
            APP_INITIALIZED_SUCCESSFULLY, INITIALIZATION_ERROR
 
-    logger.info("🚀 애플리케이션 초기화 시작...")
+    logger.info("🚀 애플리케이션 초기화 로직 시작...")
 
-    # 모듈 임포트 자체가 실패했다면, 초기화 시도하지 않고 종료 (healthz에서 에러 반환)
+    # 핵심 모듈 임포트 자체가 실패했다면, 더 이상 초기화 시도하지 않고 종료
     if MODULE_IMPORT_FAILED:
-        INITIALIZATION_ERROR = "핵심 모듈 임포트 실패로 앱 초기화 불가."
+        logger.critical("핵심 모듈 임포트 실패로 초기화 로직 건너뜀. 앱이 기능하지 않을 것입니다.")
         APP_INITIALIZED_SUCCESSFULLY = False
-        logger.critical(INITIALIZATION_ERROR)
-        return # 더 이상 초기화 진행하지 않음
+        return
 
-    required_env_vars = {
-        'GCP_PROJECT_ID': None,
-        'GCP_BUCKET_NAME': None,
-        'YOUTUBE_CLIENT_ID': None,
-        'YOUTUBE_CLIENT_SECRET': None,
-        'YOUTUBE_REFRESH_TOKEN': None,
-        'ELEVENLABS_API_KEY': None,
-        'ELEVENLABS_VOICE_ID': None,
-        'OPENAI_API_KEYS': [],
-        'GEMINI_API_KEY': None,
-        'NEWSAPI_API_KEY': None,
-        'PEXELS_API_KEY': None
-    }
+    required_env_vars = [
+        'GCP_PROJECT_ID',
+        'GCP_BUCKET_NAME',
+        'YOUTUBE_CLIENT_ID',
+        'YOUTUBE_CLIENT_SECRET',
+        'YOUTUBE_REFRESH_TOKEN',
+        'ELEVENLABS_API_KEY',
+        'ELEVENLABS_VOICE_ID',
+        'OPENAI_API_KEYS',
+        'GEMINI_API_KEY',
+        'NEWSAPI_API_KEY',
+        'PEXELS_API_KEY'
+    ]
     
     missing_vars = []
+    # 환경 변수 로드
     for var_name in required_env_vars:
         if var_name == 'OPENAI_API_KEYS':
+            # OPENAI_API_KEYS는 쉼표로 구분된 문자열이므로 특별 처리
             openai_keys_str = os.getenv(var_name, '').strip()
             if not openai_keys_str:
                 missing_vars.append(var_name)
             else:
                 OPENAI_API_KEYS.extend([key.strip() for key in openai_keys_str.split(',') if key.strip()])
-                if not OPENAI_API_KEYS:
+                if not OPENAI_API_KEYS: # 쉼표로 구분했지만 실제 유효한 키가 없는 경우
                     missing_vars.append(var_name)
         else:
             value = os.getenv(var_name)
             if not value:
                 missing_vars.append(var_name)
             else:
-                globals()[var_name] = value
+                globals()[var_name] = value # 전역 변수에 값 할당
 
     if missing_vars:
-        INITIALIZATION_ERROR = f"❌ 치명적 오류: 필수 환경 변수가 누락되었습니다: {', '.join(missing_vars)}. 컨테이너 시작은 되나 기능 제한."
+        INITIALIZATION_ERROR = f"❌ 치명적 오류: 필수 환경 변수가 누락되었습니다: {', '.join(missing_vars)}."
         logger.critical(INITIALIZATION_ERROR)
         APP_INITIALIZED_SUCCESSFULLY = False
         return
@@ -173,19 +176,17 @@ def initialize_app():
     except Exception as e:
         INITIALIZATION_ERROR = f"외부 API 클라이언트 설정 중 오류 발생 (일부 기능 제한될 수 있음): {e}"
         logger.warning(INITIALIZATION_ERROR, exc_info=True)
-        # 이 경우, 앱이 완전히 죽지는 않고 초기화 플래그만 False로 남겨둡니다.
-        APP_INITIALIZED_SUCCESSFULLY = False
+        APP_INITIALIZED_SUCCESSFULLY = False # 부분 초기화 성공이라도 전체는 실패로 간주
         return
 
     APP_INITIALIZED_SUCCESSFULLY = True
     logger.info("✅ 모든 필수 환경 변수 및 외부 서비스 초기화 성공.")
 
 
-# --- 애플리케이션 시작 시 초기화 함수 실행 ---
-# Flask 앱 객체 'app'이 정의된 후에 이 부분이 실행되어야 합니다.
-# 이제는 initialize_app()이 실패해도 앱이 즉시 종료되지 않고,
-# healthz 엔드포인트에서 초기화 실패 메시지를 반환할 수 있습니다.
-initialize_app()
+# --- 애플리케이션 시작 시 초기화 로직 실행 ---
+# Flask 앱 객체 'app'이 정의된 후에 이 초기화 로직을 실행합니다.
+# 여기서 오류가 나도 'app' 자체는 살아있으므로 health check가 가능합니다.
+initialize_app_logic()
 if APP_INITIALIZED_SUCCESSFULLY:
     logger.info("✨ Flask 애플리케이션 초기화 완료.")
 else:
@@ -206,19 +207,17 @@ def healthz():
         return f"Not Ready: 애플리케이션 초기화 오류: {INITIALIZATION_ERROR}", 500
     
     # 추가적으로, 초기화된 클라이언트가 실제로 작동하는지 가벼운 테스트를 할 수 있습니다.
-    # 예: GCS 버킷에 접근 가능한지 테스트
     try:
-        # 버킷이 초기화되었는지, 그리고 실제 접근 가능한지 가벼운 테스트
-        if bucket is None:
-             raise ValueError("Cloud Storage 버킷 객체가 초기화되지 않았습니다.")
-        # 실제 파일을 만들지 않고 존재 여부만 확인하는 것은 권장되지 않으므로,
-        # 단순하게 버킷 객체가 유효한지 확인하는 정도로 충분합니다.
-        # bucket.blob("health_check_test_file.txt").exists() # 이 부분은 실제 파일 작업이므로 주석 처리
-        logger.info("✅ Health check successful: 모든 초기화 및 GCS 연결 확인.")
+        if storage_client_instance is None or bucket is None:
+             raise ValueError("Cloud Storage 클라이언트/버킷 객체가 초기화되지 않았습니다. (초기화 오류)")
+        # 버킷에 실제 접근하는 대신, 단순히 클라이언트 객체가 유효한지 확인하는 것으로 충분
+        # 예를 들어, list_buckets() 같은 가벼운 API 호출 시도 (네트워크 비용 발생 가능성 있음)
+        # 현재 initialize_app_logic에서 get_bucket이 성공했으면 연결은 된 것으로 간주
+        logger.info("✅ Health check successful: 모든 초기화 및 기본 서비스 연결 확인.")
         return "OK", 200
     except Exception as e:
-        logger.error(f"Health check failed: GCS 연결 테스트 오류 또는 기타 초기화 문제: {e}", exc_info=True)
-        return f"Not Ready: GCS 연결 테스트 오류 또는 기타 초기화 문제: {e}", 500
+        logger.error(f"Health check failed: GCS 클라이언트/버킷 접근 테스트 오류 또는 기타 초기화 문제: {e}", exc_info=True)
+        return f"Not Ready: GCS 클라이언트/버킷 접근 테스트 오류 또는 기타 초기화 문제: {e}", 500
 
 @app.route("/", methods=["POST"])
 def main_endpoint():
@@ -256,7 +255,7 @@ def main_endpoint():
                 YOUTUBE_REFRESH_TOKEN,
                 ELEVENLABS_API_KEY,
                 ELEVENLABS_VOICE_ID,
-                OPENAI_API_KEYS,
+                OPENAI_API_KEYS, # 리스트 자체를 전달
                 GEMINI_API_KEY,
                 NEWSAPI_API_KEY,
                 PEXELS_API_KEY
@@ -309,6 +308,7 @@ def process_youtube_shorts_upload(metadata, gcp_project_id, gcp_bucket_name, you
         # 1. 뉴스 데이터 수집 및 AI 스크립트 생성
         logger.info("1. 뉴스 데이터 수집 및 AI 스크립트 생성 중...")
         try:
+            # 전달받은 openai_api_keys 리스트를 사용
             script_data = generate_script_from_news(newsapi_api_key, openai_api_keys, gemini_api_key, news_query="최신 기술 뉴스")
             title = script_data.get('title', f"자동 생성 AI 쇼츠 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             script = script_data.get('script', "이것은 뉴스 스크립트 생성에 문제가 발생하여 자동 생성된 비디오입니다. 최신 AI 기술에 대한 흥미로운 소식을 담고 있습니다.")
@@ -438,3 +438,4 @@ def process_youtube_shorts_upload(metadata, gcp_project_id, gcp_bucket_name, you
                     logger.info(f"임시 파일 삭제 완료: {f}")
                 except Exception as e:
                     logger.warning(f"임시 파일 삭제 실패 {f}: {e}")
+```
