@@ -1,84 +1,88 @@
-name: Daily YouTube Shorts Upload
+# .github/workflows/daily_upload.yaml
+name: Daily YouTube Shorts Upload # 워크플로우의 이름
 
 on:
   schedule:
     # 매일 한국 시간 오전 9시 (UTC 0시)에 실행
-    # 0 0 * * *는 UTC 기준이므로, 한국 시간 오전 9시 = UTC 자정 (00:00)입니다.
+    # UTC 기준이므로, 한국 시간 오전 9시 = UTC 자정 (00:00)입니다.
     - cron: '0 0 * * *'
-  workflow_dispatch: # 수동 실행을 허용
+  workflow_dispatch: # GitHub UI에서 워크플로우를 수동으로 실행할 수 있도록 허용
 
 env:
-  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  GCP_PROJECT_NUMBER: ${{ secrets.GCP_PROJECT_NUMBER }}
-  GCP_REGION: us-central1
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }} # GCP 프로젝트 ID (GitHub Secrets에서 가져옴)
+  GCP_PROJECT_NUMBER: ${{ secrets.GCP_PROJECT_NUMBER }} # GCP 프로젝트 번호 (GitHub Secrets에서 가져옴)
+  GCP_REGION: us-central1 # Cloud Run이 배포된 GCP 리전
   CLOUD_RUN_SERVICE_NAME: youtube-shorts-automation # Cloud Run 서비스 이름
 
 jobs:
   run-shorts-automation:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest # 워크플로우를 실행할 가상 머신 환경
     permissions:
-      contents: 'read'
-      id-token: 'write' # OIDC를 통해 GCP에 인증하기 위한 권한
+      contents: 'read' # 리포지토리 콘텐츠를 읽을 수 있는 권한
+      id-token: 'write' # OIDC(OpenID Connect)를 통해 GCP에 인증하기 위한 권한 (가장 중요!)
 
     steps:
-    - name: 'Google Cloud 인증'
-      id: auth
-      uses: google-github-actions/auth@v2
+    - name: 'Google Cloud 인증' # GCP 서비스 계정으로 인증하는 단계
+      id: auth # 이 단계에 'auth'라는 ID를 부여하여 나중에 이 단계의 결과물을 참조할 수 있도록 합니다.
+      uses: google-github-actions/auth@v2 # Google에서 제공하는 GitHub Actions 인증 액션 사용
       with:
+        # Workload Identity Federation 설정: GitHub 액션이 GCP 서비스 계정처럼 행동하도록 합니다.
         workload_identity_provider: 'projects/${{ env.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01'
-        service_account: 'github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com'
+        service_account: 'github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com' # GCP 서비스 계정 이메일
 
-    - name: 'gcloud CLI 설치 및 구성'
+    - name: 'gcloud CLI 설치 및 구성' # GCP 명령줄 도구(gcloud CLI)를 설치하고 프로젝트 ID를 설정합니다.
       uses: google-github-actions/setup-gcloud@v2
       with:
         project_id: ${{ env.GCP_PROJECT_ID }}
 
-    - name: '인증된 계정 확인'
+    - name: '인증된 계정 확인' # 현재 어떤 계정으로 GCP에 인증되었는지 확인하는 단계 (디버깅용)
       run: |
         echo "현재 인증된 계정: $(gcloud auth list --filter="status:ACTIVE" --format="value(account)")"
         echo "현재 활성 프로젝트: $(gcloud config get-value project)"
 
-    - name: 'Cloud Run 서비스 URL 가져오기'
+    - name: 'Cloud Run 서비스 URL 가져오기' # 배포된 Cloud Run 서비스의 URL을 가져옵니다.
       id: get_service_url
       run: |
         SERVICE_URL=$(gcloud run services describe ${{ env.CLOUD_RUN_SERVICE_NAME }} \
           --platform managed \
           --region ${{ env.GCP_REGION }} \
           --format='value(status.url)')
-        echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_ENV
+        echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_ENV # 가져온 URL을 환경 변수로 저장하여 다음 단계에서 사용할 수 있도록 합니다.
         echo "Cloud Run Service URL: $SERVICE_URL"
 
-    - name: 'YouTube 쇼츠 생성 및 업로드'
+    - name: 'YouTube 쇼츠 생성 및 업로드' # 실제 Cloud Run 서비스에 요청을 보내는 핵심 단계
       run: |
+        # Cloud Run 서비스 URL이 비어있으면 오류를 발생시킵니다.
         if [ -z "${{ env.SERVICE_URL }}" ]; then
           echo "::error::Cloud Run 서비스 URL을 찾을 수 없습니다. 배포가 제대로 되었는지 확인하세요."
           exit 1
         fi
 
-        # ✅ 여기! REQUEST_BODY를 app.py가 예상하는 형태로 수정합니다.
-        # "action" 키와 "metadata" 키를 포함하도록 변경합니다.
+        # REQUEST_BODY를 app.py가 예상하는 형태로 구성합니다.
+        # "action" 키와 "metadata" 키를 포함하도록 JSON 형식을 만듭니다.
         REQUEST_BODY=$(cat <<EOF
         {
           "action": "create_and_upload_shorts",
           "metadata": {
-            "workflow_run_id": "${{ github.run_id }}",
-            "trigger_time": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            "workflow_run_id": "${{ github.run_id }}", # GitHub 워크플로우 실행 ID
+            "trigger_time": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" # UTC 기준으로 현재 시간
           }
         }
         EOF
         )
 
-        echo "::group::요청 데이터"
+        echo "::group::요청 데이터" # 요청으로 보낼 JSON 데이터를 로그에 출력 (디버깅용)
         echo "$REQUEST_BODY"
         echo "::endgroup::"
 
         # 서비스 호출 (타임아웃 300초 설정)
+        # curl 명령어를 사용하여 Cloud Run 서비스에 POST 요청을 보냅니다.
         RESPONSE=$(curl --fail-with-body -sS -m 300 -X POST "${{ env.SERVICE_URL }}" \
           -H "Content-Type: application/json" \
-          -H "Authorization: Bearer $(gcloud auth print-identity-token --audiences=${{ env.SERVICE_URL }})" \
+          -H "Authorization: Bearer ${{ steps.auth.outputs.id_token }}" \ # 💡 핵심 수정 부분!
           -d "$REQUEST_BODY")
 
-        echo "::group::서비스 응답"
+        echo "::group::서비스 응답" # Cloud Run 서비스로부터 받은 응답을 로그에 출력 (디버깅용)
         echo "$RESPONSE"
         echo "::endgroup::"
 
@@ -88,7 +92,7 @@ jobs:
           exit 1
         fi
 
-        # 작업 ID 추출 (있는 경우)
+        # 작업 ID 추출 (응답에 jobId가 있다면 추출하여 다음 단계에서 사용할 수 있도록 합니다)
         JOB_ID=$(echo "$RESPONSE" | jq -r '.jobId // empty')
         if [ -n "$JOB_ID" ]; then
           echo "jobId=$JOB_ID" >> $GITHUB_OUTPUT
