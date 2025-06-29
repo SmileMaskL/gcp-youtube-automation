@@ -1,10 +1,15 @@
 Flask==3.0.3
+gunicorn==22.0.0
+gevent==24.2.1
 google-cloud-storage==2.16.0
 google-cloud-texttospeech==2.18.0
 google-api-python-client==2.126.0
 google-auth-oauthlib==1.2.0
 google-auth-httplib2==0.2.0
 MoviePy==1.0.3
-Pillow==10.3.0 # MoviePy의 ImageClip 사용 시 필요
-google-generativeai==0.6.0 # Google Gemini Pro Python SDK (만약 직접 API 호출한다면)
-# vertexai # Google Gemini Pro (Vertex AI SDK) 사용 시 (Python 3.9+ 권장)
+Pillow==10.3.0
+google-generativeai==0.6.0
+newsapi-python==0.2.7
+pexels-api==1.2.0
+google-cloud-logging==3.8.0
+requests
