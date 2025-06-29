@@ -32,7 +32,5 @@ COPY . .
 ENV PORT 8080
 
 # 컨테이너가 시작될 때 실행할 명령어
-# gunicorn 대신 Flask 개발 서버를 직접 사용해도 됩니다.
-# 하지만 프로덕션 환경에서는 gunicorn이나 uWSGI와 같은 WSGI 서버를 권장합니다.
-# gunicorn을 사용하지 않는다면 main.py의 if __name__ == '__main__': 부분을 사용합니다.
-CMD ["python", "app.py"]
+# ⭐️⭐️⭐️ 이 부분을 다시 gunicorn 명령어로 변경합니다! ⭐️⭐️⭐️
+CMD exec gunicorn --bind 0.0.0.0:$PORT --workers 1 --timeout 0 --graceful-timeout 30 src.app:app
