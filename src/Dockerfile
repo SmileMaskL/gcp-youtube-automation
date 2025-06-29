@@ -35,4 +35,4 @@ ENV PORT 8080
 # gunicorn 대신 Flask 개발 서버를 직접 사용해도 됩니다.
 # 하지만 프로덕션 환경에서는 gunicorn이나 uWSGI와 같은 WSGI 서버를 권장합니다.
 # gunicorn을 사용하지 않는다면 main.py의 if __name__ == '__main__': 부분을 사용합니다.
-CMD ["python", "main.py"]
+CMD ["python", "app.py"]
