@@ -23,12 +23,13 @@ jobs:
           # Workload Identity Federation (WIF) 제공자 설정 (필수!)
           # ⭐ 이 값은 GitHub 저장소 Settings -> Secrets -> Actions에 'GCP_WORKLOAD_IDENTITY_PROVIDER'라는 이름으로 저장되어야 합니다.
           # ⭐ Google Cloud Console에서 Workload Identity Provider의 "리소스 이름"을 정확히 복사해서 붙여넣으세요.
-          #    예시: 'projects/YOUR_PROJECT_NUMBER/locations/global/workloadIdentityPools/YOUR_POOL_NAME/providers/YOUR_PROVIDER_NAME'
+          #    형식 예시: 'projects/YOUR_PROJECT_NUMBER/locations/global/workloadIdentityPools/YOUR_POOL_NAME/providers/YOUR_PROVIDER_NAME'
+          #    (숫자, 대소문자, 슬래시, 콜론 등 모든 것이 정확해야 합니다!)
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           
           # 이 워크플로우가 사용할 서비스 계정 이메일 (필수!)
           # ⭐ 이 값은 GitHub 저장소 Settings -> Secrets -> Actions에 'GCP_SERVICE_ACCOUNT_EMAIL'라는 이름으로 저장되어야 합니다.
-          #    예시: 'github-actions-sa@your-gcp-project-id.iam.gserviceaccount.com'
+          #    형식 예시: 'github-actions-sa@your-gcp-project-id.iam.gserviceaccount.com'
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
 
           # 추가적인 인증 설정 (권장)
@@ -77,8 +78,7 @@ jobs:
           )
           
           # Cloud Run 서비스에 인증된 요청을 보내기 위한 ID 토큰 생성
-          # 이 토큰은 Workload Identity Federation을 통해 서비스 계정 권한을 사용합니다.
-          # audiences는 호출하려는 Cloud Run 서비스의 URL이어야 합니다.
+          # ⭐ 여기의 `--audience` 오타를 `--audiences`로 수정했습니다! ⭐
           ID_TOKEN=$(gcloud auth print-identity-token --audiences=${{ steps.get_service_url.outputs.SERVICE_URL }})
 
           echo "::group::요청 데이터" # 요청으로 보낼 JSON 데이터를 로그에 출력 (디버깅용)
