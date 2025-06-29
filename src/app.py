@@ -6,6 +6,7 @@ import time
 from datetime import datetime
 from flask import Flask, request, jsonify
 from concurrent.futures import ThreadPoolExecutor
+import sys # sys 모듈 임포트
 
 # --- Flask 애플리케이션 객체 선언 (⭐가장 중요! Gunicorn이 가장 먼저 찾습니다⭐) ---
 # 이 'app' 객체가 파일 로드 시점에 정의되어 있어야 Gunicorn이 앱을 시작할 수 있습니다.
@@ -26,16 +27,6 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-# --- 환경 변수 로드 (로컬 개발용) ---
-# Cloud Run에서는 환경 변수가 직접 주입되므로 이 부분은 로컬 개발에서만 작동합니다.
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-    logger.info("✅ .env 파일 로드 시도 (로컬 개발용).")
-except ImportError:
-    logger.warning("python-dotenv 모듈을 찾을 수 없습니다. .env 파일 로드를 건너뛰는 중. (배포 환경에서는 정상)")
-
-
 # --- 전역 변수 선언 및 초기화 상태 플래그 ---
 # 사용자 정의 모듈 임포트 성공 여부 플래그
 MODULE_IMPORT_FAILED = False 
@@ -44,19 +35,21 @@ INITIALIZATION_ERROR = None
 # 앱의 모든 핵심 요소가 정상적으로 초기화되었는지 여부
 APP_INITIALIZED_SUCCESSFULLY = False 
 
-# Google Cloud Imports (여기로 옮김)
-# 여기서 ImportError가 발생하면, 아래의 try-except에서 잡아서 플래그를 설정합니다.
+# --- 핵심 로직을 try-except 블록으로 감싸서 초기 오류를 명확히 포착 ---
 try:
+    # --- 환경 변수 로드 (로컬 개발용) ---
+    # Cloud Run에서는 환경 변수가 직접 주입되므로 이 부분은 로컬 개발에서만 작동합니다.
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+        logger.info("✅ .env 파일 로드 시도 (로컬 개발용).")
+    except ImportError:
+        logger.warning("python-dotenv 모듈을 찾을 수 없습니다. .env 파일 로드를 건너뛰는 중. (배포 환경에서는 정상)")
+
+    # Google Cloud Imports
     from google.cloud import storage
-except ImportError as e:
-    logger.critical(f"❌ 치명적 오류: google.cloud.storage 모듈 임포트 실패: {e}", exc_info=True)
-    MODULE_IMPORT_FAILED = True
-    INITIALIZATION_ERROR = f"google.cloud.storage 모듈 임포트 실패: {e}"
 
-
-# Third-party API Clients (여기로 옮김)
-# 여기서 ImportError가 발생하면, 아래의 try-except에서 잡아서 플래그를 설정합니다.
-try:
+    # Third-party API Clients
     import requests
     from openai import OpenAI
     from google.generativeai import configure as configure_gemini, GenerativeModel
@@ -66,28 +59,28 @@ try:
     from google.oauth2.credentials import Credentials
     import google.auth.transport.requests
     from pexels_api import API
+
+    # 사용자 정의 모듈 임포트 (src/ 디렉토리에 있는지 확인 필요)
+    # 이 부분에서 ImportError가 발생하면, Cloud Run 로그에 명확히 남도록 처리됩니다.
+    from video_script_generator import generate_script_from_news
+    from audio_generator import generate_audio_from_text
+    from video_generator import create_video_from_images_and_audio
+    from youtube_uploader import upload_video_to_youtube
+    from gcs_helper import upload_to_gcs, download_from_gcs, delete_from_gcs
+
 except ImportError as e:
-    logger.critical(f"❌ 치명적 오류: 타사 API 클라이언트 모듈 임포트 실패: {e}", exc_info=True)
+    logger.critical(f"❌ 치명적 오류: 필수 모듈 임포트 실패 (프로그램 시작 불가): {e}", exc_info=True)
     MODULE_IMPORT_FAILED = True
-    INITIALIZATION_ERROR = f"타사 API 클라이언트 모듈 임포트 실패: {e}"
-
-
-# 사용자 정의 모듈 임포트 (src/ 디렉토리에 있는지 확인 필요)
-# 혹시 여기서 ImportError가 발생하면, Cloud Run 로그에 명확히 남도록 처리합니다.
-if not MODULE_IMPORT_FAILED: # 위에 다른 임포트가 실패하지 않았을 경우에만 시도
-    try:
-        from video_script_generator import generate_script_from_news
-        from audio_generator import generate_audio_from_text
-        from video_generator import create_video_from_images_and_audio
-        from youtube_uploader import upload_video_to_youtube
-        from gcs_helper import upload_to_gcs, download_from_gcs, delete_from_gcs
-    except ImportError as e:
-        logger.critical(f"❌ 치명적 오류: 사용자 정의 모듈 임포트 실패. 애플리케이션 시작 불가: {e}", exc_info=True)
-        MODULE_IMPORT_FAILED = True
-        INITIALIZATION_ERROR = f"사용자 정의 모듈 임포트 실패: {e}"
+    INITIALIZATION_ERROR = f"필수 모듈 임포트 실패: {e}"
+except Exception as e:
+    logger.critical(f"❌ 치명적 오류: 애플리케이션 초기 로딩 중 알 수 없는 오류 발생: {e}", exc_info=True)
+    INITIALIZATION_ERROR = f"애플리케이션 초기 로딩 중 알 수 없는 오류: {e}"
+    # 이 경우 MODULE_IMPORT_FAILED를 True로 설정하여 health check에서 오류를 반환
+    MODULE_IMPORT_FAILED = True
 
 
 # --- 전역 변수 초기값 (initialize_app_logic 함수에서 os.getenv()를 통해 실제 값으로 채워집니다.) ---
+# 위 try-except 블록에서 이미 정의된 경우를 대비하여 None으로 초기화 (선언은 필요)
 GCP_PROJECT_ID = None
 GCP_BUCKET_NAME = None
 YOUTUBE_CLIENT_ID = None
