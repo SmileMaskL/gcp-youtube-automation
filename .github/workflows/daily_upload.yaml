@@ -2,21 +2,21 @@ name: Daily YouTube Shorts Upload
 
 on:
   schedule:
-    - cron: '0 0 * * *' # 매일 UTC 자정 실행
-  workflow_dispatch: # 수동 실행 허용
+    - cron: '0 0 * * *'  # 매일 UTC 자정 실행
+  workflow_dispatch:     # 수동 실행 허용
 
 jobs:
   upload_shorts:
     runs-on: ubuntu-latest
     permissions:
       contents: 'read'
-      id-token: 'write' # OIDC 토큰 요청 권한
+      id-token: 'write'
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # STEP 1: Cloud Run 서비스 URL 가져오기
+      # STEP 1: Cloud Run URL 가져오기
       - name: Get Cloud Run service URL
         id: get_service_url
         run: |
@@ -25,86 +25,30 @@ jobs:
             --region us-central1 \
             --format 'value(status.url)' \
             --project ${{ secrets.GCP_PROJECT_ID }})
-          
-          if [ -z "$SERVICE_URL" ]; then
-            echo "::error::Cloud Run 서비스 URL을 찾을 수 없습니다."
-            exit 1
-          fi
           echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_OUTPUT
-          echo "##[debug] Cloud Run URL: $SERVICE_URL"
-        env:
-          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
 
-      # STEP 2: GCP 인증 및 ID 토큰 생성
-      - name: Configure GCP credentials and get ID Token for Cloud Run
+      # STEP 2: GCP 인증 설정 (핵심 수정 부분!)
+      - name: Configure GCP credentials
         id: auth
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
-          id_token: ${{ steps.get_service_url.outputs.SERVICE_URL }} # audience로 서비스 URL 사용
+          id_token: https://youtube-shorts-automation  # 고정된 audience 값
           create_credentials_file: true
-          export_environment_variables: true
-          access_token_lifetime: 3600s
-          access_token_scopes: https://www.googleapis.com/auth/cloud-platform
-          id_token_include_email: false
 
-      # STEP 3: Cloud SDK 설정 (인증 후에 실행)
+      # STEP 3: Cloud SDK 설정
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
-        with:
-          project_id: ${{ secrets.GCP_PROJECT_ID }}
 
-      # STEP 4: ID 토큰 디버깅 출력 (확인용)
-      - name: Debug ID Token
-        run: |
-          echo "##[debug] ID Token: ${{ steps.auth.outputs.id_token }}"
-          if [ -z "${{ steps.auth.outputs.id_token }}" ]; then
-            echo "::error::ID 토큰이 비어 있습니다!"
-            exit 1
-          fi
-
-      # STEP 5: Cloud Run 서비스 호출
+      # STEP 4: Cloud Run 호출
       - name: Call Cloud Run service
-        id: call_service
         run: |
-          REQUEST_BODY=$(cat <<EOF
-          {
-            "action": "create_and_upload_shorts",
-            "metadata": {
-              "workflow_run_id": "${{ github.run_id }}",
-              "trigger_time": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-            }
-          }
-          EOF
-          )
-          
+          REQUEST_BODY='{"action": "create_and_upload_shorts"}'
           ID_TOKEN="${{ steps.auth.outputs.id_token }}"
           SERVICE_URL="${{ steps.get_service_url.outputs.SERVICE_URL }}"
 
-          # 디버깅: 요청 본문과 URL 출력
-          echo "##[debug] Request URL: $SERVICE_URL"
-          echo "##[debug] ID Token length: ${#ID_TOKEN}"
-          echo "::group::Request Body"
-          echo "$REQUEST_BODY"
-          echo "::endgroup::"
-
-          # Cloud Run 호출
-          RESPONSE=$(curl --fail-with-body -sS -m 600 -X POST "$SERVICE_URL" \
-            -H "Content-Type: application/json" \
+          curl -X POST "$SERVICE_URL" \
             -H "Authorization: Bearer $ID_TOKEN" \
-            -d "$REQUEST_BODY")
-
-          echo "::group::Service Response"
-          echo "$RESPONSE"
-          echo "::endgroup::"
-
-          if ! echo "$RESPONSE" | jq -e '.status == "processing"' > /dev/null; then
-            echo "::error::Unexpected response status"
-            exit 1
-          fi
-
-          JOB_ID=$(echo "$RESPONSE" | jq -r '.jobId // empty')
-          if [ -n "$JOB_ID" ]; then
-            echo "jobId=$JOB_ID" >> $GITHUB_OUTPUT
-          fi
+            -H "Content-Type: application/json" \
+            -d "$REQUEST_BODY"
