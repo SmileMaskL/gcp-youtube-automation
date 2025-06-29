@@ -3,14 +3,14 @@ name: Daily YouTube Shorts Upload
 on:
   schedule:
     - cron: '0 0 * * *' # 매일 UTC 자정 실행
-  workflow_dispatch: # 수동 실행 허용
+  workflow_dispatch:
 
 jobs:
   upload_shorts:
     runs-on: ubuntu-latest
     permissions:
       contents: 'read'
-      id-token: 'write' # OIDC 토큰 요청 권한: Cloud Run 호출 인증 토큰 생성에 필요
+      id-token: 'write'
 
     steps:
       - name: Checkout repository
@@ -19,22 +19,7 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      # GCP 자격 증명 설정 및 ID Token 발급
-      - name: Configure GCP credentials and get ID Token for Cloud Run
-        id: 'auth'
-        uses: 'google-github-actions/auth@v2'
-        with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
-          create_credentials_file: true
-          export_environment_variables: true
-          access_token_lifetime: 3600s
-          access_token_scopes: https://www.googleapis.com/auth/cloud-platform
-
-          # 🔑 Cloud Run audience를 반드시 지정 (서비스 URL로)
-          id_token_audience: https://youtube-shorts-automation-94662874801.us-central1.run.app # 아래 STEP에서 동적으로 가져오게 수정 가능
-
-      # Cloud Run 서비스 URL 가져오기
+      # STEP 1: Cloud Run 서비스 URL 먼저 가져오기
       - name: Get Cloud Run service URL
         id: get_service_url
         run: |
@@ -43,20 +28,28 @@ jobs:
           SERVICE_URL=$(gcloud run services describe youtube-shorts-automation \
             --platform managed \
             --region us-central1 \
-            --format 'value(status.url)' \
-            --project ${{ secrets.GCP_PROJECT_ID }})
+            --format 'value(status.url)')
 
           if [ -z "$SERVICE_URL" ]; then
-            echo "::error::Cloud Run 서비스 URL을 찾을 수 없습니다. 배포가 제대로 되었는지 확인하세요."
+            echo "::error::Cloud Run 서비스 URL을 찾을 수 없습니다."
             exit 1
           fi
 
-          echo "찾은 Cloud Run 서비스 URL: $SERVICE_URL"
           echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_OUTPUT
 
-      # Cloud Run 서비스 호출
+      # STEP 2: GCP 자격 증명 설정 및 ID Token 발급
+      - name: Configure GCP credentials and get ID Token for Cloud Run
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
+          id_token_audience: ${{ steps.get_service_url.outputs.SERVICE_URL }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      # STEP 3: Cloud Run 서비스 호출
       - name: Call Cloud Run service
-        id: call_service
         run: |
           REQUEST_BODY=$(cat <<EOF
           {
@@ -72,35 +65,13 @@ jobs:
           ID_TOKEN=${{ steps.auth.outputs.id_token }}
 
           if [ -z "$ID_TOKEN" ]; then
-            echo "::error::ID_TOKEN을 가져오지 못했습니다. 인증 스텝을 확인하세요."
+            echo "::error::ID_TOKEN을 가져오지 못했습니다."
             exit 1
           fi
-
-          echo "::group::요청 데이터"
-          echo "$REQUEST_BODY"
-          echo "::endgroup::"
 
           RESPONSE=$(curl --fail-with-body -sS -m 600 -X POST "${{ steps.get_service_url.outputs.SERVICE_URL }}" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer $ID_TOKEN" \
             -d "$REQUEST_BODY")
 
-          echo "::group::서비스 응답"
-          echo "$RESPONSE"
-          echo "::endgroup::"
-
-          if ! echo "$RESPONSE" | jq -e '.status == "processing"' > /dev/null; then
-            echo "::error::서비스 응답 실패 또는 예상치 못한 상태: $RESPONSE"
-            exit 1
-          fi
-
-          JOB_ID=$(echo "$RESPONSE" | jq -r '.jobId // empty')
-          if [ -n "$JOB_ID" ]; then
-            echo "jobId=$JOB_ID" >> $GITHUB_OUTPUT
-            echo "✅ YouTube Shorts 업로드 요청 성공! Job ID: $JOB_ID"
-          else
-            echo "::warning::요청 성공했지만 Job ID를 찾을 수 없습니다. 응답: $RESPONSE"
-          fi
-
-        env:
-          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          echo "Cloud Run 응답: $RESPONSE"
