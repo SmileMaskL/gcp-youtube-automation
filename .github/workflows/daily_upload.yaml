@@ -26,11 +26,12 @@ jobs:
         uses: actions/checkout@v4
 
       # STEP 0: gcloud CLI 설치 및 구성 (프로젝트 ID 설정 포함)
+      # 이 스텝이 인증 정보를 설정하여 이후 gcloud 명령이 동작하도록 합니다.
       - name: Set up Cloud SDK and Configure Project
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ env.GCP_PROJECT_ID }}
-          # 이 액션이 실행 컨텍스트에 project_id를 설정합니다.
+          # 💡 워크로드 아이덴티티 연동을 사용하므로 service_account_key는 필요 없습니다.
 
       # STEP 0.5: Google Cloud 인증 (Cloud Run 서비스 호출을 위한 ID 토큰 발급)
       # Cloud Run URL을 가져오기 전에 먼저 인증합니다.
@@ -50,8 +51,8 @@ jobs:
       - name: Get Cloud Run service URL
         id: get_service_url
         run: |
-          # 💡 인증이 제대로 되었는지 확인하는 디버그 라인
-          gcloud auth list --filter=ACTIVE
+          echo "현재 gcloud 인증 계정 확인:"
+          gcloud auth list --filter=status:ACTIVE # 인증이 잘 되었는지 확인하는 디버그용 명령어
 
           SERVICE_URL=$(gcloud run services describe ${{ env.CLOUD_RUN_SERVICE_NAME }} \
             --platform managed \
@@ -59,12 +60,12 @@ jobs:
             --format 'value(status.url)')
 
           if [ -z "$SERVICE_URL" ]; then
-            echo "::error::Cloud Run 서비스 URL을 찾을 수 없습니다."
+            echo "::error::Cloud Run 서비스 URL을 찾을 수 없습니다. 배포가 안 되었거나 이름이 틀렸을 수 있습니다."
             exit 1
           fi
 
           echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_OUTPUT
-          echo "Cloud Run 서비스 URL: $SERVICE_URL" # 디버그 출력
+          echo "✅ Cloud Run 서비스 URL: $SERVICE_URL" # 디버그 출력
 
       # STEP 2: ID Token Audience 동적으로 설정 및 토큰 재발급 (⭐추가⭐)
       # Cloud Run URL을 가져온 후, 그 URL을 audience로 사용하여 ID 토큰을 다시 생성합니다.
@@ -99,7 +100,7 @@ jobs:
           ID_TOKEN=${{ steps.auth_with_audience.outputs.id_token }}
 
           if [ -z "$ID_TOKEN" ]; then
-            echo "::error::ID_TOKEN을 가져오지 못했습니다. 인증 실패!"
+            echo "::error::ID_TOKEN을 가져오지 못했습니다. 인증 실패! Workload Identity Provider 설정, GCP_PROJECT_NUMBER 시크릿, 또는 서비스 계정 권한을 다시 확인하세요."
             exit 1
           fi
 
