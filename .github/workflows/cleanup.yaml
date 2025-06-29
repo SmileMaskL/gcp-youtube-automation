@@ -1,4 +1,5 @@
-name: Cleanup Old Workflow Runs
+# .github/workflows/cleanup.yaml
+name: Cleanup Old Workflow Runs # 워크플로우의 이름
 
 on:
   workflow_dispatch: # 수동 실행을 위한 트리거
@@ -8,11 +9,17 @@ on:
 jobs:
   delete-old-runs:
     runs-on: ubuntu-latest
+    permissions:
+      actions: write # 💡 수정: 이 권한이 있어야 워크플로우 실행 기록을 삭제할 수 있어요!
     steps:
       - name: Delete old workflow runs
-        uses: peter-evans/delete-old-workflow-runs@v3 # 오래된 워크플로우 실행 기록을 삭제하는 액션
+        # 💡 수정: 액션 버전을 v4로 업데이트합니다. (가장 최신 안정 버전으로 가정)
+        # 만약 v4에서도 동일 에러 발생 시, GitHub Marketplace에서 해당 액션의 최신 버전을 확인하세요.
+        uses: peter-evans/delete-old-workflow-runs@v4 
         with:
           # artifact: workflow_run (이전 버전에서 사용되던 방식. 현재는 'package-type'을 사용)
-          package-type: workflow_run # workflow run artifacts를 대상으로 지정
-          keep_minimum_runs: 5      # 최소 5개의 최신 실행 기록을 유지
-          days_old: 7               # 7일이 지난 실행 기록을 삭제
+          # package-type은 보통 artifact를 의미하며, 워크플로우 실행 자체는 artifact가 아니므로 이 줄은 제거하는 것이 좋습니다.
+          # 이 액션은 기본적으로 'workflow_run'을 대상으로 합니다.
+          # 💡 수정: package-type: workflow_run 줄은 제거합니다.
+          keep_minimum_runs: 5        # 최소 5개의 최신 실행 기록을 유지
+          days_old: 7                 # 7일이 지난 실행 기록을 삭제
