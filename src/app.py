@@ -50,7 +50,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-# --- Flask 애플리케이션 객체 선언 (가장 먼저 선언되어야 함) ---
+# --- Flask 애플리케이션 객체 선언 (이 부분이 가장 중요! 파일 최상단에 위치해야 함) ---
 # Gunicorn이 이 'app' 객체를 찾아서 실행합니다.
 app = Flask(__name__)
 
