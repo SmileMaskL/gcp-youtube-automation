@@ -16,15 +16,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Configure GCP credentials
-        id: 'auth' # 이 스텝의 ID
+      - name: Configure GCP credentials and get ID Token
+        id: 'auth' # 이 스텝의 ID. ID 토큰을 여기서 바로 가져올 것입니다.
         uses: 'google-github-actions/auth@v2'
         with:
           # Workload Identity Federation (WIF) 제공자 설정 (필수!)
           # ⭐ 이 값은 GitHub 저장소 Settings -> Secrets -> Actions에 'GCP_WORKLOAD_IDENTITY_PROVIDER'라는 이름으로 저장되어야 합니다.
           # ⭐ Google Cloud Console에서 Workload Identity Provider의 "리소스 이름"을 정확히 복사해서 붙여넣으세요.
           #    형식 예시: 'projects/YOUR_PROJECT_NUMBER/locations/global/workloadIdentityPools/YOUR_POOL_NAME/providers/YOUR_PROVIDER_NAME'
-          #    (숫자, 대소문자, 슬래시, 콜론 등 모든 것이 정확해야 합니다!)
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           
           # 이 워크플로우가 사용할 서비스 계정 이메일 (필수!)
@@ -32,7 +31,15 @@ jobs:
           #    형식 예시: 'github-actions-sa@your-gcp-project-id.iam.gserviceaccount.com'
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
 
-          # 추가적인 인증 설정 (권장)
+          # ID 토큰을 출력으로 요청 (이것이 핵심!)
+          # Workload Identity Provider가 올바르게 설정되면, 이 액션이 자동으로 ID 토큰을 생성합니다.
+          # 이 ID 토큰의 'audience'는 기본적으로 GitHub 액션 워크플로우를 나타내지만,
+          # 나중에 'curl' 명령에서 'audience'를 Cloud Run 서비스 URL로 명시하여 ID 토큰을 재생성하거나 유효성 검사를 하도록 합니다.
+          # 중요한 것은 'id_token' 필드 자체에 특정 URL을 직접 지정하지 않는 것입니다.
+          # 이 액션은 OIDC 토큰을 생성하고, 다음 단계에서 이를 사용하여 대상 서비스에 대한 ID 토큰을 얻습니다.
+          # (이전 버전의 id_token: ${{ secrets.CLOUD_RUN_SERVICE_URL }} 부분은 제거되었습니다.)
+
+          # 다른 인증 설정 (권장)
           create_credentials_file: true
           export_environment_variables: true
           access_token_lifetime: 3600s # 토큰 유효 기간 (1시간)
@@ -77,9 +84,16 @@ jobs:
           EOF
           )
           
-          # Cloud Run 서비스에 인증된 요청을 보내기 위한 ID 토큰 생성
-          # ⭐ 여기의 `--audience` 오타를 `--audiences`로 수정했습니다! ⭐
+          # ⭐ 'Configure GCP credentials and get ID Token' 스텝에서 생성된 ID 토큰을 사용합니다! ⭐
+          #    이것이 Workload Identity Federation을 통한 인증의 핵심입니다.
+          #    `google-github-actions/auth@v2` 액션이 이미 토큰을 발급했습니다.
+          #    여기서는 해당 토큰을 사용하여 대상(Cloud Run URL)에 대한 ID 토큰을 "재인증"하는 gcloud 명령을 사용합니다.
           ID_TOKEN=$(gcloud auth print-identity-token --audiences=${{ steps.get_service_url.outputs.SERVICE_URL }})
+
+          if [ -z "$ID_TOKEN" ]; then
+            echo "::error::인증 토큰(ID_TOKEN)을 가져오지 못했습니다. 이전 인증 스텝을 확인하세요."
+            exit 1
+          fi
 
           echo "::group::요청 데이터" # 요청으로 보낼 JSON 데이터를 로그에 출력 (디버깅용)
           echo "$REQUEST_BODY"
@@ -99,7 +113,7 @@ jobs:
           echo "::endgroup::"
           
           # 응답 검증: Cloud Run 서비스에서 'status: "processing"'을 반환하는지 확인
-          if ! echo "$RESPONSE" | jq -e '.status == "processing"' > /dev/null; then
+          if ! echo "$RESPONSE" | jq -e '.status == "processing"' > /dev://null; then
             echo "::error::서비스 응답 실패 또는 예상치 못한 상태: $RESPONSE"
             exit 1
           fi
