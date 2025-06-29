@@ -21,13 +21,14 @@ jobs:
         uses: 'google-github-actions/auth@v2'
         with:
           # Workload Identity Federation (WIF) 제공자 설정 (필수!)
-          # 이 값은 GitHub 저장소 Settings -> Secrets -> Actions에 'GCP_WORKLOAD_IDENTITY_PROVIDER'라는 이름으로 저장되어야 합니다.
-          # 형식 예시: 'projects/YOUR_PROJECT_NUMBER/locations/global/workloadIdentityPools/YOUR_POOL_NAME/providers/YOUR_PROVIDER_NAME'
+          # ⭐ 이 값은 GitHub 저장소 Settings -> Secrets -> Actions에 'GCP_WORKLOAD_IDENTITY_PROVIDER'라는 이름으로 저장되어야 합니다.
+          # ⭐ Google Cloud Console에서 Workload Identity Provider의 "리소스 이름"을 정확히 복사해서 붙여넣으세요.
+          #    예시: 'projects/YOUR_PROJECT_NUMBER/locations/global/workloadIdentityPools/YOUR_POOL_NAME/providers/YOUR_PROVIDER_NAME'
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           
           # 이 워크플로우가 사용할 서비스 계정 이메일 (필수!)
-          # 이 값은 GitHub 저장소 Settings -> Secrets -> Actions에 'GCP_SERVICE_ACCOUNT_EMAIL'라는 이름으로 저장되어야 합니다.
-          # 형식 예시: 'github-actions-sa@your-gcp-project-id.iam.gserviceaccount.com'
+          # ⭐ 이 값은 GitHub 저장소 Settings -> Secrets -> Actions에 'GCP_SERVICE_ACCOUNT_EMAIL'라는 이름으로 저장되어야 합니다.
+          #    예시: 'github-actions-sa@your-gcp-project-id.iam.gserviceaccount.com'
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
 
           # 추가적인 인증 설정 (권장)
