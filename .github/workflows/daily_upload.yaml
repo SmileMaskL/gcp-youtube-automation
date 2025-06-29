@@ -4,13 +4,22 @@ name: Daily YouTube Shorts Upload
 
 on:
   schedule:
-    - cron: '0 0 * * *' # 매일 UTC 자정 실행
-  workflow_dispatch: # 수동 실행을 허용
+    # 💡 하루에 5번 실행되도록 스케줄 변경 (UTC 기준)
+    # 매일 0시, 6시, 12시, 18시, 22시 (UTC)에 실행됩니다.
+    # 한국 시간(KST)으로 변환하면:
+    # UTC 00:00 = KST 09:00
+    # UTC 06:00 = KST 15:00
+    # UTC 12:00 = KST 21:00
+    # UTC 18:00 = KST 03:00 (다음날)
+    # UTC 22:00 = KST 07:00 (다음날)
+    # 실제 원하는 시간에 맞게 cron 표현식을 조정하세요.
+    - cron: '0 0,6,12,18,22 * * *' 
+  workflow_dispatch: # 수동 실행을 허용 (테스트용)
 
 env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  GCP_PROJECT_NUMBER: ${{ secrets.GCP_PROJECT_NUMBER }} # Workload Identity Pool 풀 번호
-  GCP_REGION: us-central1
+  GCP_PROJECT_NUMBER: ${{ secrets.GCP_PROJECT_NUMBER }} # Workload Identity Pool 풀 번호 (★★★ 중요! GCP Cloud Shell에서 확인한 정확한 값이어야 함 ★★★)
+  GCP_REGION: us-central1 # Cloud Run 서비스가 배포된 리전
   CLOUD_RUN_SERVICE_NAME: youtube-shorts-automation
   GCP_SERVICE_ACCOUNT_EMAIL: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com 
 
@@ -19,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: 'read'
-      id-token: 'write' # OIDC를 통한 인증을 위해 필요
+      id-token: 'write' # OpenID Connect (OIDC)를 통해 GCP에 인증하기 위한 권한
 
     steps:
       - name: Checkout repository
@@ -31,28 +40,25 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ env.GCP_PROJECT_ID }}
-          # 💡 워크로드 아이덴티티 연동을 사용하므로 service_account_key는 필요 없습니다.
+          # 워크로드 아이덴티티 연동을 사용하므로 service_account_key는 필요 없습니다.
 
-      # STEP 0.5: Google Cloud 인증 (Cloud Run 서비스 호출을 위한 ID 토큰 발급)
-      # Cloud Run URL을 가져오기 전에 먼저 인증합니다.
-      - name: Authenticate to GCP for Cloud Run call
-        id: auth # 이 id를 사용하여 나중에 id_token을 가져옵니다.
+      # STEP 0.5: Google Cloud 인증 (Cloud Run 서비스 URL 가져오기 전, 일반 gcloud 명령용)
+      # 이 인증은 gcloud 명령어가 잘 작동하도록 합니다.
+      - name: Authenticate to GCP for gcloud commands
         uses: google-github-actions/auth@v2
         with:
           # Workload Identity Provider의 전체 리소스 이름
           # secrets.GCP_PROJECT_NUMBER는 워크로드 아이덴티티 풀의 풀 번호입니다.
           workload_identity_provider: 'projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01'
           service_account: ${{ env.GCP_SERVICE_ACCOUNT_EMAIL }}
-          # id_token_audience는 나중에 Cloud Run URL을 가져와서 설정합니다.
-          # create_credentials_file: true # 불필요, 삭제
-          # export_environment_variables: true # 불필요, 삭제
+          # 여기서는 아직 Cloud Run URL을 모르므로 id_token_audience를 설정하지 않습니다.
 
       # STEP 1: Cloud Run 서비스 URL 가져오기
       - name: Get Cloud Run service URL
         id: get_service_url
         run: |
-          echo "현재 gcloud 인증 계정 확인:"
-          gcloud auth list --filter=status:ACTIVE # 인증이 잘 되었는지 확인하는 디버그용 명령어
+          echo "현재 gcloud 인증 계정 확인 (디버그용):"
+          gcloud auth list --filter=status:ACTIVE
 
           SERVICE_URL=$(gcloud run services describe ${{ env.CLOUD_RUN_SERVICE_NAME }} \
             --platform managed \
@@ -65,21 +71,19 @@ jobs:
           fi
 
           echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_OUTPUT
-          echo "✅ Cloud Run 서비스 URL: $SERVICE_URL" # 디버그 출력
+          echo "✅ Cloud Run 서비스 URL: $SERVICE_URL"
 
-      # STEP 2: ID Token Audience 동적으로 설정 및 토큰 재발급 (⭐추가⭐)
-      # Cloud Run URL을 가져온 후, 그 URL을 audience로 사용하여 ID 토큰을 다시 생성합니다.
-      # 이렇게 해야 Cloud Run이 이 토큰을 신뢰합니다.
+      # STEP 2: Cloud Run 서비스 호출을 위한 ID 토큰 재발급 (정확한 Audience 지정)
+      # Cloud Run은 호출 시 특정 'audience'를 가진 토큰을 요구합니다.
+      # 여기서 방금 얻은 Cloud Run URL을 audience로 사용하여 새로운 ID 토큰을 발급받습니다.
       - name: Re-authenticate with Cloud Run Service URL as Audience
-        id: auth_with_audience
+        id: auth_with_audience # 이 ID로 이 스텝의 출력을 참조할 수 있습니다.
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: 'projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01'
           service_account: ${{ env.GCP_SERVICE_ACCOUNT_EMAIL }}
-          # 💡 이제 서비스 URL을 audience로 정확히 지정합니다.
+          # 💡 바로 위에서 얻은 Cloud Run 서비스 URL을 'audience'로 정확히 지정합니다.
           id_token_audience: ${{ steps.get_service_url.outputs.SERVICE_URL }}
-          # create_credentials_file: true # 불필요, 삭제
-          # export_environment_variables: true # 불필요, 삭제
 
       # STEP 3: Cloud Run 서비스 호출
       - name: Call Cloud Run service
@@ -100,7 +104,7 @@ jobs:
           ID_TOKEN=${{ steps.auth_with_audience.outputs.id_token }}
 
           if [ -z "$ID_TOKEN" ]; then
-            echo "::error::ID_TOKEN을 가져오지 못했습니다. 인증 실패! Workload Identity Provider 설정, GCP_PROJECT_NUMBER 시크릿, 또는 서비스 계정 권한을 다시 확인하세요."
+            echo "::error::ID_TOKEN을 가져오지 못했습니다. 인증 실패! Workload Identity Provider 설정 (특히 '대상' Audience), GCP_PROJECT_NUMBER 시크릿, 또는 서비스 계정 권한을 다시 확인하세요."
             exit 1
           fi
 
