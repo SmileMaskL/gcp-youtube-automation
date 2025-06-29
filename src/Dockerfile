@@ -27,7 +27,8 @@ COPY . .
 # Cloud Run이 Flask 애플리케이션을 실행할 포트 설정 (Cloud Run에 의해 자동 주입됨)
 ENV PORT 8080
 
-RUN echo "worker_class = 'gevent'" > gunicorn.conf.py
+# 🚫 이 줄을 삭제해야 합니다!
+# RUN echo "worker_class = 'gevent'" > gunicorn.conf.py 
 
 # Gunicorn을 사용하여 Flask 애플리케이션 실행
 # --bind :$PORT : 0.0.0.0:${PORT}와 동일, 모든 네트워크 인터페이스에서 포트를 리스닝합니다.
