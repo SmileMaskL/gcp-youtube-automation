@@ -29,12 +29,15 @@ INITIALIZATION_ERROR = None # 초기화 시 발생하는 에러 메시지 저장
 
 try:
     # 이 부분에서 오류가 나면 아래 catch 블록으로 이동합니다.
+    # 각 사용자 정의 모듈 파일이 'src/' 폴더 안에 정확히 있는지,
+    # 그리고 해당 파일 내에 문법 오류가 없는지 다시 한번 확인해주세요.
     from video_script_generator import generate_script_from_news
     from audio_generator import generate_audio_from_text
     from video_generator import create_video_from_images_and_audio
     from youtube_uploader import upload_video_to_youtube
     from gcs_helper import upload_to_gcs, download_from_gcs, delete_from_gcs
 except ImportError as e:
+    # 이 로그가 Cloud Run에 표시되면 해당 모듈 파일을 확인해야 합니다.
     logging.critical(f"❌ 치명적 오류: 핵심 모듈 임포트 실패. 애플리케이션 시작 불가: {e}", exc_info=True)
     MODULE_IMPORT_FAILED = True
     INITIALIZATION_ERROR = f"핵심 모듈 임포트 실패: {e}"
@@ -209,10 +212,14 @@ def healthz():
     # 추가적으로, 초기화된 클라이언트가 실제로 작동하는지 가벼운 테스트를 할 수 있습니다.
     try:
         if storage_client_instance is None or bucket is None:
-             raise ValueError("Cloud Storage 클라이언트/버킷 객체가 초기화되지 않았습니다. (초기화 오류)")
-        # 버킷에 실제 접근하는 대신, 단순히 클라이언트 객체가 유효한지 확인하는 것으로 충분
-        # 예를 들어, list_buckets() 같은 가벼운 API 호출 시도 (네트워크 비용 발생 가능성 있음)
-        # 현재 initialize_app_logic에서 get_bucket이 성공했으면 연결은 된 것으로 간주
+             # 초기화 로직에서 이미 실패했으므로, 여기서 다시 예외를 발생시키지 않고
+             # initialize_app_logic의 결과를 따릅니다.
+             logger.warning("Health check: Cloud Storage 클라이언트/버킷 객체가 초기화되지 않았습니다. (초기화 오류 플래그 확인 필요)")
+             return f"Not Ready: Cloud Storage 클라이언트/버킷 초기화 오류. {INITIALIZATION_ERROR}", 500
+        
+        # 실제 파일을 만들지 않고, 버킷 접근 권한만 가볍게 확인
+        # 예를 들어, storage_client_instance.list_buckets(max_results=1).next() 같은 가벼운 연산 시도
+        # 하지만 현재 initialize_app_logic이 성공했으면 연결은 된 것으로 간주
         logger.info("✅ Health check successful: 모든 초기화 및 기본 서비스 연결 확인.")
         return "OK", 200
     except Exception as e:
@@ -438,4 +445,3 @@ def process_youtube_shorts_upload(metadata, gcp_project_id, gcp_bucket_name, you
                     logger.info(f"임시 파일 삭제 완료: {f}")
                 except Exception as e:
                     logger.warning(f"임시 파일 삭제 실패 {f}: {e}")
-```
