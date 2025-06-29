@@ -32,7 +32,7 @@ jobs:
           access_token_scopes: https://www.googleapis.com/auth/cloud-platform
 
           # 🔑 Cloud Run audience를 반드시 지정 (서비스 URL로)
-          id_token_audience: https://YOUR_CLOUD_RUN_URL # 아래 STEP에서 동적으로 가져오게 수정 가능
+          id_token_audience: https://youtube-shorts-automation-94662874801.us-central1.run.app # 아래 STEP에서 동적으로 가져오게 수정 가능
 
       # Cloud Run 서비스 URL 가져오기
       - name: Get Cloud Run service URL
