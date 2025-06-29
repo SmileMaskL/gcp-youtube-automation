@@ -7,69 +7,87 @@ from datetime import datetime
 from flask import Flask, request, jsonify
 from concurrent.futures import ThreadPoolExecutor
 
-# Google Cloud Imports
-import google.cloud.logging
-from google.cloud import storage
+# --- Flask 애플리케이션 객체 선언 (⭐가장 중요! Gunicorn이 가장 먼저 찾습니다⭐) ---
+# 이 'app' 객체가 파일 로드 시점에 정의되어 있어야 Gunicorn이 앱을 시작할 수 있습니다.
+app = Flask(__name__)
 
-# Third-party API Clients
-import requests
-from openai import OpenAI
-from google.generativeai import configure as configure_gemini, GenerativeModel
-from elevenlabs import set_api_key as set_elevenlabs_key, generate as generate_elevenlabs_audio
-from newsapi import NewsApiClient
-from googleapiclient.discovery import build
-from google.oauth2.credentials import Credentials
-import google.auth.transport.requests
-from pexels_api import API
-
-# 사용자 정의 모듈 임포트 (src/ 디렉토리에 있는지 확인 필요)
-# 혹시 여기서 ImportError가 발생하면, Cloud Run 로그에 명확히 남도록 처리합니다.
-MODULE_IMPORT_FAILED = False # 모듈 임포트 성공 여부 플래그
-INITIALIZATION_ERROR = None # 초기화 시 발생하는 에러 메시지 저장용
-
+# --- 로깅 설정 (app 객체 선언 후 바로) ---
+# Google Cloud Logging 설정
 try:
-    # 이 부분에서 오류가 나면 아래 catch 블록으로 이동합니다.
-    # 각 사용자 정의 모듈 파일이 'src/' 폴더 안에 정확히 있는지,
-    # 그리고 해당 파일 내에 문법 오류가 없는지 다시 한번 확인해주세요.
-    from video_script_generator import generate_script_from_news
-    from audio_generator import generate_audio_from_text
-    from video_generator import create_video_from_images_and_audio
-    from youtube_uploader import upload_video_to_youtube
-    from gcs_helper import upload_to_gcs, download_from_gcs, delete_from_gcs
-except ImportError as e:
-    # 이 로그가 Cloud Run에 표시되면 해당 모듈 파일을 확인해야 합니다.
-    logging.critical(f"❌ 치명적 오류: 핵심 모듈 임포트 실패. 애플리케이션 시작 불가: {e}", exc_info=True)
-    MODULE_IMPORT_FAILED = True
-    INITIALIZATION_ERROR = f"핵심 모듈 임포트 실패: {e}"
-
-
-# --- 환경 변수 로드 (로컬 개발용) ---
-# Cloud Run에서는 환경 변수가 직접 주입되므로 이 부분은 로컬 개발에서만 작동합니다.
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-    logging.info("✅ .env 파일 로드 시도 (로컬 개발용).")
-except ImportError:
-    logging.warning("python-dotenv 모듈을 찾을 수 없습니다. .env 파일 로드를 건너뛰는 중. (배포 환경에서는 정상)")
-
-# Google Cloud Logging 설정 (프로젝트 ID는 initialize_app_logic에서 설정됨)
-try:
+    import google.cloud.logging
     logging_client = google.cloud.logging.Client()
     logging_client.setup_logging()
     logging.info("✅ Google Cloud Logging이 설정되었습니다.")
 except Exception as e:
+    # Cloud Logging 설정 실패 시에도 일반 로깅으로 진행
     logging.warning(f"Google Cloud Logging 설정 실패 (일반 로깅 사용): {e}")
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-# --- Flask 애플리케이션 객체 선언 (⭐가장 중요! Gunicorn이 가장 먼저 찾습니다⭐) ---
-# 이 'app' 객체가 파일 로드 시점에 정의되어 있어야 Gunicorn이 앱을 시작할 수 있습니다.
-app = Flask(__name__)
+# --- 환경 변수 로드 (로컬 개발용) ---
+# Cloud Run에서는 환경 변수가 직접 주입되므로 이 부분은 로컬 개발에서만 작동합니다.
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    logger.info("✅ .env 파일 로드 시도 (로컬 개발용).")
+except ImportError:
+    logger.warning("python-dotenv 모듈을 찾을 수 없습니다. .env 파일 로드를 건너뛰는 중. (배포 환경에서는 정상)")
 
-# --- 전역 변수 선언 (초기화는 initialize_app_logic 함수에서 진행) ---
-# 이 변수들은 initialize_app_logic() 함수에서 os.getenv()를 통해 실제 값으로 채워집니다.
+
+# --- 전역 변수 선언 및 초기화 상태 플래그 ---
+# 사용자 정의 모듈 임포트 성공 여부 플래그
+MODULE_IMPORT_FAILED = False 
+# 초기화 시 발생하는 에러 메시지 저장용
+INITIALIZATION_ERROR = None 
+# 앱의 모든 핵심 요소가 정상적으로 초기화되었는지 여부
+APP_INITIALIZED_SUCCESSFULLY = False 
+
+# Google Cloud Imports (여기로 옮김)
+# 여기서 ImportError가 발생하면, 아래의 try-except에서 잡아서 플래그를 설정합니다.
+try:
+    from google.cloud import storage
+except ImportError as e:
+    logger.critical(f"❌ 치명적 오류: google.cloud.storage 모듈 임포트 실패: {e}", exc_info=True)
+    MODULE_IMPORT_FAILED = True
+    INITIALIZATION_ERROR = f"google.cloud.storage 모듈 임포트 실패: {e}"
+
+
+# Third-party API Clients (여기로 옮김)
+# 여기서 ImportError가 발생하면, 아래의 try-except에서 잡아서 플래그를 설정합니다.
+try:
+    import requests
+    from openai import OpenAI
+    from google.generativeai import configure as configure_gemini, GenerativeModel
+    from elevenlabs import set_api_key as set_elevenlabs_key, generate as generate_elevenlabs_audio
+    from newsapi import NewsApiClient
+    from googleapiclient.discovery import build
+    from google.oauth2.credentials import Credentials
+    import google.auth.transport.requests
+    from pexels_api import API
+except ImportError as e:
+    logger.critical(f"❌ 치명적 오류: 타사 API 클라이언트 모듈 임포트 실패: {e}", exc_info=True)
+    MODULE_IMPORT_FAILED = True
+    INITIALIZATION_ERROR = f"타사 API 클라이언트 모듈 임포트 실패: {e}"
+
+
+# 사용자 정의 모듈 임포트 (src/ 디렉토리에 있는지 확인 필요)
+# 혹시 여기서 ImportError가 발생하면, Cloud Run 로그에 명확히 남도록 처리합니다.
+if not MODULE_IMPORT_FAILED: # 위에 다른 임포트가 실패하지 않았을 경우에만 시도
+    try:
+        from video_script_generator import generate_script_from_news
+        from audio_generator import generate_audio_from_text
+        from video_generator import create_video_from_images_and_audio
+        from youtube_uploader import upload_video_to_youtube
+        from gcs_helper import upload_to_gcs, download_from_gcs, delete_from_gcs
+    except ImportError as e:
+        logger.critical(f"❌ 치명적 오류: 사용자 정의 모듈 임포트 실패. 애플리케이션 시작 불가: {e}", exc_info=True)
+        MODULE_IMPORT_FAILED = True
+        INITIALIZATION_ERROR = f"사용자 정의 모듈 임포트 실패: {e}"
+
+
+# --- 전역 변수 초기값 (initialize_app_logic 함수에서 os.getenv()를 통해 실제 값으로 채워집니다.) ---
 GCP_PROJECT_ID = None
 GCP_BUCKET_NAME = None
 YOUTUBE_CLIENT_ID = None
@@ -83,10 +101,6 @@ NEWSAPI_API_KEY = None
 PEXELS_API_KEY = None
 bucket = None # Cloud Storage 버킷 객체
 storage_client_instance = None # Cloud Storage 클라이언트 인스턴스
-
-# 애플리케이션 초기화 성공 여부를 추적하는 플래그
-APP_INITIALIZED_SUCCESSFULLY = False # 앱의 모든 핵심 요소가 정상적으로 초기화되었는지 여부
-
 
 # ThreadPoolExecutor를 사용하여 비동기 처리
 executor = ThreadPoolExecutor(max_workers=os.cpu_count() * 2 if os.cpu_count() else 2)
@@ -136,6 +150,7 @@ def initialize_app_logic():
             if not openai_keys_str:
                 missing_vars.append(var_name)
             else:
+                OPENAI_API_KEYS.clear() # 기존 리스트를 비우고 다시 채움
                 OPENAI_API_KEYS.extend([key.strip() for key in openai_keys_str.split(',') if key.strip()])
                 if not OPENAI_API_KEYS: # 쉼표로 구분했지만 실제 유효한 키가 없는 경우
                     missing_vars.append(var_name)
@@ -212,8 +227,6 @@ def healthz():
     # 추가적으로, 초기화된 클라이언트가 실제로 작동하는지 가벼운 테스트를 할 수 있습니다.
     try:
         if storage_client_instance is None or bucket is None:
-             # 초기화 로직에서 이미 실패했으므로, 여기서 다시 예외를 발생시키지 않고
-             # initialize_app_logic의 결과를 따릅니다.
              logger.warning("Health check: Cloud Storage 클라이언트/버킷 객체가 초기화되지 않았습니다. (초기화 오류 플래그 확인 필요)")
              return f"Not Ready: Cloud Storage 클라이언트/버킷 초기화 오류. {INITIALIZATION_ERROR}", 500
         
@@ -224,7 +237,7 @@ def healthz():
         return "OK", 200
     except Exception as e:
         logger.error(f"Health check failed: GCS 클라이언트/버킷 접근 테스트 오류 또는 기타 초기화 문제: {e}", exc_info=True)
-        return f"Not Ready: GCS 클라이언트/버킷 접근 테스트 오류 또는 기타 초기화 문제: {e}", 500
+        return f"Not Ready: GCS 클라이언트/버버킷 접근 테스트 오류 또는 기타 초기화 문제: {e}", 500
 
 @app.route("/", methods=["POST"])
 def main_endpoint():
