@@ -8,6 +8,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     libsm6 \
     libxext6 \
+    # 추가적으로 moviepy의 이미지 처리를 위해 필요한 패키지들 (Pillow 관련)
+    libjpeg-dev \
+    zlib1g-dev \
     # 다른 필요한 시스템 라이브러리가 있다면 여기에 추가 (예: imagemagick)
     && rm -rf /var/lib/apt/lists/*
 
@@ -23,6 +26,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 애플리케이션 코드 복사
 # .dockerignore 파일을 사용하여 불필요한 파일은 복사하지 않도록 합니다.
 # 프로젝트의 모든 파일을 /app 디렉토리로 복사합니다.
+# src/ 폴더 안에 app.py가 있다면, /app/src/app.py 경로가 됩니다.
 COPY . /app 
 
 # Cloud Run이 Flask 애플리케이션을 실행할 포트 설정 (Cloud Run에 의해 자동 주입됨)
