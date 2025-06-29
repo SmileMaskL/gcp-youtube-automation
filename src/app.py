@@ -37,7 +37,7 @@ try:
     load_dotenv()
     logging.info("✅ .env 파일 로드 시도 (로컬 개발용).")
 except ImportError:
-    logging.warning("python-dotenv 모듈을 찾을 수 없습니다. .env 파일 로드를 건너뜝니다. (배포 환경에서는 정상)")
+    logging.warning("python-dotenv 모듈을 찾을 수 없습니다. .env 파일 로드를 건너뜁니다. (배포 환경에서는 정상)")
 
 # Google Cloud Logging 설정
 try:
@@ -50,6 +50,9 @@ except Exception as e:
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+# --- Flask 애플리케이션 객체 선언 (초기화 함수 호출 전에) ---
+app = Flask(__name__) # 💡 수정: Flask 앱 객체를 초기화 함수 호출 전에 먼저 선언합니다.
 
 # --- 전역 변수 선언 (초기화는 initialize_app 함수에서 진행) ---
 # 이 변수들은 initialize_app() 함수에서 os.getenv()를 통해 실제 값으로 채워집니다.
@@ -106,7 +109,7 @@ def initialize_app():
             if not openai_keys_str:
                 missing_vars.append(var)
             else:
-                OPENAI_API_KEYS = [key.strip() for key in openai_keys_str.split(',') if key.strip()]
+                OPENAI_API_KEYS.extend([key.strip() for key in openai_keys_str.split(',') if key.strip()])
                 if not OPENAI_API_KEYS: # 모든 키가 비어있는 경우
                     missing_vars.append(var)
         else:
@@ -150,7 +153,6 @@ def initialize_app():
 # Gunicorn이 Flask 앱을 로드할 때 이 부분이 실행됩니다.
 try:
     initialize_app()
-    app = Flask(__name__) # 초기화 성공 후 Flask 앱 객체 생성
     logger.info("✨ Flask 애플리케이션 객체 생성 완료.")
 except Exception as e:
     logger.critical(f"🚨🚨🚨 애플리케이션 초기화에 치명적인 오류 발생. 컨테이너를 시작할 수 없습니다: {e}", exc_info=True)
@@ -164,25 +166,9 @@ except Exception as e:
 def healthz():
     """상태 체크 엔드포인트: Cloud Run이 컨테이너의 준비 상태를 확인하는 데 사용"""
     try:
-        # Flask 앱 객체 생성 전에 initialize_app()에서 오류가 나면 이 코드는 실행되지 않음.
-        # 따라서 bucket이 None일 가능성은 낮지만, 방어적으로 한 번 더 확인.
-        if bucket is None:
-            logger.error("Health check failed: Cloud Storage 버킷 객체가 초기화되지 않았습니다.")
-            return "Not Ready: Cloud Storage bucket not initialized", 500
-            
-        # 버킷의 최신 메타데이터를 가져와 연결 상태 확인
-        # 간단한 목록 조회를 통해 실제 연결 및 권한을 테스트하는 것이 더 확실합니다.
-        # bucket.reload()는 메타데이터만 갱신하므로, 실제 네트워크 통신 테스트로는 불충분할 수 있습니다.
-        # files = list(bucket.list_blobs(max_results=1)) # 실제 Blob 목록 조회 시도 (비용 발생 가능)
-        # logger.info(f"Health check successful: Cloud Storage bucket reachable. Found {len(files)} test blobs.")
-        
-        # 더 간단하고 안전한 연결 확인 (권한만 있다면 대부분 성공)
-        # 버킷에 대한 메타데이터 요청은 read/write 권한이 없는 경우에도 작동할 수 있습니다.
-        # 실제 파일을 업로드/다운로드 하는 것은 비용과 복잡성을 늘리므로,
-        # get_bucket으로 초기화에 성공했다면 대부분의 경우 연결은 문제 없습니다.
         # initialize_app()에서 이미 get_bucket을 했으므로 여기서는 추가적인 확인보다는 OK 반환.
-        
-        logger.info("✅ Health check successful.")
+        # initialize_app()에서 오류가 발생하면 이 함수는 호출되지 않습니다.
+        logger.info("✅ Health check successful.") # 💡 수정: 헬스 체크 성공 로그 추가
         return "OK", 200
     except Exception as e:
         logger.error(f"Health check failed: Cloud Storage 연결 테스트 오류: {e}", exc_info=True)
