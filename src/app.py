@@ -1,242 +1,317 @@
-# cloud_run_service/main.py
-
+# src/app.py
 import os
-import datetime
 import logging
-from flask import Flask, request, jsonify
-from google.cloud import storage
-import google.cloud.texttospeech as tts
-from google.cloud import youtube_v3
-import google.generativeai as genai # Google Gemini Pro 사용 예시
-from moviepy.editor import VideoFileClip, AudioFileClip, CompositeAudioClip, ImageClip, concatenate_videoclips
-import random
-import string
-import shutil
+import json
 import time
+from datetime import datetime
+from flask import Flask, request, jsonify
+from concurrent.futures import ThreadPoolExecutor
+import sys
+import shutil # ⭐ 추가: 임시 파일 정리 시 필요 ⭐
 
-# 로깅 설정
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
+# --- Flask 애플리케이션 객체 선언 (⭐Gunicorn 진입점⭐) ---
 app = Flask(__name__)
 
-# 환경 변수 설정
-YOUTUBE_API_KEY = os.environ.get('YOUTUBE_API_KEY') # YouTube Data API v3 키
-GOOGLE_CLOUD_PROJECT_ID = os.environ.get('GOOGLE_CLOUD_PROJECT_ID') # GCP 프로젝트 ID
+# --- 로깅 설정 (app 객체 선언 후 바로) ---
+try:
+    import google.cloud.logging
+    logging_client = google.cloud.logging.Client()
+    logging_client.setup_logging()
+    logging.info("✅ Google Cloud Logging이 설정되었습니다.")
+except Exception as e:
+    # Cloud Run 환경에서 Google Cloud Logging 설정이 실패하면 일반 로깅으로 대체
+    logging.warning(f"Google Cloud Logging 설정 실패 (일반 로깅 사용): {e}")
 
-# Cloud Storage 클라이언트 초기화 (서비스 계정 권한으로 자동 인증)
-storage_client = storage.Client(project=GOOGLE_CLOUD_PROJECT_ID)
-BUCKET_NAME = os.environ.get('GCS_BUCKET_NAME', 'your-youtube-shorts-bucket') # 본인의 GCS 버킷 이름으로 변경 필요!
-output_bucket = storage_client.bucket(BUCKET_NAME)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
-# Google Text-to-Speech 클라이언트 초기화
-tts_client = tts.TextToSpeechClient()
+# --- 전역 변수 선언 ---
+MODULE_IMPORT_FAILED = False
+INITIALIZATION_ERROR = None
+APP_INITIALIZED_SUCCESSFULLY = False
 
-# Google Gemini Pro 설정 (무료 티어 활용 가능성 높음)
-# 서비스 계정으로 인증되므로 API 키는 필요 없음. Vertex AI API 활성화 필수.
-# from vertexai.preview.generative_models import GenerativeModel
-# model = GenerativeModel("gemini-pro") 
+# --- 모듈 임포트 ---
+try:
+    # .env 파일은 로컬 개발용입니다. Cloud Run에서는 환경 변수를 직접 설정합니다.
+    from dotenv import load_dotenv
+    load_dotenv()
+    logger.info("✅ .env 파일 로드 시도 (로컬 개발용).")
+except ImportError:
+    logger.warning("python-dotenv 모듈 없음. 배포 환경에서는 무관.")
 
-@app.route('/', methods=['POST'])
-def handle_request():
-    try:
-        data = request.get_json()
-        logging.info(f"Received request: {data}")
+try:
+    # Google Cloud
+    from google.cloud import storage
 
-        action = data.get('action')
-        metadata = data.get('metadata', {})
-        workflow_run_id = metadata.get('workflow_run_id', 'manual_run')
-        news_topic = metadata.get('news_topic', '최신 기술 트렌드') # 기본값
+    # Third-party APIs (GPT-4o, Gemini 포함)
+    import requests
+    from openai import OpenAI # GPT-4o 사용
+    from google.generativeai import configure as configure_gemini # Google Gemini 사용
+    from elevenlabs import set_api_key as set_elevenlabs_key
+    from newsapi import NewsApiClient
+    from googleapiclient.discovery import build
+    from google.oauth2.credentials import Credentials
+    import google.auth.transport.requests
+    from pexels_api import API
 
-        if action == "create_and_upload_shorts":
-            # 1. AI로 뉴스 스크립트 생성 (Google Gemini Pro 활용 예시)
-            logging.info(f"Generating news script for topic: {news_topic} using Google Gemini Pro...")
-            script = generate_ai_script(news_topic)
-            logging.info(f"Generated script: {script[:100]}...") # 처음 100자만 출력
+    # 사용자 정의 모듈 (여러분의 파일이름이 이대로라면 문제 없음)
+    # 이 모듈들이 src 폴더 내부에 있어야 합니다.
+    from video_script_generator import generate_script_from_news
+    from audio_generator import generate_audio_from_text
+    from video_generator import create_video_from_images_and_audio
+    from youtube_uploader import upload_video_to_youtube
+    from gcs_helper import upload_to_gcs, download_from_gcs, delete_from_gcs
 
-            # 2. 스크립트를 음성 파일로 변환 (Google Text-to-Speech)
-            logging.info("Converting script to audio...")
-            audio_path = text_to_speech(script, workflow_run_id)
-            logging.info(f"Audio saved to: {audio_path}")
+except ImportError as e:
+    logger.critical(f"❌ 필수 모듈 임포트 실패: {e}", exc_info=True)
+    MODULE_IMPORT_FAILED = True
+    INITIALIZATION_ERROR = f"필수 모듈 임포트 실패: {e}"
 
-            # 3. 비디오 생성 (간단한 배경 이미지 + 음성)
-            logging.info("Creating video...")
-            video_path = create_video(audio_path, workflow_run_id)
-            logging.info(f"Video saved to: {video_path}")
+# --- ThreadPoolExecutor (비동기 처리) ---
+executor = ThreadPoolExecutor(max_workers=os.cpu_count() * 2 if os.cpu_count() else 2)
 
-            # 4. YouTube Shorts에 업로드
-            logging.info("Uploading video to YouTube Shorts...")
-            youtube_video_id = upload_to_youtube(video_path, script, news_topic)
-            logging.info(f"Video uploaded to YouTube with ID: {youtube_video_id}")
+# --- 전역 변수 초기화 ---
+GCP_PROJECT_ID = None
+GCP_BUCKET_NAME = None
+YOUTUBE_CLIENT_ID = None
+YOUTUBE_CLIENT_SECRET = None
+YOUTUBE_REFRESH_TOKEN = None
+ELEVENLABS_API_KEY = None
+ELEVENLABS_VOICE_ID = None
+OPENAI_API_KEYS = [] # 콤마(,)로 구분된 여러 키를 저장할 리스트
+GEMINI_API_KEY = None
+NEWSAPI_API_KEY = None
+PEXELS_API_KEY = None
+bucket = None
+storage_client_instance = None
 
-            # 5. 로컬 파일 정리 (Cloud Run 컨테이너에서 임시 파일 삭제)
-            clean_up_local_files(audio_path, video_path)
+# --- 초기화 함수 ---
+def initialize_app_logic():
+    global GCP_PROJECT_ID, GCP_BUCKET_NAME, YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, \
+           YOUTUBE_REFRESH_TOKEN, ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID, OPENAI_API_KEYS, \
+           GEMINI_API_KEY, NEWSAPI_API_KEY, PEXELS_API_KEY, bucket, storage_client_instance, \
+           APP_INITIALIZED_SUCCESSFULLY, INITIALIZATION_ERROR
 
-            return jsonify({
-                "status": "success",
-                "message": "YouTube Shorts created and uploaded successfully!",
-                "workflow_run_id": workflow_run_id,
-                "youtube_video_id": youtube_video_id,
-                "video_url": f"https://www.youtube.com/shorts/{youtube_video_id}"
-            }), 200
+    logger.info("🚀 애플리케이션 초기화 시작...")
 
+    if MODULE_IMPORT_FAILED:
+        logger.critical("모듈 임포트 실패로 초기화 중단. 앱이 시작되지 않습니다.")
+        APP_INITIALIZED_SUCCESSFULLY = False
+        return
+
+    required_env_vars = [
+        'GCP_PROJECT_ID', 'GCP_BUCKET_NAME', 'YOUTUBE_CLIENT_ID', 'YOUTUBE_CLIENT_SECRET',
+        'YOUTUBE_REFRESH_TOKEN', 'ELEVENLABS_API_KEY', 'ELEVENLABS_VOICE_ID',
+        'OPENAI_API_KEYS', 'GEMINI_API_KEY', 'NEWSAPI_API_KEY', 'PEXELS_API_KEY'
+    ]
+    missing_vars = []
+
+    for var_name in required_env_vars:
+        value = os.getenv(var_name)
+        logger.info(f"DEBUG: Checking env var '{var_name}'. Value exists: {value is not None and len(str(value)) > 0}") # 디버그 로그 추가
+        
+        if var_name == 'OPENAI_API_KEYS':
+            if value:
+                # ⭐ 중요: OPENAI_API_KEYS 환경 변수가 콤마(,)로 구분되어야 합니다.
+                OPENAI_API_KEYS.clear()
+                OPENAI_API_KEYS.extend([k.strip() for k in value.split(',') if k.strip()])
+                if not OPENAI_API_KEYS:
+                    missing_vars.append(var_name)
+                    logger.error(f"❌ OPENAI_API_KEYS 환경 변수가 비어있거나 잘못된 형식입니다.") # 오류 로그 추가
+            else:
+                missing_vars.append(var_name)
+                logger.error(f"❌ OPENAI_API_KEYS 환경 변수가 설정되지 않았습니다.") # 오류 로그 추가
+        elif not value:
+            missing_vars.append(var_name)
+            logger.error(f"❌ 필수 환경 변수 '{var_name}'가 설정되지 않았습니다.") # 오류 로그 추가
         else:
-            return jsonify({"status": "error", "message": "Invalid action specified."}), 400
+            globals()[var_name] = value
+            logger.info(f"✅ 환경 변수 '{var_name}' 로드 성공.") # 성공 로그 추가
 
-    except Exception as e:
-        logging.error(f"Error processing request: {e}", exc_info=True)
-        return jsonify({"status": "error", "message": str(e)}), 500
+    if missing_vars:
+        INITIALIZATION_ERROR = f"필수 환경 변수 누락 또는 오류: {', '.join(missing_vars)}"
+        logger.critical(INITIALIZATION_ERROR + " 앱 초기화 중단.")
+        APP_INITIALIZED_SUCCESSFULLY = False
+        return
 
-# --- 핵심 기능 구현 ---
-
-# 1. AI로 뉴스 스크립트 생성 함수 (Gemini Pro 사용 예시)
-def generate_ai_script(topic):
     try:
-        # 이 부분에서 실제 Gemini Pro API를 호출합니다.
-        # Vertex AI SDK를 사용하려면, Cloud Run 서비스 계정에 'Vertex AI 사용자' 권한이 필요합니다.
-        # 코드 배포 전에 'vertexai' 라이브러리를 requirements.txt에 추가해야 합니다.
-        """
-        # from vertexai.preview.generative_models import GenerativeModel
-        # model = GenerativeModel("gemini-pro") 
-        # response = model.generate_content(
-        #     f"'{topic}'에 대한 흥미롭고 짧은(500자 이내) YouTube Shorts 스크립트를 작성해줘. "
-        #     "최신 정보를 바탕으로 호기심을 자극하고 간결하게 작성하며, 마지막에 궁금증을 남기는 형식으로 해줘. "
-        #     "예시: '놀라운 신기술이 등장했습니다! 우리 삶을 어떻게 바꿀까요? 다음 쇼츠에서 더 알아봐요!'"
-        # )
-        # return response.text
-        """
-        # 현재는 예시 응답을 반환합니다. 실제 AI 통합 시 위 주석 처리된 코드를 활성화하세요.
-        prompt = (
-            f"'{topic}'에 대한 흥미롭고 짧은(500자 이내) YouTube Shorts 스크립트를 작성해줘. "
-            "최신 정보를 바탕으로 호기심을 자극하고 간결하게 작성하며, 마지막에 궁금증을 남기는 형식으로 해줘. "
-            "예시: '놀라운 신기술이 등장했습니다! 우리 삶을 어떻게 바꿀까요? 다음 쇼츠에서 더 알아봐요!'"
-        )
-        # Google Gemini API 호출 (로컬 테스트용 또는 API 키 설정 시)
-        # genai.configure(api_key="YOUR_GEMINI_API_KEY") # API 키를 사용하는 경우 (클라우드 환경에서는 서비스 계정 인증)
-        # gemini_model = genai.GenerativeModel('gemini-pro')
-        # response = gemini_model.generate_content(prompt)
-        # return response.text
-
-        # 실제 AI API 연동 전 테스트를 위해 임시 스크립트 반환
-        return (
-            f"오늘의 최신 과학 기술 뉴스는 '{topic}'입니다. 놀라운 발견이 우리의 미래를 바꿀 준비를 하고 있어요! "
-            "과연 어떤 혁신이 우리를 기다리고 있을까요? 다음 쇼츠에서 더 자세히 알아봐요! "
-            "놓치지 마세요! 이 기술이 당신의 삶을 어떻게 변화시킬지 궁금하지 않나요?"
-        )
+        logger.info(f"DEBUG: Initializing Cloud Storage client for project '{GCP_PROJECT_ID}' and bucket '{GCP_BUCKET_NAME}'...") # 디버그 로그 추가
+        storage_client_instance = storage.Client(project=GCP_PROJECT_ID)
+        bucket = storage_client_instance.get_bucket(GCP_BUCKET_NAME)
+        logger.info(f"✅ Cloud Storage 버킷 '{GCP_BUCKET_NAME}' 초기화 성공.")
     except Exception as e:
-        logging.error(f"Error generating AI script: {e}")
-        # 오류 발생 시 기본 스크립트 반환
-        return f"오늘의 최신 뉴스: {topic}. 놀라운 소식들이 가득합니다! 다음 쇼츠에서 더 자세히 알아볼까요?"
+        INITIALIZATION_ERROR = f"Cloud Storage 초기화 실패: {e}. 프로젝트 ID, 버킷 이름, 서비스 계정 권한을 확인하세요." # 오류 메시지 구체화
+        logger.critical(INITIALIZATION_ERROR, exc_info=True)
+        APP_INITIALIZED_SUCCESSFULLY = False
+        return
 
-# 2. 텍스트를 음성으로 변환하는 함수
-def text_to_speech(text, file_id):
-    synthesis_input = tts.SynthesisInput(text=text)
-    # 한국어 여성 목소리 선택 (다른 목소리를 원하면 변경 가능)
-    voice = tts.VoiceSelectionParams(language_code="ko-KR", name="ko-KR-Wavenet-A", ssml_gender=tts.SsmlVoiceGender.FEMALE)
-    audio_config = tts.AudioConfig(audio_encoding=tts.AudioEncoding.MP3)
+    try:
+        logger.info("DEBUG: Setting up ElevenLabs and Gemini API keys...") # 디버그 로그 추가
+        set_elevenlabs_key(ELEVENLABS_API_KEY)
+        configure_gemini(api_key=GEMINI_API_KEY) # Google Gemini API 설정
+        logger.info("✅ ElevenLabs 및 Gemini API 키 설정 완료.")
+    except Exception as e:
+        INITIALIZATION_ERROR = f"외부 API 키 설정 실패: {e}. API 키가 유효한지 확인하세요." # 오류 메시지 구체화
+        logger.critical(INITIALIZATION_ERROR, exc_info=True) # critical로 변경
+        APP_INITIALIZED_SUCCESSFULLY = False
+        return
 
-    response = tts_client.synthesize_speech(
-        input=synthesis_input, voice=voice, audio_config=audio_config
-    )
+    APP_INITIALIZED_SUCCESSFULLY = True
+    logger.info("✅ 앱 초기화 성공. 컨테이너가 트래픽을 받을 준비 완료.")
 
-    audio_file_name = f"shorts_audio_{file_id}.mp3"
-    audio_file_path = os.path.join("/tmp", audio_file_name) # Cloud Run 임시 디렉토리
-    with open(audio_file_path, "wb") as out:
-        out.write(response.audio_content)
-    return audio_file_path
+# 앱 시작 시 초기화 함수 호출
+initialize_app_logic()
 
-# 3. 비디오 생성 함수
-def create_video(audio_path, file_id):
-    # 빈 배경 비디오 또는 단색 이미지 사용 (간단화를 위해)
-    # 실제 프로젝트에서는 더 풍부한 배경 비디오나 이미지 시퀀스 사용 가능
-    # 임시 이미지 파일 생성
-    background_image_path = "/tmp/background.png"
-    # 간단한 단색 이미지 생성 (MoviePy에 이미지 로드 후 크기 조정)
-    # MoviePy ImageClip은 Pillow를 필요로 함 (requirements.txt에 Pillow 추가)
-    from PIL import Image
-    Image.new('RGB', (1080, 1920), color = 'black').save(background_image_path) # 쇼츠 비율 (9:16)
+# --- healthz 엔드포인트 ---
+@app.route('/healthz', methods=['GET'])
+def healthz():
+    if MODULE_IMPORT_FAILED:
+        msg = INITIALIZATION_ERROR or "필수 모듈 임포트 실패로 앱이 시작되지 못했습니다."
+        logger.error(f"❌ Health Check Failed (Module Import): {msg}")
+        return f"Not Ready: {msg}", 500
+    elif not APP_INITIALIZED_SUCCESSFULLY:
+        msg = INITIALIZATION_ERROR or "앱 초기화에 실패했습니다. 환경 변수 또는 API 키를 확인하세요."
+        logger.error(f"❌ Health Check Failed (App Initialization): {msg}")
+        return f"Not Ready: {msg}", 500
+    logger.info("✅ Health Check OK. App is ready.")
+    return "OK", 200
 
-    audio_clip = AudioFileClip(audio_path)
-    video_duration = audio_clip.duration + 1 # 음성 길이에 1초 추가 여유
+# --- 메인 엔드포인트 ---
+@app.route("/", methods=["POST"])
+def main_endpoint():
+    if MODULE_IMPORT_FAILED:
+        msg = INITIALIZATION_ERROR or "필수 모듈 임포트 실패로 앱이 시작되지 못했습니다."
+        logger.error(f"❌ Main Endpoint Call Failed (Module Import): {msg}")
+        return jsonify({"status": "error", "message": msg}), 500
+    elif not APP_INITIALIZED_SUCCESSFULLY:
+        msg = INITIALIZATION_ERROR or "앱 초기화에 실패했습니다. 환경 변수 또는 API 키를 확인하세요."
+        logger.error(f"❌ Main Endpoint Call Failed (App Initialization): {msg}")
+        return jsonify({"status": "error", "message": msg}), 500
 
-    # 쇼츠에 적합한 9:16 비율 (1080x1920)로 비디오 생성
-    video_clip = ImageClip(background_image_path, duration=video_duration)
-    video_clip = video_clip.set_fps(24) # 프레임 속도 설정
+    data = request.get_json()
+    if not data:
+        return jsonify({"status": "error", "message": "JSON payload가 제공되지 않았습니다"}), 400
 
-    final_clip = video_clip.set_audio(audio_clip)
+    action = data.get('action', '')
+    metadata = data.get('metadata', {})
 
-    video_file_name = f"youtube_shorts_{file_id}.mp4"
-    video_file_path = os.path.join("/tmp", video_file_name) # Cloud Run 임시 디렉토리
+    if action == 'create_and_upload_shorts':
+        # 비동기 처리를 위해 ThreadPoolExecutor 사용
+        executor.submit(process_youtube_shorts_upload, metadata)
+        return jsonify({"status": "processing", "message": "YouTube Shorts 업로드 프로세스 시작됨"}), 202
+    else:
+        return jsonify({"status": "error", "message": f"지원되지 않는 액션: {action}"}), 400
+
+# --- YouTube Shorts 업로드 프로세스 ---
+def process_youtube_shorts_upload(metadata):
+    logger.info(f"▶️ YouTube Shorts 업로드 프로세스 시작: {metadata}")
+    audio_path = None
+    img_path = None
+    video_path = None
+    downloaded_path = None
     
-    # 코덱 설정: libx264 (H.264)는 유튜브에 적합하며, crf=23은 품질과 파일 크기의 균형을 맞춥니다.
-    # preset=medium은 인코딩 속도와 품질의 균형을 맞춥니다.
-    final_clip.write_videofile(
-        video_file_path,
-        codec='libx264',
-        audio_codec='aac',
-        fps=24,
-        preset='medium',
-        ffmpeg_params=["-crf", "23"]
-    )
-    return video_file_path
-
-
-# 4. YouTube Shorts에 업로드하는 함수
-def upload_to_youtube(video_path, description, topic):
-    youtube = youtube_v3.resource_with_developer_key(YOUTUBE_API_KEY)
-
-    # 비디오 메타데이터 설정
-    # 쇼츠로 인식되도록 제목 또는 설명에 #Shorts 포함
-    title = f"오늘의 최신 뉴스: {topic} #Shorts #AI #기술"
-    description_full = f"{description}\n\n#인공지능 #최신기술 #과학 #놀라운발견"
-    keywords = ["AI", "인공지능", "과학기술", "최신뉴스", "쇼츠", "자동화"]
-    
-    body = {
-        'snippet': {
-            'title': title,
-            'description': description_full,
-            'tags': keywords,
-            'categoryId': '28' # 과학 기술 카테고리 (필요에 따라 변경)
-        },
-        'status': {
-            'privacyStatus': 'public' # 'public', 'private', 'unlisted' 중 선택
-        }
-    }
-
-    # 파일 업로드
-    media_body = youtube_v3.MediaFileUpload(
-        video_path, mimetype='video/mp4', chunksize=-1, resumable=True
-    )
-
-    # API 요청 실행
-    request = youtube.videos().insert(
-        part=','.join(body.keys()),
-        body=body,
-        media_body=media_body
-    )
-
-    response = request.execute()
-    return response['id']
-
-# 5. 로컬 임시 파일 정리
-def clean_up_local_files(*file_paths):
-    for path in file_paths:
-        if os.path.exists(path):
-            os.remove(path)
-            logging.info(f"Cleaned up local file: {path}")
-    # /tmp 디렉토리 자체가 비워지도록 추가 (MoviePy 등 다른 라이브러리 임시 파일)
-    for item in os.listdir('/tmp'):
-        item_path = os.path.join('/tmp', item)
+    try:
+        # 뉴스 주제를 동적으로 변경하려면 metadata에서 받아올 수 있습니다.
+        news_topic = metadata.get('news_topic', '최신 기술 뉴스') # 기본값 설정
+        logger.info(f"DEBUG: Generating script from news for topic: '{news_topic}'")
+        
+        # ⭐ GPT-4o와 Google Gemini를 함께 활용하는 로직 (수익 최적화) ⭐
+        # 첫 번째 시도: GPT-4o (OpenAI) 사용
+        script_data = {}
         try:
-            if os.path.isfile(item_path) or os.path.islink(item_path):
-                os.unlink(item_path)
-            elif os.path.isdir(item_path):
-                shutil.rmtree(item_path)
+            logger.info("DEBUG: Attempting script generation with GPT-4o (OpenAI)...")
+            # OpenAI 클라이언트 초기화 (초기화 실패 시 이 부분에서 오류가 발생할 수 있습니다.)
+            openai_client = OpenAI(api_key=OPENAI_API_KEYS[0]) # 첫 번째 키 사용 (로테이션 가능)
+            script_data = generate_script_from_news(NEWSAPI_API_KEY, [OPENAI_API_KEYS[0]], None, news_topic)
+            logger.info("✅ Script generated with GPT-4o.")
         except Exception as e:
-            logging.warning(f'Failed to delete {item_path}. Reason: {e}')
+            logger.warning(f"⚠️ GPT-4o 스크립트 생성 실패: {e}. Google Gemini로 재시도합니다.", exc_info=True)
+            # 두 번째 시도: Google Gemini (평생 무료 사용 고려) 사용
+            try:
+                logger.info("DEBUG: Attempting script generation with Google Gemini...")
+                script_data = generate_script_from_news(NEWSAPI_API_KEY, None, GEMINI_API_KEY, news_topic)
+                logger.info("✅ Script generated with Google Gemini.")
+            except Exception as e_gemini:
+                logger.error(f"❌ Google Gemini 스크립트 생성마저 실패: {e_gemini}", exc_info=True)
+                raise Exception("스크립트 생성에 필요한 모든 AI 모델이 실패했습니다.") # 두 번 다 실패하면 최종 에러
+        
+        script = script_data.get('script', 'AI 자동 생성 스크립트입니다.')
+        title = script_data.get('title', f"AI Shorts {datetime.now().strftime('%Y%m%d%H%M%S')}")
+        logger.info(f"✅ Script generated. Title: '{title}', Script (first 50 chars): '{script[:50]}...'")
+
+        audio_path = f"/tmp/audio_{datetime.now().strftime('%Y%m%d%H%M%S')}.mp3"
+        logger.info(f"DEBUG: Generating audio to '{audio_path}'")
+        generate_audio_from_text(script, ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID, audio_path)
+        logger.info(f"✅ Audio generated successfully.")
+
+        pexels = API(PEXELS_API_KEY)
+        search_keywords = script_data.get('search_keywords', 'technology, innovation') 
+        logger.info(f"DEBUG: Searching Pexels for keywords: '{search_keywords}'")
+        pexels.search(search_keywords, page=1, results_per_page=1)
+        photo = next(iter(pexels.get_entries()), None)
+        
+        if photo:
+            img_url = photo.medium
+            img_path = f"/tmp/image_{datetime.now().strftime('%Y%m%d%H%M%S')}.jpg"
+            logger.info(f"DEBUG: Downloading image from Pexels: '{img_url}' to '{img_path}'")
+            with open(img_path, 'wb') as f:
+                f.write(requests.get(img_url).content)
+            logger.info(f"✅ Pexels image downloaded successfully.")
+        else:
+            logger.warning("⚠️ Pexels에서 이미지를 찾을 수 없습니다. 기본 이미지를 사용합니다.")
+            # ⭐ 중요: 이 'default_image.jpg' 파일은 Dockerfile을 통해 /app/default_image.jpg 경로에 있어야 합니다.
+            img_path = "/app/default_image.jpg" 
+            if not os.path.exists(img_path):
+                raise FileNotFoundError(f"기본 이미지 파일이 '{img_path}' 경로에 없습니다. Dockerfile 및 프로젝트 구조 확인 필요.")
+            logger.info(f"✅ Using default image from '{img_path}'.")
+
+        video_path = f"/tmp/video_{datetime.now().strftime('%Y%m%d%H%M%S')}.mp4"
+        logger.info(f"DEBUG: Creating video to '{video_path}' from audio and image.")
+        create_video_from_images_and_audio([img_path], audio_path, video_path)
+        logger.info(f"✅ Video created successfully.")
+
+        gcs_path = f"shorts/{os.path.basename(video_path)}"
+        logger.info(f"DEBUG: Uploading video to GCS: '{gcs_path}'")
+        upload_to_gcs(GCP_BUCKET_NAME, video_path, gcs_path, GCP_PROJECT_ID)
+        logger.info(f"✅ Generated video uploaded to GCS: {gcs_path}")
+
+        downloaded_path = f"/tmp/downloaded_{os.path.basename(video_path)}"
+        logger.info(f"DEBUG: Downloading video from GCS for YouTube upload: '{downloaded_path}'")
+        download_from_gcs(GCP_BUCKET_NAME, gcs_path, downloaded_path, GCP_PROJECT_ID)
+        logger.info(f"✅ Video downloaded from GCS successfully.")
+
+        logger.info(f"DEBUG: Uploading video to YouTube.")
+        upload_video_to_youtube(
+            YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REFRESH_TOKEN,
+            downloaded_path, title, script
+        )
+        logger.info("✅ YouTube Shorts uploaded successfully.")
+
+    except Exception as e:
+        logger.error(f"❌ Shorts upload process failed: {e}", exc_info=True)
+    finally:
+        logger.info("DEBUG: Cleaning up temporary files.")
+        for temp_file in [audio_path, img_path, video_path, downloaded_path]:
+            if temp_file and os.path.exists(temp_file) and temp_file != "/app/default_image.jpg":
+                try:
+                    os.remove(temp_file)
+                    logger.info(f"🗑️ Cleaned up temporary file: {temp_file}")
+                except OSError as e:
+                    logger.warning(f"Failed to delete temporary file '{temp_file}': {e}")
+        # /tmp 디렉토리 자체 비우기 시도 (moviepy 등이 남길 수 있는 파일)
+        for item in os.listdir('/tmp'):
+            item_path = os.path.join('/tmp', item)
+            try:
+                if os.path.isfile(item_path) or os.path.islink(item_path):
+                    os.unlink(item_path)
+                elif os.path.isdir(item_path):
+                    shutil.rmtree(item_path) # ⭐ shutil 임포트 필요 ⭐
+            except Exception as e:
+                logger.warning(f'Failed to delete leftover temporary item "{item_path}". Reason: {e}')
+        logger.info("DEBUG: Temporary file cleanup complete.")
 
 
-# Cloud Run 실행 환경 설정
-if __name__ == '__main__':
-    # Cloud Run은 PORT 환경 변수를 통해 포트를 지정합니다.
-    port = int(os.environ.get('PORT', 8080))
-    app.run(host='0.0.0.0', port=port, debug=True)
+# --- 로컬 실행 진입점 ---
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 8080)))
