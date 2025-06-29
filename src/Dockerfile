@@ -34,4 +34,4 @@ ENV PORT 8080
 # ✅ --graceful-timeout 30 : 앱이 완전히 로드될 때까지 30초 대기. 이 시간 내에 시작되지 않으면 종료.
 # 로봇이 준비 운동을 충분히 할 수 있는 시간을 주는 것과 같아요!
 # 'app:app'으로 변경: src/app.py 파일 내의 'app' Flask 인스턴스를 찾아 실행합니다.
-$ CMD exec gunicorn --bind :$PORT --workers 1 --timeout 0 --graceful-timeout 30 src.app:app
+CMD exec gunicorn --bind 0.0.0.0:$PORT --workers 1 --timeout 0 --graceful-timeout 30 src.app:app
