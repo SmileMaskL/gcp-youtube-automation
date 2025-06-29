@@ -37,26 +37,21 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # --- ✨ 핵심 수정 1: Workload Identity Provider Audience를 실제 Cloud Run URL로! ✨ ---
-      # 이제 audience를 실제 Cloud Run 서비스 URL로 설정합니다.
-      # Cloud Run 서비스가 처음 생성될 때는 URL을 알 수 없으므로,
-      # 처음 배포 시에는 audience를 생략하거나, 서비스 어카운트 자체를 audience로 사용합니다.
-      # ⭐ 이 인증은 'gcloud run deploy'를 위한 인증이므로, audience는 WIF provider ID로 합니다. ⭐
-      # 'gcloud run deploy' 명령어는 내부적으로 GCR(Google Container Registry)에 이미지를 빌드하고 푸시하며,
-      # Cloud Run 서비스를 생성하거나 업데이트합니다. 이때 필요한 인증 토큰의 audience는
-      # Workload Identity Provider 자체의 audience입니다.
+      # --- ✨ 핵심 수정 1: Workload Identity Provider Audience를 'principal' 주소로! ✨ ---
+      # 'invalid_target' 에러는 주로 auth 액션이 Workload Identity Provider를 찾지 못할 때 발생합니다.
+      # Provider의 'principal' 주소를 audience로 명시적으로 지정하여 정확한 대상을 가리키도록 합니다.
       - name: Authenticate to Google Cloud for gcloud commands
         id: 'auth'
         uses: 'google-github-actions/auth@v2'
         with:
           workload_identity_provider: 'projects/${{ env.PROJECT_ID }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01'
           service_account: 'github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com'
-          # ⭐ 중요: gcloud run deploy를 위한 audience는 WIF provider ID입니다. ⭐
-          # 이전 로그에서 "The audience in ID Token [https://iam.googleapis.com/projects/***/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01]
-          # does not match the expected audience https://youtube-shorts-automation-***.us-central1.run.app." 이 에러가 나왔던 것은
-          # 'deploy' 스텝 자체의 audience가 아닌, 나중에 'curl'로 Cloud Run을 호출할 때 필요한 audience가 문제였기 때문입니다.
-          # deploy 단계의 auth는 `gcloud` 명령어 실행을 위한 것이므로, WIF provider ID가 올바른 audience입니다.
-          audience: //iam.googleapis.com/projects/${{ env.PROJECT_ID }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01
+          # ⭐ 중요: Workload Identity Pool의 'principal' 주소를 audience로 사용!
+          # 이 주소는 GCP 콘솔의 '워크로드 아이덴티티 풀' -> '풀 세부정보'에서 확인 가능합니다.
+          # 예: principal://iam.googleapis.com/projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/github-actions-pool/subject/SUBJECT_ATTRIBUTE_VALUE
+          # 우리는 여기서 'subject/SUBJECT_ATTRIBUTE_VALUE' 부분을 제거하고, 풀/제공업체까지만 지정합니다.
+          # 이는 auth 액션이 토큰을 요청할 때 사용하는 기본 audience 형식에 가깝습니다.
+          audience: //iam.googleapis.com/projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01
       
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
@@ -80,7 +75,7 @@ jobs:
               OPENAI_API_KEYS="${{ env.SECRET_OPENAI_API_KEYS }}",\
               GEMINI_API_KEY=${{ env.SECRET_GEMINI_API_KEY }},\
               NEWSAPI_API_KEY=${{ env.SECRET_NEWSAPI_API_KEY }},\
-              PEXELS_API_KEY=${{ env.SECRET_PEXELS_API_KEY }},\
+              PEXELS_API_KEY=${{ env.PEXELS_API_KEY }},\
               YOUTUBE_CLIENT_ID=${{ env.SECRET_YOUTUBE_CLIENT_ID }},\
               YOUTUBE_CLIENT_SECRET=${{ env.SECRET_YOUTUBE_CLIENT_SECRET }},\
               YOUTUBE_REFRESH_TOKEN=${{ env.SECRET_YOUTUBE_REFRESH_TOKEN }}
