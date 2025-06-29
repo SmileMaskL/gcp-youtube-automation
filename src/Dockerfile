@@ -8,10 +8,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     libsm6 \
     libxext6 \
-    # 추가적으로 moviepy의 이미지 처리를 위해 필요한 패키지들 (Pillow 관련)
     libjpeg-dev \
     zlib1g-dev \
-    # 다른 필요한 시스템 라이브러리가 있다면 여기에 추가 (예: imagemagick)
+    # 필요한 경우 ImageMagick 설치 (moviepy에 도움이 될 수 있음)
+    # imagemagick \
     && rm -rf /var/lib/apt/lists/*
 
 # 작업 디렉토리 설정
@@ -25,15 +25,16 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # 애플리케이션 코드 복사
 # .dockerignore 파일을 사용하여 불필요한 파일은 복사하지 않도록 합니다.
-# 프로젝트의 모든 파일을 /app 디렉토리로 복사합니다.
 # src/ 폴더 안에 app.py가 있다면, /app/src/app.py 경로가 됩니다.
 COPY . /app 
 
+# ⭐ 추가: Pexels 이미지 실패 시 사용할 기본 이미지 복사
+#    이 파일은 src/app.py에서 /app/default_image.jpg 경로로 사용됩니다.
+#    따라서 'src' 폴더 안에 'default_image.jpg' 파일을 넣어주세요.
+COPY src/default_image.jpg /app/default_image.jpg 
+
 # Cloud Run이 Flask 애플리케이션을 실행할 포트 설정 (Cloud Run에 의해 자동 주입됨)
 ENV PORT 8080
-
-# 🚫 이 줄을 삭제해야 합니다! gunicorn.conf.py 파일은 필요 없습니다.
-# RUN echo "worker_class = 'gevent'" > gunicorn.conf.py 
 
 # Gunicorn을 사용하여 Flask 애플리케이션 실행
 # --bind 0.0.0.0:$PORT : 모든 네트워크 인터페이스에서 PORT 환경 변수에 지정된 포트를 리스닝합니다.
