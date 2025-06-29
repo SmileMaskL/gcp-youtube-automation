@@ -4,8 +4,10 @@ name: Daily YouTube Shorts Upload # 워크플로우의 이름
 on:
   schedule:
     # 매일 한국 시간 오전 9시 (UTC 0시)에 실행
-    # UTC 기준이므로, 한국 시간 오전 9시 = UTC 자정 (00:00)입니다.
-    - cron: '0 0 * * *'
+    # 0 0 * * *는 UTC 기준이므로, 한국 시간 오전 9시 = UTC 자정 (00:00)입니다.
+    # 💡 수정: 하루 5회 실행 (한국 시간 0시, 5시, 10시, 15시, 20시)
+    # UTC 0시, 5시, 10시, 15시, 20시에 실행됩니다.
+    - cron: '0 */5 * * *'
   workflow_dispatch: # GitHub UI에서 워크플로우를 수동으로 실행할 수 있도록 허용
 
 env:
@@ -79,7 +81,7 @@ jobs:
         # curl 명령어를 사용하여 Cloud Run 서비스에 POST 요청을 보냅니다.
         RESPONSE=$(curl --fail-with-body -sS -m 300 -X POST "${{ env.SERVICE_URL }}" \
           -H "Content-Type: application/json" \
-          -H "Authorization: Bearer ${{ steps.auth.outputs.id_token }}" \ # 💡 핵심 수정 부분!
+          -H "Authorization: Bearer ${{ steps.auth.outputs.id_token }}" \
           -d "$REQUEST_BODY")
 
         echo "::group::서비스 응답" # Cloud Run 서비스로부터 받은 응답을 로그에 출력 (디버깅용)
