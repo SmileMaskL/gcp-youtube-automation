@@ -1,3 +1,5 @@
+# .github/workflows/deploy-and-run.yml
+
 name: Deploy and Run YouTube Shorts Automation
 
 on:
@@ -8,7 +10,9 @@ on:
 
 env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  GCP_PROJECT_NUMBER: ${{ secrets.GCP_PROJECT_NUMBER }}
+  # ⚠️ 중요: 이 GCP_PROJECT_NUMBER는 Workload Identity Pool을 만들 때 생성된 '풀 번호'여야 합니다.
+  #       GitHub Secrets에 이 값을 정확히 추가했는지 다시 확인하세요.
+  GCP_PROJECT_NUMBER: ${{ secrets.GCP_PROJECT_NUMBER }} 
   GCP_REGION: us-central1 # us-central1으로 통일
   CLOUD_RUN_SERVICE_NAME: youtube-shorts-automation # Cloud Run 서비스 이름
   ARTIFACT_REGISTRY_REPO: youtube-shorts-automation-repo # Artifact Registry 리포지토리 이름 (이미 있다면 그대로)
@@ -29,13 +33,23 @@ jobs:
       id: auth
       uses: google-github-actions/auth@v2
       with:
-        workload_identity_provider: 'projects/${{ env.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01'
+        # ⚠️ 여기가 Workload Identity Provider의 전체 리소스 이름입니다.
+        #    'projects/풀_번호/locations/global/workloadIdentityPools/풀_ID/providers/프로바이더_ID' 형식
+        #    secrets.GCP_PROJECT_NUMBER는 여러분의 GCP '프로젝트 번호'가 아닌
+        #    Workload Identity Pool을 만들 때 생성된 '풀 번호'여야 함을 기억하세요.
+        workload_identity_provider: 'projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01'
         service_account: 'github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com'
+        # 배포 단계에서는 id_token_audience가 명시적으로 필요하지 않습니다.
 
     - name: 'gcloud CLI 설치 및 구성'
       uses: google-github-actions/setup-gcloud@v2
       with:
         project_id: ${{ env.GCP_PROJECT_ID }}
+        # 💡 Workload Identity Federation을 사용하므로 service_account_key는 필요 없습니다.
+
+    # 💡 인증이 성공했는지 확인하기 위한 디버그 스텝 추가
+    - name: '디버그: 현재 활성 계정 확인'
+      run: gcloud auth list --filter=status:ACTIVE
 
     - name: 'Artifact Registry 리포지토리 생성 (이미 있다면 스킵)'
       run: |
@@ -51,6 +65,7 @@ jobs:
       run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev
 
     - name: 'Docker 이미지 빌드'
+      # src 폴더에 Dockerfile과 Python 코드가 있으므로 ./src를 사용합니다.
       run: docker build -t ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPO }}/${{ env.CLOUD_RUN_SERVICE_NAME }}:${{ github.sha }} ./src
 
     - name: 'Docker 이미지 Artifact Registry에 푸시'
@@ -70,19 +85,38 @@ jobs:
           --min-instances 0 \
           --max-instances 1 \
           --timeout 600s \
-          --set-env-vars=GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }},GCP_BUCKET_NAME=${{ env.GCP_BUCKET_NAME }},YOUTUBE_CLIENT_ID=${{ secrets.YOUTUBE_CLIENT_ID }},YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }},YOUTUBE_REFRESH_TOKEN=${{ secrets.YOUTUBE_REFRESH_TOKEN }},ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }},ELEVENLABS_VOICE_ID=${{ secrets.ELEVENLABS_VOICE_ID }},OPENAI_API_KEYS="${{ secrets.OPENAI_API_KEYS }}",GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }},PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }},NEWSAPI_API_KEY=${{ secrets.NEWSAPI_API_KEY }} \
           --ingress all \
-          --port 8080
-        echo "SERVICE_URL=$(gcloud run services describe ${{ env.CLOUD_RUN_SERVICE_NAME }} --platform managed --region ${{ env.GCP_REGION }} --format='value(status.url)')" >> $GITHUB_ENV
-        echo "✅ Cloud Run 서비스 배포 완료: ${{ env.SERVICE_URL }}"
+          --port 8080 \
+          --set-env-vars=\
+            GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }},\
+            GCP_BUCKET_NAME=${{ env.GCP_BUCKET_NAME }},\
+            YOUTUBE_CLIENT_ID=${{ secrets.YOUTUBE_CLIENT_ID }},\
+            YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }},\
+            YOUTUBE_REFRESH_TOKEN="${{ secrets.YOUTUBE_REFRESH_TOKEN }}",\
+            ELEVENLABS_API_KEY="${{ secrets.ELEVENLABS_API_KEY }}",\
+            ELEVENLABS_VOICE_ID="${{ secrets.ELEVENLABS_VOICE_ID }}",\
+            # ⚠️ 중요: OPENAI_API_KEYS 시크릿의 값이 콤마(,)로 구분된 하나의 문자열이어야 합니다.
+            #     secrets.OPENAI_API_KEYS에 "key1,key2,key3" 이런 형식으로 저장되어야 합니다.
+            OPENAI_API_KEYS="${{ secrets.OPENAI_API_KEYS }}",\
+            GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}",\
+            PEXELS_API_KEY="${{ secrets.PEXELS_API_KEY }}",\
+            NEWSAPI_API_KEY="${{ secrets.NEWSAPI_API_KEY }}"
+        
+        # Cloud Run 서비스 URL을 GITHUB_ENV에 저장하여 다음 job에서 사용 (필요시)
+        # daily_upload.yaml이 직접 URL을 가져오므로, 여기서는 단순히 로깅용으로 남겨둡니다.
+        SERVICE_URL=$(gcloud run services describe ${{ env.CLOUD_RUN_SERVICE_NAME }} --platform managed --region ${{ env.GCP_REGION }} --format='value(status.url)')
+        echo "✅ Cloud Run 서비스 배포 완료: $SERVICE_URL"
+        echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_ENV # 이 라인은 삭제해도 무방
 
-  get-service-url:
-    needs: build-and-deploy
-    runs-on: ubuntu-latest
-    outputs:
-      service_url: ${{ env.SERVICE_URL }} # 서비스 URL을 출력으로 설정 (daily_upload.yaml에서 사용)
-    steps:
-      - name: '서비스 URL 가져오기'
-        run: |
-          echo "SERVICE_URL=${{ needs.build-and-deploy.outputs.SERVICE_URL }}" >> $GITHUB_ENV
-          echo "서비스 URL은: ${{ needs.build-and-deploy.outputs.SERVICE_URL }}" # 디버그용
+  # 이 get-service-url job은 이제 필요 없습니다. daily_upload.yaml이 자체적으로 URL을 가져옵니다.
+  # 만약 deploy-and-run.yml에서 다른 후속 작업에 SERVICE_URL이 필요하다면 유지할 수 있습니다.
+  # 여기서는 삭제하는 것을 추천합니다.
+  # get-service-url:
+  #   needs: build-and-deploy
+  #   runs-on: ubuntu-latest
+  #   outputs:
+  #     service_url: ${{ env.SERVICE_URL }}
+  #   steps:
+  #     - name: '서비스 URL 가져오기'
+  #       run: |
+  #         echo "서비스 URL은: ${{ env.SERVICE_URL }}"
