@@ -1,3 +1,4 @@
+# .github/workflows/daily_upload.yaml
 name: Daily YouTube Shorts Upload
 
 on:
@@ -23,16 +24,13 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # ✅ 2. GCP 인증 (audience 명시적으로 지정)
+      # ✅ 2. GCP 인증 (audience 제거!!)
       - name: Authenticate to Google Cloud
         id: auth
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: 'projects/${{ env.PROJECT_ID }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01'
           service_account: 'github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com'
-          # Workload Identity Pool Provider 자체를 audience로 명시합니다.
-          # 이 audience 값이 GCP Workload Identity Pool Provider의 '허용된 잠재고객' 목록에 정확히 일치해야 합니다.
-          audience: '//iam.googleapis.com/projects/${{ env.PROJECT_ID }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01'
 
       # ✅ 3. Cloud SDK 설치
       - name: Set up Cloud SDK
@@ -72,4 +70,4 @@ jobs:
             -H "Authorization: Bearer $TOKEN" \
             -H "Content-Type: application/json" \
             -d '{"action": "create_and_upload_shorts", "metadata": {"news_topic": "최신 기술 뉴스"}}' \
-            "${{ env.CLOUD_RUN_SERVICE_URL }}" # URL에 따옴표 추가하여 공백 문제 방지
+            "${{ env.CLOUD_RUN_SERVICE_URL }}"
