@@ -7,9 +7,9 @@ on:
 
 env:
   PROJECT_ID: youtube-fully-automated
+  PROJECT_NUM: 94662874801
   GCP_REGION: us-central1
   SERVICE_NAME: youtube-shorts-automation
-  PROJECT_NUM: 94662874801
 
 jobs:
   trigger_upload_process:
