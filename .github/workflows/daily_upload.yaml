@@ -6,10 +6,11 @@ on:
   workflow_dispatch:
 
 env:
-  PROJECT_NUM: 94662874801  # 프로젝트 숫자 ID
-  PROJECT_ID: youtube-fully-automated  # 프로젝트 이름 (다른 곳에서 필요할 수 있으므로 유지)
+  PROJECT_ID: youtube-fully-automated
   GCP_REGION: us-central1
   SERVICE_NAME: youtube-shorts-automation
+  # ★ 중요! 숫자 ID 추가 ★
+  PROJECT_NUM: 94662874801
 
 jobs:
   trigger_upload_process:
@@ -26,6 +27,7 @@ jobs:
         id: auth
         uses: google-github-actions/auth@v2
         with:
+          # ★ 수정된 부분: PROJECT_ID → PROJECT_NUM ★
           workload_identity_provider: 'projects/${{ env.PROJECT_NUM }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01'
           service_account: 'github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com'
 
@@ -43,26 +45,21 @@ jobs:
           echo "CLOUD_RUN_SERVICE_URL=$SERVICE_URL" >> "$GITHUB_ENV"
           echo "✅ Cloud Run Service URL: $SERVICE_URL"
 
-          if [ -z "$SERVICE_URL" ]; then
-            echo "❌ Error: Cloud Run service URL could not be retrieved."
-            exit 1
-          fi
-
       - name: Trigger Cloud Run service
         run: |
+          # ★ 오류 방지용 추가 체크 ★
           if [ -z "${{ env.CLOUD_RUN_SERVICE_URL }}" ]; then
-            echo "❌ Error: CLOUD_RUN_SERVICE_URL is not set. Cannot trigger service."
+            echo "❌ Error: CLOUD_RUN_SERVICE_URL is empty!"
             exit 1
           fi
 
-          echo "🚀 Triggering Cloud Run service at ${{ env.CLOUD_RUN_SERVICE_URL }}"
-
-          # Workload Identity Provider의 기본 audience 사용
-          PROVIDER_AUDIENCE="//iam.googleapis.com/projects/${{ env.PROJECT_NUM }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01"
-          TOKEN=$(gcloud auth print-identity-token --audiences="$PROVIDER_AUDIENCE")
-
+          echo "🚀 Triggering: ${{ env.CLOUD_RUN_SERVICE_URL }}"
+          
+          # ★ 간소화된 토큰 생성 ★
+          TOKEN=$(gcloud auth print-identity-token)
+          
           curl -X POST \
             -H "Authorization: Bearer $TOKEN" \
             -H "Content-Type: application/json" \
-            -d '{"action": "create_and_upload_shorts", "metadata": {"news_topic": "최신 기술 뉴스"}}' \
+            -d '{"action": "create_and_upload_shorts"}' \
             "${{ env.CLOUD_RUN_SERVICE_URL }}"
