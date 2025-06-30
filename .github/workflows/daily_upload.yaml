@@ -7,9 +7,10 @@ on:
 
 env:
   PROJECT_ID: youtube-fully-automated
-  PROJECT_NUM: ${{ secrets.GCP_PROJECT_NUMBER }}
+  PROJECT_NUM: 94662874801
   GCP_REGION: us-central1
   SERVICE_NAME: youtube-shorts-automation
+  PROVIDER_RESOURCE_NAME: projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider
 
 jobs:
   trigger_upload_process:
@@ -22,13 +23,13 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # ✅ GCP 인증용 audience
+      # ✅ GCP 인증 (provider resource name을 audience로)
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: 'projects/${{ env.PROJECT_NUM }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider'
-          service_account: 'github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com'
-          audience: "//iam.googleapis.com/projects/${{ env.PROJECT_NUM }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider"
+          workload_identity_provider: ${{ env.PROVIDER_RESOURCE_NAME }}
+          service_account: github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
+          audience: "//iam.googleapis.com/${{ env.PROVIDER_RESOURCE_NAME }}"
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
@@ -43,12 +44,12 @@ jobs:
             --format="value(status.url)")
           echo "CLOUD_RUN_SERVICE_URL=$SERVICE_URL" >> "$GITHUB_ENV"
 
-      # ✅ Cloud Run 호출용 audience
+      # ✅ Cloud Run 호출용 audience (Cloud Run URL)
       - name: Authenticate to Google Cloud for Cloud Run Service Call
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: 'projects/${{ env.PROJECT_NUM }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider'
-          service_account: 'github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com'
+          workload_identity_provider: ${{ env.PROVIDER_RESOURCE_NAME }}
+          service_account: github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
           audience: ${{ env.CLOUD_RUN_SERVICE_URL }}
 
       - name: Trigger Cloud Run service
