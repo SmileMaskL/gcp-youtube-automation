@@ -1,0 +1,16 @@
+bindings:
+- members:
+  - user:blackhole826@gmail.com
+  role: roles/iam.serviceAccountAdmin
+- members:
+  - serviceAccount:github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
+  role: roles/iam.serviceAccountTokenCreator
+- members:
+  - serviceAccount:github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
+  - user:blackhole826@gmail.com
+  role: roles/iam.serviceAccountUser
+- members:
+  - principalSet://iam.googleapis.com/projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/attribute.repository/SmileMaskL/gcp-youtube-automation
+  role: roles/iam.workloadIdentityUser
+etag: BwY4w3_zuDc=
+version: 1
