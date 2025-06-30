@@ -29,7 +29,7 @@ jobs:
         with:
           # ★★ 중요! PROJECT_NUM 사용하도록 수정 ★★
           workload_identity_provider: 'https://iam.googleapis.com/projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01'
-          service_account: 'github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com'
+          service_account: 'github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com'
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
