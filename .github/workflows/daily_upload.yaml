@@ -2,14 +2,13 @@ name: Daily YouTube Shorts Upload
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # UTC 기준 매일 자정 (KST 오전 9시)
+    - cron: '0 0 * * *'  # UTC 자정 = KST 오전 9시
   workflow_dispatch:
 
 env:
   PROJECT_ID: youtube-fully-automated
   GCP_REGION: us-central1
   SERVICE_NAME: youtube-shorts-automation
-  # ★★ 여기서 프로젝트 번호를 환경변수로 설정 ★★
   PROJECT_NUM: 94662874801
 
 jobs:
@@ -27,8 +26,8 @@ jobs:
         id: auth
         uses: google-github-actions/auth@v2
         with:
-          # ★★ 중요! PROJECT_NUM 사용하도록 수정 ★★
-          workload_identity_provider: 'https://iam.googleapis.com/projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01'
+          # ✅ ✅ ✅ 반드시 Resource name 형식으로 입력
+          workload_identity_provider: 'projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01'
           service_account: 'github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com'
 
       - name: Set up Cloud SDK
@@ -40,23 +39,20 @@ jobs:
           SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
             --platform managed \
             --region ${{ env.GCP_REGION }} \
-            --project ${{ env.PROJECT_ID }} \  # 여기는 프로젝트 ID 사용
+            --project ${{ env.PROJECT_ID }} \
             --format="value(status.url)")
           echo "CLOUD_RUN_SERVICE_URL=$SERVICE_URL" >> "$GITHUB_ENV"
           echo "✅ Cloud Run Service URL: $SERVICE_URL"
 
-      - name: Trigger Cloud Run service
-        run: |
-          if [ -z "${{ env.CLOUD_RUN_SERVICE_URL }}" ]; then
-            echo "❌ Error: CLOUD_RUN_SERVICE_URL is empty!"
+          if [ -z "$SERVICE_URL" ]; then
+            echo "❌ Error: Cloud Run service URL could not be retrieved."
             exit 1
           fi
 
-          echo "🚀 Triggering: ${{ env.CLOUD_RUN_SERVICE_URL }}"
-          
-          # ★★ 토큰 생성 시 프로젝트 ID 명시 ★★
-          TOKEN=$(gcloud auth print-identity-token --project=${{ env.PROJECT_ID }})
-          
+      - name: Trigger Cloud Run service
+        run: |
+          TOKEN=$(gcloud auth print-identity-token --audiences=${{ env.CLOUD_RUN_SERVICE_URL }})
+
           curl -X POST \
             -H "Authorization: Bearer $TOKEN" \
             -H "Content-Type: application/json" \
