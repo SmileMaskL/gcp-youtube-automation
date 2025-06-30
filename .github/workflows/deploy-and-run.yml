@@ -118,7 +118,7 @@ jobs:
         id: 'auth_run'
         uses: 'google-github-actions/auth@v2'
         with:
-          workload_identity_provider: 'projects/${{ env.PROJECT_ID }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-001'
+          workload_identity_provider: 'projects/${{ env.PROJECT_ID }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider'
           service_account: 'github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com'
           # ⭐ 중요: 여기서는 '실제 Cloud Run 서비스 URL'을 audience로 사용합니다. ⭐
           # 이전에 얻은 CLOUD_RUN_SERVICE_URL 변수를 사용합니다.
