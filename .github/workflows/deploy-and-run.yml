@@ -1,58 +1,39 @@
-# .github/workflows/deploy-and-run.yml
 name: Deploy to Cloud Run and Run Daily Upload
 
 on:
   push:
     branches:
       - main
-    paths: # src 폴더 안의 파일이 변경될 때만 트리거
+    paths:
       - 'src/**'
-      - '.github/workflows/deploy-and-run.yml' # 이 파일 자체도 변경 시 트리거
-  workflow_dispatch: # GitHub UI에서 수동 실행 가능하도록
-  
+      - '.github/workflows/deploy-and-run.yml'
+  workflow_dispatch:
+
 env:
-  PROJECT_ID: youtube-fully-automated # ✨ 여러분의 GCP 프로젝트 ID로 변경! ✨
+  PROJECT_ID: youtube-fully-automated
+  PROJECT_NUM: ${{ secrets.GCP_PROJECT_NUMBER }}
   GCP_REGION: us-central1
   SERVICE_NAME: youtube-shorts-automation
-  # 환경 변수는 GitHub Secrets에서 가져옵니다.
-  SECRET_GCS_BUCKET_NAME: ${{ secrets.GCS_BUCKET_NAME }}
-  SECRET_ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
-  SECRET_ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
-  SECRET_OPENAI_API_KEYS: ${{ secrets.OPENAI_API_KEYS }}
-  SECRET_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-  SECRET_NEWSAPI_API_KEY: ${{ secrets.NEWSAPI_API_KEY }}
-  SECRET_PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-  SECRET_YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
-  SECRET_YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
-  SECRET_YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     permissions:
       contents: 'read'
-      id-token: 'write' # Workload Identity Federation을 위해 필요
-      
+      id-token: 'write'
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # --- ✨ 핵심 수정 1: Workload Identity Provider Audience를 'principal' 주소로! ✨ ---
-      # 'invalid_target' 에러는 주로 auth 액션이 Workload Identity Provider를 찾지 못할 때 발생합니다.
-      # Provider의 'principal' 주소를 audience로 명시적으로 지정하여 정확한 대상을 가리키도록 합니다.
+      # ✅ GCP 인증용 audience
       - name: Authenticate to Google Cloud for gcloud commands
-        id: 'auth'
-        uses: 'google-github-actions/auth@v2'
+        uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: 'projects/${{ env.PROJECT_ID }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider'
+          workload_identity_provider: 'projects/${{ env.PROJECT_NUM }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider'
           service_account: 'github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com'
-          # ⭐ 중요: Workload Identity Pool의 'principal' 주소를 audience로 사용!
-          # 이 주소는 GCP 콘솔의 '워크로드 아이덴티티 풀' -> '풀 세부정보'에서 확인 가능합니다.
-          # 예: principal://iam.googleapis.com/projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/github-actions-pool/subject/SUBJECT_ATTRIBUTE_VALUE
-          # 우리는 여기서 'subject/SUBJECT_ATTRIBUTE_VALUE' 부분을 제거하고, 풀/제공업체까지만 지정합니다.
-          # 이는 auth 액션이 토큰을 요청할 때 사용하는 기본 audience 형식에 가깝습니다.
-          audience: //iam.googleapis.com/projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider
-      
+          audience: "//iam.googleapis.com/projects/${{ env.PROJECT_NUM }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider"
+
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
@@ -64,22 +45,7 @@ jobs:
             --region ${{ env.GCP_REGION }} \
             --allow-unauthenticated \
             --project ${{ env.PROJECT_ID }} \
-            --timeout 900s \
-            # --- ✨ 핵심 수정 2: 모든 환경 변수를 --set-env-vars로 전달 (변수명 일치 확인) ✨ ---
-            # app.py에서 필요로 하는 모든 환경 변수를 여기에 명시적으로 전달합니다.
-            --set-env-vars \
-              GCP_PROJECT_ID=${{ env.PROJECT_ID }},\
-              GCP_BUCKET_NAME=${{ env.SECRET_GCS_BUCKET_NAME }},\
-              ELEVENLABS_API_KEY=${{ env.SECRET_ELEVENLABS_API_KEY }},\
-              ELEVENLABS_VOICE_ID=${{ env.SECRET_ELEVENLABS_VOICE_ID }},\
-              OPENAI_API_KEYS="${{ env.SECRET_OPENAI_API_KEYS }}",\
-              GEMINI_API_KEY=${{ env.SECRET_GEMINI_API_KEY }},\
-              NEWSAPI_API_KEY=${{ env.SECRET_NEWSAPI_API_KEY }},\
-              PEXELS_API_KEY=${{ env.PEXELS_API_KEY }},\
-              YOUTUBE_CLIENT_ID=${{ env.SECRET_YOUTUBE_CLIENT_ID }},\
-              YOUTUBE_CLIENT_SECRET=${{ env.SECRET_YOUTUBE_CLIENT_SECRET }},\
-              YOUTUBE_REFRESH_TOKEN=${{ env.SECRET_YOUTUBE_REFRESH_TOKEN }}
-        # ⭐ 중요: 여기서는 GCP_PROJECT_NUMBER가 필요 없음. deploy 명령은 프로젝트 ID로 충분. ⭐
+            --timeout 900s
 
       - name: Get Cloud Run Service URL
         id: get_url
@@ -90,61 +56,34 @@ jobs:
             --project ${{ env.PROJECT_ID }} \
             --format="value(status.url)")
           echo "CLOUD_RUN_SERVICE_URL=$SERVICE_URL" >> "$GITHUB_ENV"
-          echo "Cloud Run Service URL: $SERVICE_URL" # 디버깅용 출력
-          if [ -z "$SERVICE_URL" ]; then
-            echo "Error: Cloud Run service URL could not be retrieved."
-            exit 1
-          fi
-          # ⭐ GITHUB_ENV에 PROJECT_ID도 다시 넣어줌. run_daily_upload job에서 사용하기 위함.
-          echo "PROJECT_ID=${{ env.PROJECT_ID }}" >> "$GITHUB_ENV"
-        # env: # get_url 단계에서 GCP_PROJECT_NUMBER는 직접 사용되지 않으므로 필요 없음.
-        #   GCP_PROJECT_NUMBER: ${{ secrets.GCP_PROJECT_NUMBER }}
 
   run_daily_upload:
     runs-on: ubuntu-latest
-    needs: deploy # deploy Job이 성공해야 이 Job이 실행됩니다.
+    needs: deploy
     permissions:
       contents: 'read'
-      id-token: 'write' # Workload Identity Federation을 위해 필요
-    
+      id-token: 'write'
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # --- ✨ 핵심 수정 3: Workload Identity Provider Audience 설정 (Cloud Run 호출을 위한 인증!) ✨ ---
-      # 이제 audience를 '실제 배포된 Cloud Run 서비스의 URL'로 설정합니다.
-      # 이 토큰은 'curl' 명령어로 Cloud Run 서비스를 호출할 때 사용됩니다.
+      # ✅ Cloud Run 호출용 audience
       - name: Authenticate to Google Cloud for Cloud Run Service Call
-        id: 'auth_run'
-        uses: 'google-github-actions/auth@v2'
+        uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: 'projects/${{ env.PROJECT_ID }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider'
+          workload_identity_provider: 'projects/${{ env.PROJECT_NUM }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider'
           service_account: 'github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com'
-          # ⭐ 중요: 여기서는 '실제 Cloud Run 서비스 URL'을 audience로 사용합니다. ⭐
-          # 이전에 얻은 CLOUD_RUN_SERVICE_URL 변수를 사용합니다.
-          audience: ${{ env.CLOUD_RUN_SERVICE_URL }} 
-          
+          audience: ${{ env.CLOUD_RUN_SERVICE_URL }}
+
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Trigger Cloud Run service for Daily Upload
+      - name: Trigger Cloud Run service
         run: |
-          # Cloud Run 서비스 URL을 사용하여 POST 요청을 보냅니다.
-          # 이 URL은 이전 'get_url' 단계에서 $GITHUB_ENV에 저장됩니다.
-          if [ -z "${{ env.CLOUD_RUN_SERVICE_URL }}" ]; then
-            echo "Error: CLOUD_RUN_SERVICE_URL is not set. Cannot trigger service."
-            exit 1
-          fi
-          
-          echo "Triggering Cloud Run service at ${{ env.CLOUD_RUN_SERVICE_URL }}"
-          # Cloud Run 서비스에 인증된 요청을 보내기 위해 gcloud auth print-identity-token 사용
-          # ⭐ 중요: 여기에서도 audience를 실제 Cloud Run 서비스 URL로 지정해야 합니다. ⭐
           TOKEN=$(gcloud auth print-identity-token --audiences=${{ env.CLOUD_RUN_SERVICE_URL }})
-          
           curl -X POST \
             -H "Authorization: Bearer $TOKEN" \
             -H "Content-Type: application/json" \
-            -d '{"action": "create_and_upload_shorts", "metadata": {"news_topic": "최신 기술 뉴스"}}' \
+            -d '{"action": "create_and_upload_shorts"}' \
             ${{ env.CLOUD_RUN_SERVICE_URL }}
-        # env: # 여기서는 GCP_PROJECT_NUMBER가 직접 사용되지 않으므로 필요 없음.
-        #   GCP_PROJECT_NUMBER: ${{ secrets.GCP_PROJECT_NUMBER }}
