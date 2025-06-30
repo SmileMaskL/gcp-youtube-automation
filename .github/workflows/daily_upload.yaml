@@ -9,12 +9,15 @@ on:
 
 env:
   PROJECT_ID: youtube-fully-automated
-  PROJECT_NUM: 94662874801
+  # PROJECT_NUM은 이제 secrets.GCP_PROJECT_NUMBER를 통해 자동으로 설정됩니다.
   GCP_REGION: us-central1
   SERVICE_NAME: youtube-shorts-automation
   # Workload Identity Pool Provider의 전체 리소스 이름
   # GCP에 실제 존재하는 제공업체 이름과 정확히 일치해야 합니다.
+  # secrets.GCP_PROJECT_NUMBER를 사용하면 GitHub Secrets에서 가져오므로 안전합니다.
   PROVIDER_RESOURCE_NAME: projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider
+  # GitHub Actions Secret에 SERVICE_ACCOUNT_EMAIL이라는 이름으로 서비스 계정 이메일 주소를 추가해야 합니다.
+  SERVICE_ACCOUNT_EMAIL: ${{ secrets.SERVICE_ACCOUNT_EMAIL }} # <-- 새로 추가/수정될 부분
 
 jobs:
   trigger_upload_process:
@@ -37,7 +40,7 @@ jobs:
         with:
           token_format: 'access_token' # Cloud SDK가 사용할 액세스 토큰을 요청
           workload_identity_provider: ${{ env.PROVIDER_RESOURCE_NAME }}
-          service_account: github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
+          service_account: ${{ env.SERVICE_ACCOUNT_EMAIL }} # <-- 서비스 계정 이메일을 Secret 변수로 참조
           # audience 파라미터는 여기에서 직접 지정하지 않습니다.
           # workload_identity_provider에 지정된 값으로 내부적으로 처리됩니다.
 
