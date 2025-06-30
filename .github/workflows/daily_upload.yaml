@@ -1,12 +1,9 @@
-# .github/workflows/daily_upload.yaml
-
 name: Daily YouTube Shorts Upload
 
 on:
   schedule:
-    # ✅ UTC 기준 매일 오전 0시 0분 (KST 오전 9시)에 실행
     - cron: '0 0 * * *'
-  workflow_dispatch: # GitHub UI에서 수동 실행 가능하도록
+  workflow_dispatch:
 
 env:
   PROJECT_ID: youtube-fully-automated
@@ -18,27 +15,23 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: 'read'
-      id-token: 'write' # Workload Identity Federation을 위해 필요
+      id-token: 'write'
 
     steps:
-      # ✅ 1. GitHub 코드 체크아웃
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # ✅ 2. GCP 인증 (audience 수정!!)
       - name: Authenticate to Google Cloud
         id: auth
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: 'projects/${{ env.PROJECT_ID }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01'
           service_account: 'github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com'
-          audience: 'https://accounts.google.com' # ✅✅ 수정된 부분
+          audience: '//iam.googleapis.com/projects/${{ env.PROJECT_ID }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01' # ✅ 최종 고정
 
-      # ✅ 3. Cloud SDK 설치
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      # ✅ 4. Cloud Run 서비스 URL 가져오기
       - name: Get Cloud Run Service URL
         id: get_url
         run: |
@@ -48,23 +41,14 @@ jobs:
             --project ${{ env.PROJECT_ID }} \
             --format="value(status.url)")
           echo "CLOUD_RUN_SERVICE_URL=$SERVICE_URL" >> "$GITHUB_ENV"
-          echo "✅ Cloud Run Service URL: $SERVICE_URL"
 
           if [ -z "$SERVICE_URL" ]; then
             echo "❌ Error: Cloud Run service URL could not be retrieved."
             exit 1
           fi
 
-      # ✅ 5. Cloud Run 서비스 트리거 (호출 시 audience 지정)
       - name: Trigger Cloud Run service
         run: |
-          if [ -z "${{ env.CLOUD_RUN_SERVICE_URL }}" ]; then
-            echo "❌ Error: CLOUD_RUN_SERVICE_URL is not set. Cannot trigger service."
-            exit 1
-          fi
-
-          echo "🚀 Triggering Cloud Run service at ${{ env.CLOUD_RUN_SERVICE_URL }}"
-
           TOKEN=$(gcloud auth print-identity-token --audiences=${{ env.CLOUD_RUN_SERVICE_URL }})
 
           curl -X POST \
