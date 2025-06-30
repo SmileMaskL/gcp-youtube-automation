@@ -14,7 +14,7 @@ env:
   SERVICE_NAME: youtube-shorts-automation
   # Workload Identity Pool Provider의 전체 리소스 이름
   # GCP에 실제 존재하는 제공업체 이름과 정확히 일치해야 합니다.
-  PROVIDER_RESOURCE_NAME: projects/${{ env.PROJECT_NUM }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider
+  PROVIDER_RESOURCE_NAME: projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider
 
 jobs:
   trigger_upload_process:
