@@ -1,3 +1,5 @@
+# .github/workflows/daily_upload.yaml
+
 name: Daily YouTube Shorts Upload
 
 on:
@@ -7,11 +9,10 @@ on:
 
 env:
   PROJECT_ID: youtube-fully-automated
-  PROJECT_NUM: 94662874801  # 프로젝트 번호 (주민등록번호)
+  PROJECT_NUM: 94662874801
   GCP_REGION: us-central1
   SERVICE_NAME: youtube-shorts-automation
-  # ✅ 프로젝트 번호 사용 + 큰따옴표 미리 감싸기
-  PROVIDER_RESOURCE_NAME: "projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01"
+  PROVIDER_RESOURCE_NAME: projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01
 
 jobs:
   trigger_upload_process:
@@ -29,7 +30,6 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           token_format: 'access_token'
-          # ✅ 큰따옴표로 확실히 감쌈!
           workload_identity_provider: "${{ env.PROVIDER_RESOURCE_NAME }}"
           service_account: 'github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com'
 
@@ -44,6 +44,7 @@ jobs:
             --region ${{ env.GCP_REGION }} \
             --project ${{ env.PROJECT_ID }} \
             --format="value(status.url)")
+
           echo "CLOUD_RUN_SERVICE_URL=$SERVICE_URL" >> "$GITHUB_ENV"
           echo "✅ Cloud Run Service URL: $SERVICE_URL"
 
@@ -55,7 +56,7 @@ jobs:
       - name: Trigger Cloud Run service
         run: |
           echo "✅ Generating identity token for Cloud Run audience"
-          # ✅ Cloud Run URL을 대상(audience)으로 지정
+
           TOKEN=$(gcloud auth print-identity-token --audiences=$CLOUD_RUN_SERVICE_URL)
 
           echo "✅ Generated Identity Token"
