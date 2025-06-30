@@ -26,6 +26,7 @@ jobs:
         id: auth
         uses: google-github-actions/auth@v2
         with:
+          token_format: 'access_token'
           workload_identity_provider: 'projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01'
           service_account: 'github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com'
 
@@ -51,6 +52,8 @@ jobs:
       - name: Trigger Cloud Run service
         run: |
           TOKEN=$(gcloud auth print-identity-token --audiences=${{ env.CLOUD_RUN_SERVICE_URL }})
+
+          echo "✅ Generated Identity Token"
 
           curl -X POST \
             -H "Authorization: Bearer $TOKEN" \
