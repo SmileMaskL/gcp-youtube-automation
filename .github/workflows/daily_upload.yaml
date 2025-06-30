@@ -31,6 +31,7 @@ jobs:
           workload_identity_provider: 'projects/${{ env.PROJECT_ID }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01'
           service_account: 'github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com'
           # Workload Identity Pool Provider 자체를 audience로 명시합니다.
+          # 이 audience 값이 GCP Workload Identity Pool Provider의 '허용된 잠재고객' 목록에 정확히 일치해야 합니다.
           audience: '//iam.googleapis.com/projects/${{ env.PROJECT_ID }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01'
 
       # ✅ 3. Cloud SDK 설치
