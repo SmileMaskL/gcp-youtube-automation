@@ -28,9 +28,14 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 애플리케이션 코드 복사
 COPY . .
 
+# ⭐ 추가: Pexels 이미지 실패 시 사용할 기본 이미지 복사
+#    이 파일은 src/app.py에서 /app/default_image.jpg 경로로 사용됩니다.
+#    따라서 'src' 폴더 안에 'default_image.jpg' 파일을 넣어주세요.
+COPY src/default_image.jpg /app/default_image.jpg 
+
 # Cloud Run은 PORT 환경 변수로 포트를 지정하므로, 이 변수를 따르도록 Flask 앱 설정
 ENV PORT 8080
 
 # 컨테이너가 시작될 때 실행할 명령어
-# ⭐️⭐️⭐️ 이 부분을 다시 gunicorn 명령어로 변경합니다! ⭐️⭐️⭐️
+# ⭐️⭐️⭐️ gunicorn을 사용해서 src.app:app을 실행합니다! ⭐️⭐️⭐️
 CMD exec gunicorn --bind 0.0.0.0:$PORT --workers 1 --timeout 0 --graceful-timeout 30 src.app:app
