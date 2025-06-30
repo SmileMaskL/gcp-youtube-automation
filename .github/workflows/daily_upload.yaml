@@ -1,8 +1,10 @@
+# .github/workflows/daily_upload.yaml
+
 name: Daily YouTube Shorts Upload
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # UTC 기준 매일 자정 (KST 오전 9시)
+    - cron: '0 0 * * *'  # 매일 자정 (KST 오전 9시)
   workflow_dispatch:
 
 env:
@@ -17,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: 'read'
-      id-token: 'write' # 반드시 필요함
+      id-token: 'write'
 
     steps:
       - name: Checkout Repository
@@ -27,10 +29,9 @@ jobs:
         id: auth
         uses: google-github-actions/auth@v2
         with:
-          token_format: 'id_token' # ⭐ 변경 (access_token → id_token)
+          token_format: 'id_token'
           workload_identity_provider: ${{ env.PROVIDER_RESOURCE_NAME }}
           service_account: 'github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com'
-          id_token_audience: 'https://youtube-shorts-automation-94662874801.us-central1.run.app' # ⭐ Cloud Run URL (allowedAudiences에 등록된 값)
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
@@ -53,12 +54,10 @@ jobs:
 
       - name: Trigger Cloud Run service
         run: |
-          TOKEN=$(gcloud auth print-identity-token --audiences=$CLOUD_RUN_SERVICE_URL)
-
-          echo "✅ Generated Identity Token"
+          echo "✅ Using GitHub-issued id_token"
 
           curl -X POST \
-            -H "Authorization: Bearer $TOKEN" \
+            -H "Authorization: Bearer ${{ steps.auth.outputs.id_token }}" \
             -H "Content-Type: application/json" \
             -d '{"action": "create_and_upload_shorts"}' \
-            "$CLOUD_RUN_SERVICE_URL"
+            "${{ env.CLOUD_RUN_SERVICE_URL }}"
