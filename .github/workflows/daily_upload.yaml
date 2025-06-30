@@ -24,7 +24,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # ✅ 2. GCP 인증 먼저
+      # ✅ 2. GCP 인증 (audience 지정 X)
       - name: Authenticate to Google Cloud
         id: auth
         uses: google-github-actions/auth@v2
@@ -63,7 +63,7 @@ jobs:
 
           echo "🚀 Triggering Cloud Run service at ${{ env.CLOUD_RUN_SERVICE_URL }}"
 
-          # audience는 print-identity-token에서 지정
+          # audience는 print-identity-token에서 지정 (허용된 audience 목록 중 URL 사용)
           TOKEN=$(gcloud auth print-identity-token --audiences=${{ env.CLOUD_RUN_SERVICE_URL }})
 
           curl -X POST \
