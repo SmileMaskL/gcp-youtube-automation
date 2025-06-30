@@ -28,8 +28,8 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           # ★ 수정된 부분: PROJECT_ID → PROJECT_NUM ★
-          workload_identity_provider: 'projects/${{ env.PROJECT_NUM }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01'
-          service_account: 'github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com'
+          workload_identity_provider: 'projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01'
+          service_account: 'github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com'
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
