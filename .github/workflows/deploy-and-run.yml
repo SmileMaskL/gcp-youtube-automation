@@ -44,14 +44,14 @@ jobs:
         id: 'auth'
         uses: 'google-github-actions/auth@v2'
         with:
-          workload_identity_provider: 'projects/${{ env.PROJECT_ID }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01'
+          workload_identity_provider: 'projects/${{ env.PROJECT_ID }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-001'
           service_account: 'github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com'
           # ⭐ 중요: Workload Identity Pool의 'principal' 주소를 audience로 사용!
           # 이 주소는 GCP 콘솔의 '워크로드 아이덴티티 풀' -> '풀 세부정보'에서 확인 가능합니다.
           # 예: principal://iam.googleapis.com/projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/github-actions-pool/subject/SUBJECT_ATTRIBUTE_VALUE
           # 우리는 여기서 'subject/SUBJECT_ATTRIBUTE_VALUE' 부분을 제거하고, 풀/제공업체까지만 지정합니다.
           # 이는 auth 액션이 토큰을 요청할 때 사용하는 기본 audience 형식에 가깝습니다.
-          audience: //iam.googleapis.com/projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01
+          audience: //iam.googleapis.com/projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-001
       
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
@@ -118,7 +118,7 @@ jobs:
         id: 'auth_run'
         uses: 'google-github-actions/auth@v2'
         with:
-          workload_identity_provider: 'projects/${{ env.PROJECT_ID }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01'
+          workload_identity_provider: 'projects/${{ env.PROJECT_ID }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-001'
           service_account: 'github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com'
           # ⭐ 중요: 여기서는 '실제 Cloud Run 서비스 URL'을 audience로 사용합니다. ⭐
           # 이전에 얻은 CLOUD_RUN_SERVICE_URL 변수를 사용합니다.
