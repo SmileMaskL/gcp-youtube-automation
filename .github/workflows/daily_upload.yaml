@@ -10,6 +10,7 @@ env:
   PROJECT_NUM: 94662874801
   GCP_REGION: us-central1
   SERVICE_NAME: youtube-shorts-automation
+  PROVIDER_RESOURCE_NAME: projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01
 
 jobs:
   trigger_upload_process:
@@ -27,7 +28,7 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           token_format: 'access_token'
-          workload_identity_provider: 'projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01'
+          workload_identity_provider: ${{ env.PROVIDER_RESOURCE_NAME }}
           service_account: 'github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com'
 
       - name: Set up Cloud SDK
