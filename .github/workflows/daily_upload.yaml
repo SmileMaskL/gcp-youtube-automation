@@ -4,12 +4,11 @@ name: Daily YouTube Shorts Upload
 on:
   schedule:
     # UTC 기준 매일 오전 0시 0분 (KST는 오전 9시)에 실행
-    # GitHub Actions 스케줄은 최소 5분 간격입니다.
     - cron: '0 0 * * *'
   workflow_dispatch: # GitHub UI에서 수동 실행 가능하도록
 
 env:
-  PROJECT_ID: youtube-fully-automated # ✨ 여러분의 GCP 프로젝트 ID로 변경! ✨
+  PROJECT_ID: youtube-fully-automated
   GCP_REGION: us-central1
   SERVICE_NAME: youtube-shorts-automation
 
@@ -24,21 +23,10 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # --- ✨ 이 부분은 이전 답변의 코드 그대로입니다. ✨ ---
-      # audience를 '실제 배포된 Cloud Run 서비스의 URL'로 설정합니다.
-      - name: Authenticate to Google Cloud for Cloud Run Service Call
-        id: 'auth'
-        uses: 'google-github-actions/auth@v2'
-        with:
-          workload_identity_provider: 'projects/${{ env.PROJECT_ID }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01'
-          service_account: 'github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com'
-          # ⭐ 중요: 여기서는 '실제 Cloud Run 서비스 URL'을 audience로 사용합니다. ⭐
-          # get_url 스텝에서 가져올 Cloud Run 서비스 URL을audience로 사용합니다.
-          audience: ${{ env.CLOUD_RUN_SERVICE_URL }} # 아래 get_url 스텝에서 설정될 값 사용
-      
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
+      # ✅ ✅ ✅ Cloud Run URL 먼저 가져오기
       - name: Get Cloud Run Service URL
         id: get_url
         run: |
@@ -54,6 +42,15 @@ jobs:
             exit 1
           fi
 
+      # ✅ ✅ ✅ URL 가져온 뒤 인증
+      - name: Authenticate to Google Cloud for Cloud Run Service Call
+        id: 'auth'
+        uses: 'google-github-actions/auth@v2'
+        with:
+          workload_identity_provider: 'projects/${{ env.PROJECT_ID }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01'
+          service_account: 'github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com'
+          audience: ${{ env.CLOUD_RUN_SERVICE_URL }}
+
       - name: Trigger Cloud Run service
         run: |
           if [ -z "${{ env.CLOUD_RUN_SERVICE_URL }}" ]; then
@@ -62,10 +59,8 @@ jobs:
           fi
 
           echo "Triggering Cloud Run service at ${{ env.CLOUD_RUN_SERVICE_URL }}"
-          # Cloud Run 서비스에 인증된 요청을 보내기 위해 gcloud auth print-identity-token 사용
-          # ⭐ 중요: 여기에서도 audience를 실제 Cloud Run 서비스 URL로 지정해야 합니다. ⭐
           TOKEN=$(gcloud auth print-identity-token --audiences=${{ env.CLOUD_RUN_SERVICE_URL }})
-          
+
           curl -X POST \
             -H "Authorization: Bearer $TOKEN" \
             -H "Content-Type: application/json" \
