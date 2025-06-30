@@ -2,7 +2,7 @@ name: Daily YouTube Shorts Upload
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # UTC 자정 = KST 오전 9시
+    - cron: '0 0 * * *'  # UTC 기준 매일 자정 (KST 오전 9시)
   workflow_dispatch:
 
 env:
@@ -26,7 +26,6 @@ jobs:
         id: auth
         uses: google-github-actions/auth@v2
         with:
-          # ✅ ✅ ✅ 반드시 Resource name 형식으로 입력
           workload_identity_provider: 'projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01'
           service_account: 'github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com'
 
