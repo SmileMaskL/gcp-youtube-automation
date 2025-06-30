@@ -12,7 +12,7 @@ env:
   PROJECT_NUM: 94662874801
   GCP_REGION: us-central1
   SERVICE_NAME: youtube-shorts-automation
-  PROVIDER_RESOURCE_NAME: projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01
+  PROVIDER_RESOURCE_NAME: projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-001
 
 jobs:
   trigger_upload_process:
