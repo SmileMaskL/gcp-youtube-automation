@@ -13,7 +13,7 @@ google-cloud-logging
 
 # AI APIs
 openai==1.30.1
-google-generativeai==0.5.4
+google-generativeai
 elevenlabs==1.0.1
 
 # NewsAPI
