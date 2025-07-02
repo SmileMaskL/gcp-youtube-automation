@@ -23,6 +23,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      # ☁️ Cloud SDK 설치
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
@@ -31,7 +32,7 @@ jobs:
         id: auth_gcp
         uses: google-github-actions/auth@v2
         with:
-          token_format: 'access_token'
+          token_format: 'access_token'  # gcloud CLI 인증
           workload_identity_provider: ${{ env.PROVIDER_RESOURCE_NAME }}
           service_account: ${{ env.SERVICE_ACCOUNT_EMAIL }}
 
@@ -45,7 +46,7 @@ jobs:
             --project ${{ env.PROJECT_ID }} \
             --format="value(status.url)")
           echo "CLOUD_RUN_SERVICE_URL=$SERVICE_URL" >> "$GITHUB_ENV"
-          echo "url=$SERVICE_URL" >> $GITHUB_OUTPUT
+          echo "url=$SERVICE_URL" >> $GITHUB_OUTPUT  # ✅ set-output → GITHUB_OUTPUT 변경
 
           if [ -z "$SERVICE_URL" ]; then
             echo "❌ Error: Cloud Run service URL could not be retrieved."
