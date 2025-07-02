@@ -30,7 +30,7 @@ jobs:
         with:
           workload_identity_provider: ${{ env.PROVIDER_RESOURCE_NAME }}
           service_account: github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
-          audience: "//iam.googleapis.com/${{ env.PROVIDER_RESOURCE_NAME }}"
+          # audience: "//iam.googleapis.com/${{ env.PROVIDER_RESOURCE_NAME }}" # <--- 이 라인을 삭제합니다!
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
