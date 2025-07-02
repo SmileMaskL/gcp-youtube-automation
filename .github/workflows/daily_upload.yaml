@@ -33,12 +33,9 @@ jobs:
           token_format: 'access_token' # Cloud SDK가 사용할 액세스 토큰을 요청
           workload_identity_provider: ${{ env.PROVIDER_RESOURCE_NAME }}
           service_account: ${{ env.SERVICE_ACCOUNT_EMAIL }}
-          # audience 파라미터는 여기에서 직접 지정하지 않습니다.
-          # workload_identity_provider에 지정된 값으로 내부적으로 처리됩니다.
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
-        # Authenticate step에서 받은 인증 정보가 여기에 자동으로 적용됩니다.
 
       # --- ☁️ Cloud Run 서비스 URL 가져오기 ---
       - name: Get Cloud Run Service URL
@@ -67,9 +64,11 @@ jobs:
 
           echo "🚀 Triggering Cloud Run service at ${{ env.CLOUD_RUN_SERVICE_URL }}"
 
-          # gcloud CLI는 이미 서비스 계정으로 인증되어 있으므로, 이 라인은 제거합니다.
-          # gcloud config set account ${{ env.SERVICE_ACCOUNT_EMAIL }} # <--- 이 라인을 삭제합니다!
+          # gcloud CLI가 올바른 서비스 계정을 사용하도록 명시적으로 다시 설정
+          gcloud config set account ${{ env.SERVICE_ACCOUNT_EMAIL }} # <--- 이 라인이 다시 추가되었습니다!
 
+          # Cloud Run 서비스 호출을 위한 ID 토큰을 생성합니다.
+          # 이 토큰의 audience는 Cloud Run 서비스의 URL이어야 합니다.
           TOKEN=$(gcloud auth print-identity-token --audiences=${{ env.CLOUD_RUN_SERVICE_URL }})
 
           echo "✅ Generated Identity Token for Cloud Run service."
