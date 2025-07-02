@@ -45,7 +45,7 @@ jobs:
             --project ${{ env.PROJECT_ID }} \
             --format="value(status.url)")
           echo "CLOUD_RUN_SERVICE_URL=$SERVICE_URL" >> "$GITHUB_ENV"
-          echo "::set-output name=url::$SERVICE_URL"
+          echo "url=$SERVICE_URL" >> $GITHUB_OUTPUT
 
           if [ -z "$SERVICE_URL" ]; then
             echo "❌ Error: Cloud Run service URL could not be retrieved."
