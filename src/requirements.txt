@@ -1,18 +1,31 @@
+# requirements.txt
+
 Flask==3.0.3
 gunicorn==22.0.0
-gevent==24.2.1
+
+# Google Cloud
 google-cloud-storage==2.16.0
-google-cloud-texttospeech==2.18.0
-google-api-python-client==2.126.0
+google-api-python-client==2.125.0
+google-auth==2.29.0
 google-auth-oauthlib==1.2.0
-google-auth-httplib2==0.2.0
-MoviePy==1.0.3
-Pillow==10.3.0
-google-generativeai==0.6.0
+google-cloud-logging==3.10.0
+
+# AI APIs
+openai==1.30.1
+google-generativeai==0.5.4
+elevenlabs==1.0.1
+
+# NewsAPI
 newsapi-python==0.2.7
-pexels-api==1.0.1
-google-cloud-logging==3.8.0
-requests==2.31.0
-protobuf==4.25.3
-importlib-metadata==8.6.0
-numpy==1.26.4
+
+# Video & Audio
+pexels_api==1.0.6
+moviepy==1.0.3
+imageio==2.34.1
+imageio-ffmpeg==0.4.9
+
+# dotenv for local dev
+python-dotenv==1.0.1
+
+# Utils
+requests==2.32.2
