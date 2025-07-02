@@ -26,18 +26,24 @@ jobs:
         uses: actions/checkout@v4
 
       # --- 🔑 GCP 인증 ---
-      - name: Authenticate to Google Cloud
-        id: auth
+      # ID 토큰을 직접 요청하도록 token_format을 'id_token'으로 변경하고,
+      # audience를 Cloud Run 서비스 URL로 명시적으로 지정합니다.
+      - name: Authenticate to Google Cloud and get ID Token for Cloud Run
+        id: auth_id_token # ID를 변경하여 명확히 합니다.
         uses: google-github-actions/auth@v2
         with:
-          token_format: 'access_token' # Cloud SDK가 사용할 액세스 토큰을 요청
+          # Cloud Run 호출에 필요한 ID 토큰을 직접 요청합니다.
+          token_format: 'id_token' # <--- 이 라인이 변경되었습니다!
           workload_identity_provider: ${{ env.PROVIDER_RESOURCE_NAME }}
           service_account: ${{ env.SERVICE_ACCOUNT_EMAIL }}
+          # Cloud Run 호출을 위한 ID 토큰이므로, audience를 Cloud Run 서비스 URL로 지정합니다.
+          audience: ${{ env.CLOUD_RUN_SERVICE_URL }} # <--- 이 라인이 추가되었습니다!
 
-      - name: Set up Cloud SDK
+      - name: Set up Cloud SDK # gcloud 명령을 사용하지 않지만, 환경 설정 관례상 유지합니다.
         uses: google-github-actions/setup-gcloud@v2
 
       # --- ☁️ Cloud Run 서비스 URL 가져오기 ---
+      # 이 스텝은 이전과 동일하게 유지됩니다.
       - name: Get Cloud Run Service URL
         id: get_url
         run: |
@@ -55,7 +61,8 @@ jobs:
           fi
 
       # --- 🚀 Cloud Run 서비스 트리거 ---
-      - name: Trigger Cloud Run service
+      # google-github-actions/auth 액션에서 직접 얻은 ID 토큰을 사용합니다.
+      - name: Trigger Cloud Run service with ID Token
         run: |
           if [ -z "${{ env.CLOUD_RUN_SERVICE_URL }}" ]; then
             echo "❌ Error: CLOUD_RUN_SERVICE_URL is not set. Cannot trigger service."
@@ -64,14 +71,16 @@ jobs:
 
           echo "🚀 Triggering Cloud Run service at ${{ env.CLOUD_RUN_SERVICE_URL }}"
 
-          # gcloud CLI가 올바른 서비스 계정을 사용하도록 명시적으로 다시 설정
-          gcloud config set account ${{ env.SERVICE_ACCOUNT_EMAIL }} # <--- 이 라인이 다시 추가되었습니다!
+          # Authenticate to Google Cloud and get ID Token for Cloud Run 스텝에서 얻은 ID 토큰 사용
+          # 이전 단계의 ID가 auth_id_token이므로, steps.auth_id_token.outputs.id_token 사용
+          TOKEN="${{ steps.auth_id_token.outputs.id_token }}" # <--- 이 라인이 변경되었습니다!
 
-          # Cloud Run 서비스 호출을 위한 ID 토큰을 생성합니다.
-          # 이 토큰의 audience는 Cloud Run 서비스의 URL이어야 합니다.
-          TOKEN=$(gcloud auth print-identity-token --audiences=${{ env.CLOUD_RUN_SERVICE_URL }})
+          if [ -z "$TOKEN" ]; then
+            echo "❌ Error: ID Token for Cloud Run service could not be retrieved."
+            exit 1
+          fi
 
-          echo "✅ Generated Identity Token for Cloud Run service."
+          echo "✅ Using ID Token to call Cloud Run service."
 
           curl -X POST \
             -H "Authorization: Bearer $TOKEN" \
