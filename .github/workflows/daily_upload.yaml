@@ -9,14 +9,9 @@ on:
 
 env:
   PROJECT_ID: youtube-fully-automated
-  # PROJECT_NUM은 이제 secrets.GCP_PROJECT_NUMBER를 통해 자동으로 설정됩니다.
   GCP_REGION: us-central1
   SERVICE_NAME: youtube-shorts-automation
-  # Workload Identity Pool Provider의 전체 리소스 이름
-  # GCP에 실제 존재하는 제공업체 이름과 정확히 일치해야 합니다.
-  # secrets.GCP_PROJECT_NUMBER를 사용하면 GitHub Secrets에서 가져오므로 안전합니다.
   PROVIDER_RESOURCE_NAME: projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider
-  # GitHub Actions Secret에 SERVICE_ACCOUNT_EMAIL이라는 이름으로 서비스 계정 이메일 주소를 추가해야 합니다.
   SERVICE_ACCOUNT_EMAIL: ${{ secrets.SERVICE_ACCOUNT_EMAIL }}
 
 jobs:
@@ -31,9 +26,6 @@ jobs:
         uses: actions/checkout@v4
 
       # --- 🔑 GCP 인증 ---
-      # google-github-actions/auth 액션은 딱 한 번만 사용해서 GCP에 로그인합니다.
-      # 이 액션이 생성하는 ID 토큰의 audience는 자동으로 PROVIDER_RESOURCE_NAME 값과 일치하게 됩니다.
-      # allowed-audiences에는 GCP Workload Identity Provider의 리소스 이름 (//iam.googleapis.com/...)이 포함되어야 합니다.
       - name: Authenticate to Google Cloud
         id: auth
         uses: google-github-actions/auth@v2
@@ -66,8 +58,6 @@ jobs:
           fi
 
       # --- 🚀 Cloud Run 서비스 트리거 ---
-      # Cloud Run 서비스 호출을 위한 ID 토큰은 gcloud auth print-identity-token으로 직접 생성합니다.
-      # 이때 audience는 호출하려는 Cloud Run 서비스의 URL입니다.
       - name: Trigger Cloud Run service
         run: |
           if [ -z "${{ env.CLOUD_RUN_SERVICE_URL }}" ]; then
@@ -77,11 +67,9 @@ jobs:
 
           echo "🚀 Triggering Cloud Run service at ${{ env.CLOUD_RUN_SERVICE_URL }}"
 
-          # gcloud CLI가 올바른 서비스 계정을 사용하도록 명시적으로 설정
-          gcloud config set account ${{ env.SERVICE_ACCOUNT_EMAIL }} # <--- 이 라인이 추가되었습니다!
+          # gcloud CLI는 이미 서비스 계정으로 인증되어 있으므로, 이 라인은 제거합니다.
+          # gcloud config set account ${{ env.SERVICE_ACCOUNT_EMAIL }} # <--- 이 라인을 삭제합니다!
 
-          # Cloud Run 서비스 호출을 위한 ID 토큰을 생성합니다.
-          # 이 토큰의 audience는 Cloud Run 서비스의 URL이어야 합니다.
           TOKEN=$(gcloud auth print-identity-token --audiences=${{ env.CLOUD_RUN_SERVICE_URL }})
 
           echo "✅ Generated Identity Token for Cloud Run service."
