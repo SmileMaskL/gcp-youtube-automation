@@ -8,7 +8,6 @@ FROM python:3.11-slim-buster
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     # 필요한 경우 다른 시스템 라이브러리 추가
-    # 예를 들어, 이미지 처리 라이브러리 (libsm6, libxext6)
     libsm6 \
     libxext6 \
     && rm -rf /var/lib/apt/lists/*
@@ -28,14 +27,15 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 애플리케이션 코드 복사
 COPY . .
 
-# ⭐ 추가: Pexels 이미지 실패 시 사용할 기본 이미지 복사
-#    이 파일은 src/app.py에서 /app/default_image.jpg 경로로 사용됩니다.
-#    따라서 'src' 폴더 안에 'default_image.jpg' 파일을 넣어주세요.
-COPY src/default_image.jpg /app/default_image.jpg 
+# ⭐ 수정: Pexels 이미지 실패 시 사용할 기본 이미지 복사
+#   이 파일은 src/app.py에서 /app/default_image.jpg 경로로 사용됩니다.
+#   'src' 폴더 자체가 빌드 컨텍스트이므로 'src/' 접두사는 제거합니다.
+COPY default_image.jpg /app/default_image.jpg # <--- 이 라인이 수정되었습니다!
 
 # Cloud Run은 PORT 환경 변수로 포트를 지정하므로, 이 변수를 따르도록 Flask 앱 설정
 ENV PORT 8080
 
 # 컨테이너가 시작될 때 실행할 명령어
 # ⭐️⭐️⭐️ gunicorn을 사용해서 src.app:app을 실행합니다! ⭐️⭐️⭐️
+# 프로젝트 구조에 따라 src.app:app이 올바른 경로인지 확인해주세요. (현재 구조로는 맞습니다)
 CMD exec gunicorn --bind 0.0.0.0:$PORT --workers 1 --timeout 0 --graceful-timeout 30 src.app:app
