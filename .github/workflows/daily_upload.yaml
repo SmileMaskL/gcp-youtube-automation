@@ -56,7 +56,8 @@ jobs:
             --image gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:latest \
             --region ${{ env.GCP_REGION }} \
             --platform managed \
-            --allow-unauthenticated
+            --allow-unauthenticated \
+            --project ${{ env.PROJECT_ID }}
 
       # ☁️ 6) Get Cloud Run Service URL
       - name: Get Cloud Run Service URL
@@ -75,7 +76,7 @@ jobs:
             exit 1
           fi
 
-      # 🔑 7) Get ID Token for Cloud Run
+      # 🔑 7) ID 토큰 발급 (audience = Cloud Run URL)
       - name: Get ID Token for Cloud Run
         id: auth_id_token
         uses: google-github-actions/auth@v2
