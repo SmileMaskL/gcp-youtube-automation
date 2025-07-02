@@ -11,6 +11,7 @@ import shutil # ⭐ 추가: 임시 파일 정리 시 필요 ⭐
 
 # --- Flask 애플리케이션 객체 선언 (⭐Gunicorn 진입점⭐) ---
 app = Flask(__name__)
+
 @app.route('/healthz')
 def health_check():
     return "ok", 200
