@@ -23,7 +23,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # 🔑 1) 먼저 GCP 인증 (access_token) → gcloud CLI 인증
+      # 🔑 1) GCP 인증
       - name: Authenticate to Google Cloud
         id: auth
         uses: google-github-actions/auth@v2
@@ -32,17 +32,12 @@ jobs:
           workload_identity_provider: ${{ env.PROVIDER_RESOURCE_NAME }}
           service_account: ${{ env.SERVICE_ACCOUNT_EMAIL }}
 
-      # ✅ 1-1) Export GOOGLE_APPLICATION_CREDENTIALS (추가 안전장치)
-      - name: Export GOOGLE_APPLICATION_CREDENTIALS
-        run: echo "GOOGLE_APPLICATION_CREDENTIALS=${{ steps.auth.outputs.credentials_file_path }}" >> $GITHUB_ENV
-
-      # ☁️ 2) gcloud CLI 설치 및 credentials_file 전달
+      # ☁️ 2) gcloud CLI 설치
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ env.PROJECT_ID }}
           install_components: 'beta'
-          credentials_file: ${{ steps.auth.outputs.credentials_file_path }}
 
       # ✅ 3) 인증된 계정 확인 (디버깅)
       - name: Verify GCP authentication
