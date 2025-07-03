@@ -28,17 +28,20 @@ RUN if [ ! -f "default_image.jpg" ]; then \
         apt-get autoremove -y; \
     fi
 
-CMD ["gunicorn", "-w", "$MAX_WORKERS", "-b", "0.0.0.0:8080", "app:app"]
+# 이 부분은 제거해도 됩니다. 위에 이미 CMD가 정의되어 있었지만 무시됩니다.
+# CMD ["gunicorn", "-w", "$MAX_WORKERS", "-b", "0.0.0.0:8080", "app:app"]
 
 # 환경 변수 설정
 ENV PORT=8080
 ENV MAX_WORKERS=4
 ENV ENABLE_GCS_BACKUP="false"
 
-# Gunicorn 실행 (프로덕션 최적화 설정)
-CMD ["gunicorn", "app:app", \
-    "--bind", "0.0.0.0:8080", \
-    "--workers", "$MAX_WORKERS", \
-    "--worker-class", "gthread", \
-    "--threads", "2", \
-    "--timeout", "120"]
+# Gunicorn 실행 (프로덕션 최적화 설정) - 이 부분을 아래와 같이 수정하세요!
+# 기존: CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:8080", "--workers", "$MAX_WORKERS", "--worker-class", "gthread", "--threads", "2", "--timeout", "120"]
+# 변경: 쉘 확장 형식을 사용합니다.
+CMD gunicorn app:app \
+    --bind 0.0.0.0:"$PORT" \
+    --workers "$MAX_WORKERS" \
+    --worker-class gthread \
+    --threads 2 \
+    --timeout 120
