@@ -17,7 +17,7 @@ COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy all source code
-COPY . /app/
+COPY . ./
 
 # Set environment variable for port
 ENV PORT=8080
