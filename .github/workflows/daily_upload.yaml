@@ -1,3 +1,5 @@
+# .github/workflows/daily_upload.yaml
+
 name: Daily YouTube Shorts Upload
 
 on:
@@ -24,7 +26,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # 🔑 1) GCP 인증
+      # 🔑 GCP 인증
       - name: Authenticate to Google Cloud
         id: auth
         uses: google-github-actions/auth@v2
@@ -33,22 +35,29 @@ jobs:
           workload_identity_provider: ${{ env.PROVIDER_RESOURCE_NAME }}
           service_account: ${{ env.SERVICE_ACCOUNT_EMAIL }}
 
-      # ☁️ 2) gcloud CLI 설치
+      # ☁️ gcloud CLI 설치
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ env.PROJECT_ID }}
 
-      # ✅ 3) 인증된 계정 확인 (디버깅)
+      # ✅ 인증 확인
       - name: Verify GCP authentication
         run: gcloud auth list
 
-      # 🛠️ 4) Build and Push Docker Image
-      - name: Build and Push Docker Image
+      # 🛠️ Docker build & push
+      - name: Build Docker image
         run: |
-          gcloud builds submit src/ --tag gcr.io/$PROJECT_ID/$IMAGE_NAME --file src/Dockerfile
+          docker build -t gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:latest ./src
 
-      # 🚀 5) Deploy to Cloud Run
+      - name: Configure Docker for GCR
+        run: gcloud auth configure-docker
+
+      - name: Push Docker image to GCR
+        run: |
+          docker push gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:latest
+
+      # 🚀 Deploy to Cloud Run
       - name: Deploy to Cloud Run
         run: |
           gcloud run deploy ${{ env.SERVICE_NAME }} \
@@ -58,7 +67,7 @@ jobs:
             --allow-unauthenticated \
             --project ${{ env.PROJECT_ID }}
 
-      # ☁️ 6) Get Cloud Run Service URL
+      # ☁️ Get Cloud Run Service URL
       - name: Get Cloud Run Service URL
         id: get_url
         run: |
@@ -75,7 +84,7 @@ jobs:
             exit 1
           fi
 
-      # 🔑 7) ID 토큰 발급 (audience = Cloud Run URL)
+      # 🔑 ID 토큰 발급
       - name: Get ID Token for Cloud Run
         id: auth_id_token
         uses: google-github-actions/auth@v2
@@ -85,11 +94,10 @@ jobs:
           workload_identity_provider: ${{ env.PROVIDER_RESOURCE_NAME }}
           service_account: ${{ env.SERVICE_ACCOUNT_EMAIL }}
 
-      # 🚀 8) Trigger Cloud Run service
+      # 🚀 Trigger Cloud Run service
       - name: Trigger Cloud Run service
         run: |
           echo "🚀 Triggering Cloud Run service at ${{ env.CLOUD_RUN_SERVICE_URL }}"
-
           TOKEN="${{ steps.auth_id_token.outputs.id_token }}"
 
           if [ -z "$TOKEN" ]; then
