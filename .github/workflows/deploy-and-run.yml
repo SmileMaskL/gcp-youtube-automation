@@ -24,17 +24,25 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # ✅ GCP 인증 (provider resource name을 audience로)
+      # ✅ GCP 인증 (Workload Identity Federation)
       - name: Authenticate to Google Cloud for gcloud commands
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ env.PROVIDER_RESOURCE_NAME }}
           service_account: github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
-          # audience: "//iam.googleapis.com/${{ env.PROVIDER_RESOURCE_NAME }}" # <--- 이 라인을 삭제합니다!
+          token_format: access_token
 
+      # 🔍 인증 계정 확인 (디버깅용)
+      - name: Confirm GCP Auth Identity
+        run: |
+          gcloud config list account
+          gcloud auth list
+
+      # ✅ Cloud SDK 설정
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
+      # ✅ Cloud Run 배포 (소스에서 직접)
       - name: Deploy to Cloud Run
         run: |
           gcloud run deploy ${{ env.SERVICE_NAME }} \
@@ -43,6 +51,7 @@ jobs:
             --allow-unauthenticated \
             --project ${{ env.PROJECT_ID }}
 
+      # ✅ 배포 URL 출력 (환경 변수에 저장)
       - name: Get Cloud Run Service URL
         id: get_url
         run: |
@@ -52,3 +61,4 @@ jobs:
             --project ${{ env.PROJECT_ID }} \
             --format="value(status.url)")
           echo "CLOUD_RUN_SERVICE_URL=$SERVICE_URL" >> "$GITHUB_ENV"
+          echo "✅ 배포된 서비스 URL: $SERVICE_URL"
