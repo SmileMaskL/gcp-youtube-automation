@@ -30,3 +30,7 @@ python-dotenv==1.0.1
 
 # Utils
 requests==2.32.2
+
+# Etc
+fastapi
+uvicorn[standard]
