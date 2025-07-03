@@ -34,7 +34,8 @@ RUN if [ ! -f "default_image.jpg" ]; then \
 # 환경 변수 설정
 ENV PORT=8080
 ENV MAX_WORKERS=4
-ENV ENABLE_GCS_BACKUP="false" # GCS 백업 기능 사용 여부
+ENV ENABLE_GCS_BACKUP="false" 
+# GCS 백업 기능 사용 여부
 
 # Gunicorn 실행 (프로덕션 최적화 설정)
 # 쉘 형식 (CMD command arg1 arg2...)으로 환경 변수 확장
