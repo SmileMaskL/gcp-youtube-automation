@@ -28,6 +28,8 @@ RUN if [ ! -f "default_image.jpg" ]; then \
         apt-get autoremove -y; \
     fi
 
+CMD ["gunicorn", "-w", "$MAX_WORKERS", "-b", "0.0.0.0:8080", "app:app"]
+
 # 환경 변수 설정
 ENV PORT=8080
 ENV MAX_WORKERS=4
