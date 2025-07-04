@@ -13,13 +13,13 @@ resource "google_cloud_scheduler_job" "five_times_daily_youtube_shorts_upload_jo
 
   http_target {
     http_method = "POST"
-    # Cloud Run 서비스 호출용 URL - Cloud Run REST API invoke endpoint 형태
-    uri = "https://${var.region}-run.googleapis.com/apis/serving.knative.dev/v1/namespaces/${var.project_id}/services/${var.service_name}:invoke"
+    # Cloud Run 서비스 호출용 URL - 실제 서비스 URL로 변경
+    uri = "https://youtube-shorts-automation-94662874801.us-central1.run.app"
 
     oidc_token {
       service_account_email = var.service_account_email
-      # audience는 호출하는 Cloud Run URL과 같아야 함
-      audience = "https://${var.region}-run.googleapis.com/apis/serving.knative.dev/v1/namespaces/${var.project_id}/services/${var.service_name}:invoke"
+      # audience는 호출하는 Cloud Run URL과 같아야 함 - 실제 서비스 URL로 변경
+      audience = "https://youtube-shorts-automation-94662874801.us-central1.run.app"
     }
 
     headers = {
