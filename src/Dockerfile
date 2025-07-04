@@ -12,7 +12,7 @@ RUN apt-get update && \
 WORKDIR /app
 
 # ✅ requirements.txt 복사 및 설치
-COPY requirements.txt .
+COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # ✅ 전체 코드 복사
@@ -27,5 +27,5 @@ RUN if [ ! -f "default_image.jpg" ]; then \
 ENV PORT=8080
 ENV MAX_WORKERS=4
 
-# ✅ gunicorn으로 실행
+# ✅ gunicorn으로 실행 (src.app:app 으로 수정)
 CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:8080", "src.app:app"]
