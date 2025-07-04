@@ -1,42 +1,36 @@
-variable "project_id" {
-  description = "The GCP project ID."
-  type        = string
-}
-
-variable "gcp_region" {
-  description = "The GCP region for Cloud Run."
-  type        = string
-  default     = "us-central1"
-}
-
-variable "cloud_run_service_name" {
-  description = "The name for the Cloud Run service."
-  type        = string
-  default     = "youtube-shorts-automation"
-}
-
-variable "cloud_run_service_account_email" {
-  description = "Email of the service account used by Cloud Run."
-  type        = string
+provider "google" {
+  project = var.project_id
+  region  = var.region
 }
 
 resource "google_cloud_scheduler_job" "five_times_daily_youtube_shorts_upload_job" {
-  project  = var.project_id
-  region   = var.gcp_region
-  name     = "five-times-daily-youtube-shorts-upload"
-  schedule = "0 21,0,3,6,9 * * *" # 하루 5회 실행 (KST 6,9,12,15,18시)
+  name        = var.scheduler_name
+  description = "Run YouTube Shorts upload 5 times daily"
+  schedule    = "0 0,6,12,18,23 * * *"  # KST 기준 0시,6시,12시,18시,23시 실행
+  time_zone   = "Asia/Seoul"
+  project     = var.project_id
+  region      = var.region
 
   http_target {
-    uri = "https://${var.gcp_region}-${var.project_id}.run.app/${var.cloud_run_service_name}"
     http_method = "POST"
+    # Cloud Run 서비스 호출용 URL - Cloud Run REST API invoke endpoint 형태
+    uri = "https://${var.region}-run.googleapis.com/apis/serving.knative.dev/v1/namespaces/${var.project_id}/services/${var.service_name}:invoke"
+
+    oidc_token {
+      service_account_email = var.service_account_email
+      # audience는 호출하는 Cloud Run URL과 같아야 함
+      audience = "https://${var.region}-run.googleapis.com/apis/serving.knative.dev/v1/namespaces/${var.project_id}/services/${var.service_name}:invoke"
+    }
+
     headers = {
       "Content-Type" = "application/json"
     }
-    body = jsonencode({ "action" = "create_and_upload_shorts" })
 
-    oidc_token {
-      service_account_email = var.cloud_run_service_account_email
-      audience = "https://${var.gcp_region}-${var.project_id}.run.app/${var.cloud_run_service_name}"
-    }
+    body = jsonencode({
+      action   = "create_and_upload_shorts",
+      metadata = {
+        source = "scheduler"
+      }
+    })
   }
 }
