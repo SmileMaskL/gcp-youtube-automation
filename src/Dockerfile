@@ -9,7 +9,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # ✅ 작업 디렉토리 설정
-WORKDIR /app
+WORKDIR /app/src
 
 # ✅ requirements.txt 복사 및 설치
 COPY requirements.txt ./
@@ -28,4 +28,4 @@ ENV PORT=8080
 ENV MAX_WORKERS=4
 
 # ✅ gunicorn으로 실행 (src.app:app 으로 수정)
-CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:8080", "src.app:app"]
+CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:8080", "app:app"]
