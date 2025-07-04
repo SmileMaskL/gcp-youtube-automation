@@ -26,11 +26,13 @@ resource "google_cloud_scheduler_job" "five_times_daily_youtube_shorts_upload_jo
       "Content-Type" = "application/json"
     }
 
-    body = jsonencode({
+    # IMPORTANT: body 필드는 Base64 인코딩되어야 합니다.
+    # jsonencode 결과를 base64encode로 다시 인코딩합니다.
+    body = base64encode(jsonencode({
       action   = "create_and_upload_shorts",
       metadata = {
         source = "scheduler"
       }
-    })
+    }))
   }
 }
