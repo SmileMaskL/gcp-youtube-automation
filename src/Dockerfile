@@ -26,6 +26,7 @@ RUN if [ ! -f "default_image.jpg" ]; then \
 # ✅ 환경 변수 설정
 ENV PORT=8080
 ENV MAX_WORKERS=4
+ENV PYTHONPATH=/app
 
 # ✅ gunicorn으로 실행 (src.app:app 으로 수정)
 CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:8080", "app:app"]
