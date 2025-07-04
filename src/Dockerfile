@@ -32,4 +32,4 @@ ENV PYTHONPATH=/app
 # --worker-class gevent 를 명령어에 포함할 경우, gevent를 requirements.txt에 설치해야 함.
 # 아래는 기본 sync worker를 사용하는 안정적인 예시입니다.
 # CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:8080", "src.app:app"]
-CMD ["gunicorn", "--worker-class", "gevent", "-w", "4", "-b", "0.0.0.0:8080", "src.app:app"]
+CMD ["gunicorn", "--worker-class", "gevent", "--workers", "1", "--timeout", "0", "src.app:app"]
