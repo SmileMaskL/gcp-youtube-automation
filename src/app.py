@@ -1,11 +1,10 @@
-# src/app.py
-
 import os
 import logging
 import uuid
 from datetime import datetime
 from flask import Flask, request, jsonify
 from concurrent.futures import ThreadPoolExecutor
+import atexit
 
 # =============================
 # Flask app 선언
@@ -114,6 +113,7 @@ def process_youtube_shorts_upload(metadata, job_id):
     try:
         # ⭐ 실제 비즈니스 로직 호출 위치 ⭐
         # 예: generate_video(metadata), upload_to_youtube(video_path), 등
+        # (여기에 유튜브 쇼츠 생성 및 업로드 관련 코드 구현)
 
         logger.info(f"✅ [{job_id}] 작업 성공적으로 완료됨.")
         job_status[job_id].update({
@@ -132,7 +132,6 @@ def process_youtube_shorts_upload(metadata, job_id):
 # =============================
 # Graceful shutdown
 # =============================
-import atexit
 @atexit.register
 def shutdown_threadpool():
     logger.info("🛑 ThreadPoolExecutor shutting down...")
