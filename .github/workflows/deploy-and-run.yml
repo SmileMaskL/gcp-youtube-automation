@@ -1,4 +1,4 @@
-name: Deploy to Cloud Run and Run Daily Upload
+name: Deploy to Cloud Run with Docker Image
 
 on:
   push:
@@ -8,9 +8,9 @@ on:
 
 env:
   PROJECT_ID: youtube-fully-automated
-  PROJECT_NUM: 94662874801
   GCP_REGION: us-central1
   SERVICE_NAME: youtube-shorts-automation
+  IMAGE_NAME: youtube-shorts-automation
   PROVIDER_RESOURCE_NAME: projects/94662874801/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider
 
 jobs:
@@ -24,34 +24,36 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # ✅ GCP 인증 (Workload Identity Federation)
-      - name: Authenticate to Google Cloud for gcloud commands
+      - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ env.PROVIDER_RESOURCE_NAME }}
           service_account: github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
           token_format: access_token
 
-      # 🔍 인증 계정 확인 (디버깅용)
-      - name: Confirm GCP Auth Identity
-        run: |
-          gcloud config list account
-          gcloud auth list
-
-      # ✅ Cloud SDK 설정
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      # ✅ Cloud Run 배포 (소스에서 직접)
+      - name: Configure Docker for GCR
+        run: gcloud auth configure-docker
+
+      - name: Build Docker image
+        run: |
+          docker build -t gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:latest ./src
+
+      - name: Push Docker image to GCR
+        run: |
+          docker push gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:latest
+
       - name: Deploy to Cloud Run
         run: |
           gcloud run deploy ${{ env.SERVICE_NAME }} \
-            --source ./src \
+            --image gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:latest \
             --region ${{ env.GCP_REGION }} \
+            --platform managed \
             --allow-unauthenticated \
             --project ${{ env.PROJECT_ID }}
 
-      # ✅ 배포 URL 출력 (환경 변수에 저장)
       - name: Get Cloud Run Service URL
         id: get_url
         run: |
@@ -60,5 +62,4 @@ jobs:
             --region ${{ env.GCP_REGION }} \
             --project ${{ env.PROJECT_ID }} \
             --format="value(status.url)")
-          echo "CLOUD_RUN_SERVICE_URL=$SERVICE_URL" >> "$GITHUB_ENV"
           echo "✅ 배포된 서비스 URL: $SERVICE_URL"
