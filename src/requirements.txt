@@ -34,3 +34,7 @@ requests==2.32.2
 # Etc
 fastapi
 uvicorn[standard]
+
+# Asynchronous / Greenlet (for Gunicorn gevent worker)
+gevent==22.10.2
+greenlet==3.0.3  # gevent의 종속성 (gevent==22.10.2와 호환되는 최신 버전)
