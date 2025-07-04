@@ -17,7 +17,8 @@ resource "google_cloud_scheduler_job" "five_times_daily_youtube_shorts_upload_jo
     uri = "https://youtube-shorts-automation-94662874801.us-central1.run.app"
 
     oidc_token {
-      service_account_email = var.service_account_email
+      # service_account_email 변수 대신 서비스 계정 이메일 직접 지정
+      service_account_email = "github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com"
       # audience는 호출하는 Cloud Run URL과 같아야 함 - 실제 서비스 URL로 변경
       audience = "https://youtube-shorts-automation-94662874801.us-central1.run.app"
     }
