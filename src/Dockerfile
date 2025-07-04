@@ -1,4 +1,4 @@
-# src/Dockerfile
+# Dockerfile
 
 FROM python:3.11-slim
 
@@ -7,10 +7,11 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
+# ✅ WORKDIR을 src로 설정
+WORKDIR /app/src
 
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt ../
+RUN pip install --no-cache-dir -r ../requirements.txt
 
 COPY . .
 
@@ -21,4 +22,5 @@ RUN if [ ! -f "default_image.jpg" ]; then \
 ENV PORT=8080
 ENV MAX_WORKERS=4
 
-CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:8080", "src.app:app"]
+# ✅ src 디렉토리 안에 있으므로 app:app으로 실행 가능
+CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:8080", "app:app"]
