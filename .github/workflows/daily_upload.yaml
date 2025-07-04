@@ -4,7 +4,7 @@ name: Daily YouTube Shorts Upload
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # 매일 KST 오전 9시 실행
+    - cron: '0 0 * * *'  # 매일 KST 오전 9시 실행 (UTC 00:00은 KST 09:00입니다)
   workflow_dispatch:
 
 env:
@@ -12,7 +12,8 @@ env:
   GCP_REGION: us-central1
   SERVICE_NAME: youtube-shorts-automation
   IMAGE_NAME: youtube-shorts-automation
-  PROVIDER_RESOURCE_NAME: projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider
+  # PROVIDER_RESOURCE_NAME: secrets.GCP_PROJECT_NUMBER가 아닌 실제 PROJECT_NUM 사용
+  PROVIDER_RESOURCE_NAME: projects/${{ env.PROJECT_ID }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider
   SERVICE_ACCOUNT_EMAIL: ${{ secrets.SERVICE_ACCOUNT_EMAIL }}
 
 jobs:
@@ -45,17 +46,13 @@ jobs:
       - name: Verify GCP authentication
         run: gcloud auth list
 
-      # 🛠️ Docker build & push
-      - name: Build Docker image
+      # 🛠️ Docker build & push (Cloud Build를 사용하여 이미지 빌드 및 GCR 푸시)
+      # gcloud builds submit 명령어가 올바른 인자를 사용하도록 수정
+      - name: Build and Push Docker image to GCR via Cloud Build
         run: |
-          docker build -t gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:latest ./src
-
-      - name: Configure Docker for GCR
-        run: gcloud auth configure-docker
-
-      - name: Push Docker image to GCR
-        run: |
-          docker push gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:latest
+          gcloud builds submit ./src \
+            --tag gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:latest \
+            --project ${{ env.PROJECT_ID }}
 
       # 🚀 Deploy to Cloud Run
       - name: Deploy to Cloud Run
