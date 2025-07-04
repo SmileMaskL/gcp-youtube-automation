@@ -30,4 +30,4 @@ ENV ENABLE_GCS_BACKUP="false"
 
 # 🔥 Gunicorn으로 app.py의 app 객체 실행
 # ⚠️ 여기서 'app:app' 은 app.py 파일 안의 Flask app 이름입니다.
-CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:8080", "app:app"]
+CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:8080", "src.app:app"]
