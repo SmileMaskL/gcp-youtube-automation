@@ -9,7 +9,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # ✅ 작업 디렉토리 설정
-WORKDIR /app/src
+WORKDIR /app
 
 # ✅ requirements.txt 복사 및 설치
 COPY requirements.txt ./
@@ -28,5 +28,7 @@ ENV PORT=8080
 ENV MAX_WORKERS=4
 ENV PYTHONPATH=/app
 
-# ✅ gunicorn으로 실행 (src.app:app 으로 수정)
-CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:8080", "app:app"]
+# ✅ Gunicorn 실행
+# --worker-class gevent 를 명령어에 포함할 경우, gevent를 requirements.txt에 설치해야 함.
+# 아래는 기본 sync worker를 사용하는 안정적인 예시입니다.
+CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:8080", "src.app:app"]
