@@ -42,6 +42,7 @@ jobs:
       - name: Trigger Shorts Upload
         run: |
           # Cloud Run 서비스 이름 변경에 따라 URL도 변경될 것을 예상하고 예시 업데이트 (실제 URL은 배포 후 확인 필요)
-          curl -X POST "https://youtube-shorts-automation-xxxxx.a.run.app" \ # 'shorts-uploader-xxxxx' 대신 'youtube-shorts-automation-xxxxx'와 유사하게 될 것
+          curl -X POST "https://youtube-shorts-automation-94662874801.us-central1.run.app" \ 
+             # 'shorts-uploader-xxxxx' 대신 'youtube-shorts-automation-xxxxx'와 유사하게 될 것
             -H "Content-Type: application/json" \
             -d '{"action": "create_and_upload_shorts", "metadata": {"topic": "긍정 명언"}}'
