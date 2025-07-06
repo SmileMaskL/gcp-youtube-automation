@@ -1,108 +1,82 @@
-# .github/workflows/daily_upload.yaml (이전 내용을 모두 지우고 아래 내용으로 교체하세요!)
+# .github/workflows/daily_upload.yaml
 
 name: Daily YouTube Shorts Upload
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # 매일 UTC 0시 (한국시간 9시)에 자동 실행
-  workflow_dispatch: # 수동으로 워크플로우를 실행할 수 있게 해줍니다.
+    - cron: '0 0 * * *' # 매일 한국시간 9시에 실행 (UTC 0시)
+  workflow_dispatch:
 
 env:
   PROJECT_ID: youtube-fully-automated
   GCP_REGION: us-central1
   SERVICE_NAME: youtube-shorts-automation
   IMAGE_NAME: youtube-shorts-automation
-  # ✅ 중요! 이 부분이 GCP에서 실제로 생성한 Workload Identity Provider의 이름과
-  # 정확히 일치해야 합니다. 에러 메시지에 'github-actions-provider-01'이 보였으므로,
-  # 이 예시에서는 그렇게 수정했습니다. 당신의 GCP 설정을 다시 확인하고 정확히 맞춰주세요!
-  PROVIDER_RESOURCE_NAME: projects/youtube-fully-automated/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider-01
-  SERVICE_ACCOUNT_EMAIL: ${{ secrets.SERVICE_ACCOUNT_EMAIL }} # GitHub Secrets에 저장된 서비스 계정 이메일
+  PROVIDER_RESOURCE_NAME: projects/youtube-fully-automated/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider
+  SERVICE_ACCOUNT_EMAIL: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
 
 jobs:
   deploy_and_trigger:
-    runs-on: ubuntu-latest # 이 워크플로우를 실행할 가상 머신 환경
+    runs-on: ubuntu-latest
     permissions:
-      contents: 'read' # 저장소 내용 읽기 권한
-      id-token: 'write' # OIDC 토큰(인증 토큰)을 생성할 수 있는 권한 (Workload Identity Federation에 필수!)
+      contents: 'read'
+      id-token: 'write'
 
     steps:
-      - name: Checkout Repository # GitHub 저장소의 코드를 가져옵니다.
-        uses: actions/checkout@v4
+    - name: Checkout Repository
+      uses: actions/checkout@v4
 
-      - name: Authenticate to Google Cloud (Workload Identity Federation) # GCP에 인증합니다.
-        id: auth
-        uses: google-github-actions/auth@v2
-        with:
-          token_format: 'access_token' # 액세스 토큰 형식으로 인증합니다.
-          # ✅ 중요! 이 값은 GCP Workload Identity Provider의 리소스 이름과 정확히 일치해야 합니다.
-          workload_identity_provider: ${{ env.PROVIDER_RESOURCE_NAME }}
-          service_account: ${{ env.SERVICE_ACCOUNT_EMAIL }} # 인증에 사용할 GCP 서비스 계정 이메일
+    - name: Authenticate to Google Cloud (Workload Identity Federation)
+      id: auth
+      uses: google-github-actions/auth@v2
+      with:
+        token_format: 'access_token'
+        workload_identity_provider: ${{ env.PROVIDER_RESOURCE_NAME }}
+        service_account: ${{ env.SERVICE_ACCOUNT_EMAIL }}
 
-      - name: Set up Cloud SDK # GCP 명령어를 사용할 수 있도록 환경을 설정합니다.
-        uses: google-github-actions/setup-gcloud@v2
-        with:
-          project_id: ${{ env.PROJECT_ID }} # GCP 프로젝트 ID
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
 
-      - name: Verify GCP authentication # GCP 인증이 잘 되었는지 확인합니다.
-        run: gcloud auth list
+    - name: Build Docker image
+      run: docker build -t gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:latest ./src
 
-      - name: Build Docker image # Docker 이미지를 만듭니다.
-        # ✅ Dockerfile이 'src' 폴더 안에 있으므로, 빌드 컨텍스트를 './src'로 지정합니다.
-        # Dockerfile 안에서는 'src/'를 붙이지 않고 상대 경로를 사용해야 합니다.
-        run: docker build -t gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:latest ./src
+    - name: Configure Docker for GCR
+      run: gcloud auth configure-docker
 
-      - name: Configure Docker for GCR # Docker가 GCP Container Registry에 이미지를 올릴 수 있도록 설정합니다.
-        run: gcloud auth configure-docker
+    - name: Push Docker image to GCR
+      run: docker push gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:latest
 
-      - name: Push Docker image to GCR # 만든 Docker 이미지를 GCP Container Registry에 올립니다.
-        run: docker push gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:latest
+    - name: Deploy to Cloud Run
+      run: |
+        gcloud run deploy ${{ env.SERVICE_NAME }} \
+          --image gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:latest \
+          --region ${{ env.GCP_REGION }} \
+          --platform managed \
+          --allow-unauthenticated
 
-      - name: Deploy to Cloud Run # Docker 이미지를 Cloud Run 서비스로 배포합니다.
-        run: |
-          gcloud run deploy ${{ env.SERVICE_NAME }} \
-            --image gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:latest \
-            --region ${{ env.GCP_REGION }} \
-            --platform managed \
-            --allow-unauthenticated \
-            --project ${{ env.PROJECT_ID }} \
-            --port 8080 # ✅ 중요! Dockerfile에서 EXPOSE 8080을 했으므로, Cloud Run도 8080 포트로 설정합니다.
+    - name: Get Cloud Run Service URL
+      id: get_url
+      run: |
+        SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
+          --platform managed \
+          --region ${{ env.GCP_REGION }} \
+          --format="value(status.url)")
+        echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_ENV
+        echo "url=$SERVICE_URL" >> $GITHUB_OUTPUT
 
-      - name: Get Cloud Run Service URL # 배포된 Cloud Run 서비스의 URL 주소를 가져옵니다.
-        id: get_url
-        run: |
-          SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
-            --platform managed \
-            --region ${{ env.GCP_REGION }} \
-            --project ${{ env.PROJECT_ID }} \
-            --format="value(status.url)")
-          echo "CLOUD_RUN_SERVICE_URL=$SERVICE_URL" >> "$GITHUB_ENV" # 환경 변수에 저장
-          echo "url=$SERVICE_URL" >> "$GITHUB_OUTPUT" # 다음 스텝에서 사용할 수 있도록 출력
-          if [ -z "$SERVICE_URL" ]; then
-            echo "❌ Cloud Run URL을 가져오지 못했습니다."
-            exit 1
-          fi
+    - name: Get ID Token for Cloud Run
+      id: id_token
+      uses: google-github-actions/auth@v2
+      with:
+        token_format: 'id_token'
+        id_token_audience: ${{ steps.get_url.outputs.url }}
+        workload_identity_provider: ${{ env.PROVIDER_RESOURCE_NAME }}
+        service_account: ${{ env.SERVICE_ACCOUNT_EMAIL }}
 
-      - name: Get ID Token for Cloud Run # Cloud Run 서비스를 호출하기 위한 인증 토큰을 가져옵니다.
-        id: auth_id_token
-        uses: google-github-actions/auth@v2
-        with:
-          token_format: 'id_token' # ID 토큰 형식으로 인증합니다.
-          # ✅ 중요! Cloud Run 호출 시에는 Cloud Run 서비스의 URL을 audience로 지정합니다.
-          id_token_audience: ${{ steps.get_url.outputs.url }}
-          # 이 토큰을 발급받는 데 필요한 Workload Identity Provider 정보입니다.
-          workload_identity_provider: ${{ env.PROVIDER_RESOURCE_NAME }}
-          service_account: ${{ env.SERVICE_ACCOUNT_EMAIL }}
-
-      - name: Trigger Cloud Run service # 배포된 Cloud Run 서비스를 호출하여 유튜브 쇼츠 생성/업로드 작업을 시작합니다.
-        run: |
-          TOKEN="${{ steps.auth_id_token.outputs.id_token }}"
-          if [ -z "$TOKEN" ]; then
-            echo "❌ ID Token을 가져오지 못했습니다."
-            exit 1
-          fi
-
-          curl -X POST \
-            -H "Authorization: Bearer $TOKEN" \
-            -H "Content-Type: application/json" \
-            -d '{"action": "create_and_upload_shorts"}' \
-            "${{ env.CLOUD_RUN_SERVICE_URL }}"
+    - name: Trigger Cloud Run Service
+      run: |
+        curl -X POST \
+          -H "Authorization: Bearer ${{ steps.id_token.outputs.id_token }}" \
+          -H "Content-Type: application/json" \
+          -d '{"action": "create_and_upload_shorts"}' \
+          "${{ env.SERVICE_URL }}"
