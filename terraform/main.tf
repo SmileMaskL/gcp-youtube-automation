@@ -1,16 +1,12 @@
-provider "google" {
-  project = "youtube-fully-automated"
-  region  = "us-central1" # Cloud Run 서비스도 us-central1에 배포되도록 일치시킵니다.
-}
+# terraform/main.tf
 
-# ✅ 변수 정의: 프로젝트 ID를 유연하게 사용하기 위해 추가
-variable "project_id" {
-  description = "The GCP project ID."
-  type        = string
-  default     = "youtube-fully-automated"
+provider "google" {
+  project = var.project_id # 변수를 사용하여 프로젝트 ID를 지정합니다.
+  region  = "us-central1"  # Cloud Run 서비스도 us-central1에 배포되도록 일치시킵니다.
 }
 
 # ✅ Cloud Run 서비스 계정 이메일 변수 정의 (코드 가독성 및 유지보수성 향상)
+# project_id 변수는 이 파일에서 제거했습니다. 이는 'variables.tf' 파일에 선언되어야 합니다.
 variable "cloud_run_service_account_email" {
   description = "The email of the service account used by Cloud Run."
   type        = string
