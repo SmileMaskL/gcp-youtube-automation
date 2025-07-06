@@ -30,6 +30,7 @@ jobs:
           workload_identity_provider: ${{ env.PROVIDER_RESOURCE_NAME }}
           service_account: github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
           token_format: access_token
+          audience: 'https://github.com/'
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
