@@ -1,22 +1,18 @@
-# .github/workflows/cleanup.yaml (이전 내용을 모두 지우고 아래 내용으로 교체하세요!)
-
-name: Cleanup Old Workflow Runs # 워크플로우의 이름
+name: Cleanup Old Workflow Runs
 
 on:
-  workflow_dispatch: # 수동 실행을 위한 트리거
+  workflow_dispatch:
   schedule:
-    - cron: '0 0 * * 0' # 매주 일요일 UTC 00:00 (한국 시간 오전 9시)에 자동 실행
+    - cron: '0 0 * * 0' # 매주 일요일 UTC 00:00
 
 jobs:
   delete-old-runs:
     runs-on: ubuntu-latest
     permissions:
-      actions: write # 이 권한이 있어야 워크플로우 실행 기록을 삭제할 수 있어요!
+      actions: write
     steps:
       - name: Delete old workflow runs
-        # ✅ 중요! 액션 이름을 'delete-workflow-runs'로 변경하고, 버전을 '@v3'로 지정합니다.
-        # 'Unable to resolve action' 에러 해결!
-        uses: peter-evans/delete-workflow-runs@v3 
+        uses: peter-evans/delete-workflow-runs@v3
         with:
-          keep_minimum_runs: 5       # 최소 5개의 최신 실행 기록을 유지
-          days_old: 7                # 7일이 지난 실행 기록을 삭제
+          keep_minimum_runs: 5
+          days_old: 7
