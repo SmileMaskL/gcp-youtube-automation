@@ -1,10 +1,12 @@
-Flask==2.3.3
+# src/requirements.txt (수정된 버전)
+
+Flask==3.0.0            # Flask 버전을 3.0.0으로 올립니다. (flask-pymongo 충돌 해결)
 gunicorn==22.0.0
 
 # Google Cloud
 google-cloud-storage==2.16.0
 google-api-python-client==2.126.0
-protobuf==4.25.3
+protobuf>=5.29.3        # protobuf 버전을 5.29.3 이상으로 올립니다. (tink 충돌 해결)
 google-auth==2.29.0
 google-auth-oauthlib==1.2.0
 google-cloud-logging
