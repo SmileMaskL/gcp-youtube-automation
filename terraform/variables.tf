@@ -1,6 +1,7 @@
 variable "project_id" {
   description = "GCP Project ID"
   type        = string
+  default     = "youtube-fully-automated"
 }
 
 variable "region" {
