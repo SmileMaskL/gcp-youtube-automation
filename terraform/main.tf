@@ -1,8 +1,6 @@
-# main.tf
-
 provider "google" {
   project = "youtube-fully-automated"
-  region  = "asia-northeast3"
+  region  = "us-central1"
 }
 
 # ✅ Pub/Sub topic 생성
