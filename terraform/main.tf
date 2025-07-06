@@ -1,39 +1,44 @@
+# main.tf
+
 provider "google" {
-  project = var.project_id
-  region  = var.region
+  project = "your-project-id"
+  region  = "asia-northeast3"
 }
 
-resource "google_cloud_scheduler_job" "five_times_daily_youtube_shorts_upload_job" {
-  name        = var.scheduler_name
-  description = "Run YouTube Shorts upload 5 times daily"
-  schedule    = "0 0,6,12,18,23 * * *"  # KST 기준 0시,6시,12시,18시,23시 실행
-  time_zone   = "Asia/Seoul"
-  project     = var.project_id
-  region      = var.region
+# ✅ Pub/Sub topic 생성
+resource "google_pubsub_topic" "shorts_trigger" {
+  name = "shorts-trigger"
+}
 
-  http_target {
-    http_method = "POST"
-    # Cloud Run 서비스 호출용 URL - 실제 서비스 URL로 변경
-    uri = "https://youtube-shorts-automation-94662874801.us-central1.run.app"
+# ✅ Cloud Scheduler job 생성 (매일 오전 9시 실행 예시)
+resource "google_cloud_scheduler_job" "daily_shorts_trigger" {
+  name             = "daily-shorts-trigger"
+  description      = "매일 유튜브 쇼츠 자동 업로드 트리거"
+  schedule         = "0 9 * * *" # 서울 오전 9시 → UTC 0시
+  time_zone        = "Asia/Seoul"
 
+  pubsub_target {
+    topic_name = google_pubsub_topic.shorts_trigger.id
+    data       = base64encode("{\"action\":\"create_and_upload_shorts\", \"metadata\":{\"topic\":\"긍정 명언\"}}")
+  }
+}
+
+# ✅ Cloud Run 서비스에 Pub/Sub subscriber 역할 부여
+resource "google_project_iam_member" "cloudrun_pubsub_subscriber" {
+  project = "your-project-id"
+  role    = "roles/pubsub.subscriber"
+  member  = "serviceAccount:your-cloud-run-service-account@your-project-id.iam.gserviceaccount.com"
+}
+
+# ✅ Pub/Sub subscription 생성 → Cloud Run Push endpoint에 전달
+resource "google_pubsub_subscription" "shorts_trigger_subscription" {
+  name  = "shorts-trigger-subscription"
+  topic = google_pubsub_topic.shorts_trigger.id
+
+  push_config {
+    push_endpoint = "https://your-cloud-run-url/"
     oidc_token {
-      # service_account_email 변수 대신 서비스 계정 이메일 직접 지정
-      service_account_email = "github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com"
-      # audience는 호출하는 Cloud Run URL과 같아야 함 - 실제 서비스 URL로 변경
-      audience = "https://youtube-shorts-automation-94662874801.us-central1.run.app"
+      service_account_email = "your-cloud-run-service-account@your-project-id.iam.gserviceaccount.com"
     }
-
-    headers = {
-      "Content-Type" = "application/json"
-    }
-
-    # IMPORTANT: body 필드는 Base64 인코딩되어야 합니다.
-    # jsonencode 결과를 base64encode로 다시 인코딩합니다.
-    body = base64encode(jsonencode({
-      action   = "create_and_upload_shorts",
-      metadata = {
-        source = "scheduler"
-      }
-    }))
   }
 }
