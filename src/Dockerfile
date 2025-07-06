@@ -6,6 +6,7 @@ RUN apt-get update && \
         ffmpeg \
         libimage-exiftool-perl \
         wget && \
+        build-essential && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -13,6 +14,11 @@ WORKDIR /app
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+# 빌드 도구는 런타임에 필요 없으므로 제거 (선택 사항이지만 이미지 크기 최적화에 도움)
+RUN apt-get purge -y build-essential && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 COPY . .
 
