@@ -29,18 +29,19 @@ jobs:
 
       - name: Build and push Docker image
         run: |
-          gcloud builds submit --tag gcr.io/youtube-fully-automated/shorts-uploader
-
+          # Terraform과 동일하게 'youtube-shorts-automation'으로 이미지 태그 변경
+          gcloud builds submit --tag gcr.io/youtube-fully-automated/youtube-shorts-automation
       - name: Deploy to Cloud Run
         run: |
-          gcloud run deploy shorts-uploader \
-            --image gcr.io/youtube-fully-automated/shorts-uploader \
+          # Terraform과 동일하게 Cloud Run 서비스 이름 'youtube-shorts-automation'으로 변경
+          gcloud run deploy youtube-shorts-automation \
+            --image gcr.io/youtube-fully-automated/youtube-shorts-automation \ # 이미지 이름도 일관되게 변경
             --platform managed \
             --region us-central1 \
             --allow-unauthenticated
-
       - name: Trigger Shorts Upload
         run: |
-          curl -X POST "https://shorts-uploader-xxxxx.a.run.app" \
+          # Cloud Run 서비스 이름 변경에 따라 URL도 변경될 것을 예상하고 예시 업데이트 (실제 URL은 배포 후 확인 필요)
+          curl -X POST "https://youtube-shorts-automation-xxxxx.a.run.app" \ # 'shorts-uploader-xxxxx' 대신 'youtube-shorts-automation-xxxxx'와 유사하게 될 것
             -H "Content-Type: application/json" \
             -d '{"action": "create_and_upload_shorts", "metadata": {"topic": "긍정 명언"}}'
