@@ -1,5 +1,3 @@
-# src/requirements.txt
-
 Flask==2.3.3
 gunicorn==22.0.0
 
@@ -24,6 +22,7 @@ pexels_api==1.0.1
 moviepy==1.0.3
 imageio==2.34.1
 imageio-ffmpeg==0.4.9
+ffmpeg-python==0.2.0
 
 # dotenv for local dev
 python-dotenv==1.0.1
@@ -31,11 +30,6 @@ python-dotenv==1.0.1
 # Utils
 requests==2.32.2
 
-# Etc
-fastapi
-uvicorn[standard]
-ffmpeg-python====0.2.0
-
 # Asynchronous / Greenlet (for Gunicorn gevent worker)
 gevent==23.9.1
-greenlet==3.0.3  # gevent의 종속성 (gevent==22.10.2와 호환되는 최신 버전)
+greenlet==3.0.3
