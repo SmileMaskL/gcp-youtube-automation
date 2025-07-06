@@ -39,6 +39,7 @@ jobs:
           # ✅ 중요! 이 값은 GCP Workload Identity Provider의 리소스 이름과 정확히 일치해야 합니다.
           workload_identity_provider: ${{ env.PROVIDER_RESOURCE_NAME }}
           service_account: ${{ env.SERVICE_ACCOUNT_EMAIL }} # 인증에 사용할 GCP 서비스 계정 이메일
+          audience: 'https://github.com/'
 
       - name: Set up Cloud SDK # GCP 명령어를 사용할 수 있도록 환경을 설정합니다.
         uses: google-github-actions/setup-gcloud@v2
