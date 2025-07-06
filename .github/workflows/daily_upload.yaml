@@ -1,17 +1,20 @@
+# .github/workflows/daily_upload.yaml (전체 코드)
+
 name: Daily YouTube Shorts Upload
 
 on:
   schedule:
     - cron: '0 0 * * *'  # 매일 UTC 0시 (한국시간 9시)
-  workflow_dispatch:
+  workflow_dispatch: # 수동 실행 트리거
 
 env:
   PROJECT_ID: youtube-fully-automated
   GCP_REGION: us-central1
   SERVICE_NAME: youtube-shorts-automation
   IMAGE_NAME: youtube-shorts-automation
-  # PROVIDER_RESOURCE_NAME을 env 내부에서 다른 env 변수를 참조할 때 정확한 형식으로 수정합니다.
-  # env 변수는 이미 정의되어 있으므로 직접 사용 가능합니다.
+  # ✅ Workload Identity Provider의 리소스 이름.
+  # 이 부분은 GCP에서 실제로 생성한 워크로드 아이덴티티 제공업체의 이름과 정확히 일치해야 합니다.
+  # 만약 GCP에서 'github-actions-provider-01'로 만들었다면, 아래도 그렇게 바꿔야 합니다.
   PROVIDER_RESOURCE_NAME: projects/youtube-fully-automated/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider
   SERVICE_ACCOUNT_EMAIL: ${{ secrets.SERVICE_ACCOUNT_EMAIL }}
 
@@ -20,19 +23,19 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: 'read'
-      id-token: 'write'
+      id-token: 'write' # OIDC 토큰 생성을 위해 필요
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Authenticate to Google Cloud
+      - name: Authenticate to Google Cloud (Workload Identity Federation)
         id: auth
         uses: google-github-actions/auth@v2
         with:
           token_format: 'access_token'
-          # Provider 인증에는 provider resource name을 audience로 지정합니다.
-          # workload_identity_provider는 액션의 인자로 provider resource name을 직접 받습니다.
+          # ✅ Provider 인증에는 provider resource name을 audience로 지정합니다.
+          # 이 값은 위에서 정의한 env.PROVIDER_RESOURCE_NAME과 동일해야 합니다.
           workload_identity_provider: ${{ env.PROVIDER_RESOURCE_NAME }}
           service_account: ${{ env.SERVICE_ACCOUNT_EMAIL }}
 
@@ -45,6 +48,7 @@ jobs:
         run: gcloud auth list
 
       - name: Build Docker image
+        # ✅ Dockerfile이 src 디렉토리 안에 있으므로, 빌드 컨텍스트를 src로 지정합니다.
         run: docker build -t gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:latest ./src
 
       - name: Configure Docker for GCR
@@ -60,7 +64,8 @@ jobs:
             --region ${{ env.GCP_REGION }} \
             --platform managed \
             --allow-unauthenticated \
-            --project ${{ env.PROJECT_ID }}
+            --project ${{ env.PROJECT_ID }} \
+            --port 8080 # ✅ Dockerfile에서 EXPOSE 8080을 했으므로, Cloud Run도 8080 포트로 설정
 
       - name: Get Cloud Run Service URL
         id: get_url
@@ -71,7 +76,7 @@ jobs:
             --project ${{ env.PROJECT_ID }} \
             --format="value(status.url)")
           echo "CLOUD_RUN_SERVICE_URL=$SERVICE_URL" >> "$GITHUB_ENV"
-          echo "url=$SERVICE_URL" >> "$GITHUB_OUTPUT" # GITHUB_OUTPUT은 ">" 대신 ">>"로 변경
+          echo "url=$SERVICE_URL" >> "$GITHUB_OUTPUT" # GITHUB_OUTPUT은 ">>"로 변경하여 추가
           if [ -z "$SERVICE_URL" ]; then
             echo "❌ Cloud Run URL을 가져오지 못했습니다."
             exit 1
@@ -82,9 +87,9 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           token_format: 'id_token'
-          # Cloud Run 호출에는 Cloud Run URL을 audience로 지정합니다.
+          # ✅ Cloud Run 호출에는 Cloud Run URL을 audience로 지정합니다.
           id_token_audience: ${{ steps.get_url.outputs.url }}
-          # Workload Identity Provider 정보는 이 토큰을 발급받는 데 필요합니다.
+          # 이 토큰을 발급받는 데 필요한 Workload Identity Provider 정보입니다.
           workload_identity_provider: ${{ env.PROVIDER_RESOURCE_NAME }}
           service_account: ${{ env.SERVICE_ACCOUNT_EMAIL }}
 
@@ -96,6 +101,7 @@ jobs:
             exit 1
           fi
 
+          # Cloud Run 서비스 호출
           curl -X POST \
             -H "Authorization: Bearer $TOKEN" \
             -H "Content-Type: application/json" \
