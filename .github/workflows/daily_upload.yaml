@@ -36,7 +36,7 @@ jobs:
           gcloud run deploy shorts-uploader \
             --image gcr.io/youtube-fully-automated/shorts-uploader \
             --platform managed \
-            --region asia-northeast3 \
+            --region us-central1 \
             --allow-unauthenticated
 
       - name: Trigger Shorts Upload
