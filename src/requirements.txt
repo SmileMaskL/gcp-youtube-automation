@@ -1,11 +1,11 @@
 # src/requirements.txt
 
-Flask==3.0.3
+Flask==2.3.3
 gunicorn==22.0.0
 
 # Google Cloud
 google-cloud-storage==2.16.0
-google-api-python-client==2.125.0
+google-api-python-client==2.126.0
 protobuf==5.29.3
 google-auth==2.29.0
 google-auth-oauthlib==1.2.0
@@ -13,7 +13,7 @@ google-cloud-logging
 
 # AI APIs
 openai==1.30.1
-google-generativeai
+google-generativeai==0.4.0
 elevenlabs==1.0.1
 
 # NewsAPI
@@ -34,7 +34,8 @@ requests==2.32.2
 # Etc
 fastapi
 uvicorn[standard]
+ffmpeg-python====0.2.0
 
 # Asynchronous / Greenlet (for Gunicorn gevent worker)
-gevent==22.10.2
+gevent==23.9.1
 greenlet==3.0.3  # gevent의 종속성 (gevent==22.10.2와 호환되는 최신 버전)
