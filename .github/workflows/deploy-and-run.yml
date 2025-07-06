@@ -1,3 +1,5 @@
+# .github/workflows/deploy-and-run.yml (이전 내용을 모두 지우고 아래 내용으로 교체하세요!)
+
 name: Deploy to Cloud Run with Docker Image
 
 on:
@@ -18,19 +20,22 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: 'read'
-      id-token: 'write'
+      id-token: 'write' # 이 권한은 Workload Identity Federation을 사용하지 않아도 필요할 수 있습니다.
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Authenticate to Google Cloud
+      - name: Generate Temporary Service Account Key # ✅ 새로 추가된 부분: 서비스 계정 키 파일 생성
+        id: generate_key
+        run: |
+          echo "${{ secrets.GCP_SA_KEY }}" > ./gcp-sa-key.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=./gcp-sa-key.json" >> "$GITHUB_ENV"
+          
+      - name: Authenticate to Google Cloud # ✅ 변경된 부분: Workload Identity Federation 대신 서비스 계정 키로 인증
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ env.PROVIDER_RESOURCE_NAME }}
-          service_account: github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
-          token_format: access_token
-          audience: 'https://github.com/'
+          credentials_json: ${{ secrets.GCP_SA_KEY }} # 직접 키 파일 내용 사용
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
@@ -39,12 +44,10 @@ jobs:
         run: gcloud auth configure-docker
 
       - name: Build Docker image
-        run: |
-          docker build -t gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:latest ./src
+        run: docker build -t gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:latest ./src
 
       - name: Push Docker image to GCR
-        run: |
-          docker push gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:latest
+        run: docker push gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:latest
 
       - name: Deploy to Cloud Run
         run: |
@@ -64,3 +67,7 @@ jobs:
             --project ${{ env.PROJECT_ID }} \
             --format="value(status.url)")
           echo "✅ 배포된 서비스 URL: $SERVICE_URL"
+          
+      - name: Cleanup Service Account Key # ✅ 새로 추가된 부분: 임시 키 파일 삭제 (보안 강화)
+        if: always()
+        run: rm -f ./gcp-sa-key.json
