@@ -1,7 +1,7 @@
 # main.tf
 
 provider "google" {
-  project = "your-project-id"
+  project = "youtube-fully-automated"
   region  = "asia-northeast3"
 }
 
@@ -25,9 +25,9 @@ resource "google_cloud_scheduler_job" "daily_shorts_trigger" {
 
 # ✅ Cloud Run 서비스에 Pub/Sub subscriber 역할 부여
 resource "google_project_iam_member" "cloudrun_pubsub_subscriber" {
-  project = "your-project-id"
+  project = "youtube-fully-automated"
   role    = "roles/pubsub.subscriber"
-  member  = "serviceAccount:your-cloud-run-service-account@your-project-id.iam.gserviceaccount.com"
+  member  = "serviceAccount:github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com"
 }
 
 # ✅ Pub/Sub subscription 생성 → Cloud Run Push endpoint에 전달
@@ -36,9 +36,9 @@ resource "google_pubsub_subscription" "shorts_trigger_subscription" {
   topic = google_pubsub_topic.shorts_trigger.id
 
   push_config {
-    push_endpoint = "https://your-cloud-run-url/"
+    push_endpoint = "https://youtube-shorts-automation-94662874801.us-central1.run.app"
     oidc_token {
-      service_account_email = "your-cloud-run-service-account@your-project-id.iam.gserviceaccount.com"
+      service_account_email = "github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com"
     }
   }
 }
