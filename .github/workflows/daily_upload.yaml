@@ -10,7 +10,9 @@ env:
   GCP_REGION: us-central1
   SERVICE_NAME: youtube-shorts-automation
   IMAGE_NAME: youtube-shorts-automation
-  PROVIDER_RESOURCE_NAME: projects/${{ env.PROJECT_ID }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider
+  # PROVIDER_RESOURCE_NAME을 env 내부에서 다른 env 변수를 참조할 때 정확한 형식으로 수정합니다.
+  # env 변수는 이미 정의되어 있으므로 직접 사용 가능합니다.
+  PROVIDER_RESOURCE_NAME: projects/youtube-fully-automated/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider
   SERVICE_ACCOUNT_EMAIL: ${{ secrets.SERVICE_ACCOUNT_EMAIL }}
 
 jobs:
@@ -29,6 +31,8 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           token_format: 'access_token'
+          # Provider 인증에는 provider resource name을 audience로 지정합니다.
+          # workload_identity_provider는 액션의 인자로 provider resource name을 직접 받습니다.
           workload_identity_provider: ${{ env.PROVIDER_RESOURCE_NAME }}
           service_account: ${{ env.SERVICE_ACCOUNT_EMAIL }}
 
@@ -67,7 +71,7 @@ jobs:
             --project ${{ env.PROJECT_ID }} \
             --format="value(status.url)")
           echo "CLOUD_RUN_SERVICE_URL=$SERVICE_URL" >> "$GITHUB_ENV"
-          echo "url=$SERVICE_URL" >> $GITHUB_OUTPUT
+          echo "url=$SERVICE_URL" >> "$GITHUB_OUTPUT" # GITHUB_OUTPUT은 ">" 대신 ">>"로 변경
           if [ -z "$SERVICE_URL" ]; then
             echo "❌ Cloud Run URL을 가져오지 못했습니다."
             exit 1
@@ -78,7 +82,9 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           token_format: 'id_token'
+          # Cloud Run 호출에는 Cloud Run URL을 audience로 지정합니다.
           id_token_audience: ${{ steps.get_url.outputs.url }}
+          # Workload Identity Provider 정보는 이 토큰을 발급받는 데 필요합니다.
           workload_identity_provider: ${{ env.PROVIDER_RESOURCE_NAME }}
           service_account: ${{ env.SERVICE_ACCOUNT_EMAIL }}
 
