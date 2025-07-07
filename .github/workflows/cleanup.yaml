@@ -12,7 +12,7 @@ jobs:
       actions: write # 이 워크플로가 워크플로 실행 기록을 삭제할 수 있도록 'actions: write' 권한 부여 (필수)
     steps:
       - name: Delete old workflow runs # 오래된 워크플로 실행 기록 삭제 단계
-        uses: peter-evans/delete-workflow-runs@v3 # peter-evans/delete-workflow-runs 액션의 v3 버전 사용
+        uses: peter-evans/delete-workflow-runs@v2 # peter-evans/delete-workflow-runs 액션의 v3 버전 사용
         with:
           repository: ${{ github.repository }} # 현재 GitHub 저장소를 대상으로 지정
           token: ${{ secrets.GITHUB_TOKEN }} # GitHub Actions에서 자동으로 제공하는 기본 토큰 사용
