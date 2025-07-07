@@ -1,21 +1,25 @@
 # src/requirements.txt (수정된 버전)
 
-Flask==3.0.0
+# Web Framework
+fastapi==0.111.0
+uvicorn==0.30.1 # FastAPI와 함께 사용되는 ASGI 서버
 gunicorn==22.0.0
+
+# Asynchronous / Greenlet (for Gunicorn gevent worker)
+gevent==23.9.1
+greenlet==3.0.3
 
 # Google Cloud
 google-cloud-storage==2.16.0
 google-api-python-client==2.126.0
-# protobuf 버전을 4점대 최신 버전으로 지정하여 충돌을 피합니다.
-protobuf==4.25.3 # ✅ 여기를 다시 4.25.3으로 고정합니다. (이전 변경에서 5.x.x로 올렸던 것을 되돌림)
+protobuf==4.25.3 # protobuf 버전을 4점대 최신 버전으로 고정하여 충돌을 피합니다.
 google-auth==2.29.0
 google-auth-oauthlib==1.2.0
-google-cloud-logging
+google-cloud-logging==3.8.0 # 명시적 버전 추가
 
 # AI APIs
 openai==1.30.1
-# google-ai-generativelanguage==0.4.0 # ✅ 이 줄은 삭제하거나 주석 처리합니다.
-google-generativeai==0.4.0 # 이 라이브러리는 유지합니다.
+google-generativeai==0.4.0
 elevenlabs==1.0.1
 
 # NewsAPI
@@ -33,7 +37,3 @@ python-dotenv==1.0.1
 
 # Utils
 requests==2.32.2
-
-# Asynchronous / Greenlet (for Gunicorn gevent worker)
-gevent==23.9.1
-greenlet==3.0.3
