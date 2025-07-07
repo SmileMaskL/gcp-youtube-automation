@@ -16,20 +16,20 @@ jobs:
     steps:
       # 1. 저장소 체크아웃 (기본 액션이 잘 작동하는지 확인)
       # 이 스텝이 실패한다면, 러너의 기본적인 동작에 문제가 있을 가능성이 큽니다.
-      - name: Checkout repository
+      - name: Checkout repository for basic action test
         uses: actions/checkout@v4
 
       # 2. GitHub API 연결 테스트 (네트워크 문제 확인)
       # 이 스텝이 실패한다면, 러너가 GitHub Actions 액션을 다운로드하는 데 필요한 네트워크 연결에 문제가 있을 수 있습니다.
-      - name: Test GitHub API Connectivity
+      - name: Test GitHub API Connectivity for Actions
         run: |
-          echo "Testing connectivity to api.github.com..."
-          curl -v https://api.github.com/
+          echo "Testing connectivity to api.github.com for action fetching..."
+          curl -v https://api.github.com/repos/peter-evans/delete-workflow-runs/contents/action.yml
           if [ $? -ne 0 ]; then
-            echo "Error: Failed to connect to GitHub API. This might be a network issue."
+            echo "Error: Failed to connect to GitHub API to fetch action metadata. This might be a network issue."
             exit 1
           else
-            echo "Successfully connected to GitHub API."
+            echo "Successfully connected to GitHub API and fetched action metadata."
           fi
 
       # 3. peter-evans/delete-workflow-runs 액션 사용
