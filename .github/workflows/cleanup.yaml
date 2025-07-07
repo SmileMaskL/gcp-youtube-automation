@@ -12,7 +12,7 @@ jobs:
       actions: write
     steps:
       - name: Delete old workflow runs
-        uses: peter-evans/delete-workflow-runs@v3
+        uses: peter-evans/delete-workflow-runs@v2
         with:
           keep_minimum_runs: 5
           days_old: 7
