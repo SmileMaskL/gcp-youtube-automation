@@ -3,7 +3,7 @@ name: Cleanup Old Workflow Runs # 오래된 워크플로 실행 기록 정리
 on:
   workflow_dispatch: # 수동으로 워크플로를 실행할 수 있도록 허용
   schedule:
-    # 매일 자정 UTC에 실행. (매주 일요일 실행은 중복되므로 하나만 유지하는 것이 효율적입니다.)
+    # 매일 자정 UTC에 실행.
     - cron: '0 0 * * *' 
 
 jobs:
@@ -14,14 +14,32 @@ jobs:
       contents: read # 저장소 내용 읽기 권한
       
     steps:
-      # peter-evans/delete-workflow-runs 액션 사용 (가장 권장되는 방법)
+      # 1. 저장소 체크아웃 (기본 액션이 잘 작동하는지 확인)
+      # 이 스텝이 실패한다면, 러너의 기본적인 동작에 문제가 있을 가능성이 큽니다.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. GitHub API 연결 테스트 (네트워크 문제 확인)
+      # 이 스텝이 실패한다면, 러너가 GitHub Actions 액션을 다운로드하는 데 필요한 네트워크 연결에 문제가 있을 수 있습니다.
+      - name: Test GitHub API Connectivity
+        run: |
+          echo "Testing connectivity to api.github.com..."
+          curl -v https://api.github.com/
+          if [ $? -ne 0 ]; then
+            echo "Error: Failed to connect to GitHub API. This might be a network issue."
+            exit 1
+          else
+            echo "Successfully connected to GitHub API."
+          fi
+
+      # 3. peter-evans/delete-workflow-runs 액션 사용
+      # 위의 진단 스텝들이 성공했는데도 이 스텝에서 에러가 발생한다면,
+      # 액션 자체의 일시적인 문제이거나 GitHub Actions의 특정 캐싱 문제일 수 있습니다.
       - name: Delete old workflow runs
-        # 최신 안정 버전인 v5 사용 권장
         uses: peter-evans/delete-workflow-runs@v5 
         with:
           repository: ${{ github.repository }}
           token: ${{ secrets.GITHUB_TOKEN }}
           keep_minimum_runs: 5 # 최소 5개의 최신 실행 기록 유지
           days_old: 7 # 7일 이상된 실행 기록 삭제
-          # 현재 워크플로(cleanup.yml)는 삭제 대상에서 제외
-          exclude_workflows: "cleanup.yml" 
+          exclude_workflows: "cleanup.yml" # 현재 워크플로는 삭제 대상에서 제외
