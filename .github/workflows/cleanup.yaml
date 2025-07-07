@@ -3,18 +3,62 @@ name: Cleanup Old Workflow Runs # 오래된 워크플로 실행 기록 정리
 on:
   workflow_dispatch: # 수동으로 워크플로를 실행할 수 있도록 허용
   schedule:
-    - cron: '0 0 * * 0' # 매주 일요일 UTC 00:00에 실행되도록 스케줄 설정
+    - cron: '0 0 * * 0' # 매주 일요일 UTC 00:00에 실행 (기본 설정)
+    - cron: '0 0 * * *'  # 매일 자정 실행 (추가 옵션)
 
 jobs:
   delete-old-runs:
     runs-on: ubuntu-latest # 최신 Ubuntu 환경에서 실행
     permissions:
-      actions: write # 이 워크플로가 워크플로 실행 기록을 삭제할 수 있도록 'actions: write' 권한 부여 (필수)
+      actions: write # 워크플로 실행 기록 삭제 권한
+      contents: read # 저장소 내용 읽기 권한
+      
+    strategy:
+      matrix:
+        method: ["peter-evans", "c-hive", "gh-api"] # 3가지 방법을 순차적으로 시도
+
     steps:
-      - name: Delete old workflow runs # 오래된 워크플로 실행 기록 삭제 단계
-        uses: peter-evans/delete-workflow-runs@v4 # peter-evans/delete-workflow-runs 액션의 v3 버전 사용
+      # 방법 1: peter-evans/delete-workflow-runs (주요 방법)
+      - name: Delete with peter-evans action
+        if: matrix.method == 'peter-evans'
+        uses: peter-evans/delete-workflow-runs@v4
         with:
-          repository: ${{ github.repository }} # 현재 GitHub 저장소를 대상으로 지정
-          token: ${{ secrets.GITHUB_TOKEN }} # GitHub Actions에서 자동으로 제공하는 기본 토큰 사용
-          keep_minimum_runs: 5 # 최소 5개의 최신 워크플로 실행 기록은 유지
-          days_old: 7 # 7일보다 오래된 워크플로 실행 기록을 삭제
+          repository: ${{ github.repository }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          keep_minimum_runs: 5
+          days_old: 7
+          exclude_workflows: "cleanup.yml" # 현재 워크플로는 제외
+
+      # 방법 2: c-hive/gha-remove-workflows (대체 방법 1)
+      - name: Delete with c-hive action
+        if: matrix.method == 'c-hive'
+        uses: c-hive/gha-remove-workflows@v1
+        with:
+          age_days: 7
+          keep_minimum: 5
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # 방법 3: GitHub API 직접 호출 (대체 방법 2)
+      - name: Delete with GitHub API
+        if: matrix.method == 'gh-api'
+        run: |
+          # 7일 이상된 완료된 워크플로 실행 삭제
+          gh api -X GET /repos/${{ github.repository }}/actions/runs \
+            | jq -r '.workflow_runs[] | select(.status != "in_progress") | select(.created_at < "$(date -d "7 days ago" -u +"%Y-%m-%dT%H:%M:%SZ")") | .id' \
+            | head -n -5 \ # 최신 5개는 유지
+            | xargs -n1 -I {} gh api -X DELETE /repos/${{ github.repository }}/actions/runs/{}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
+      # 모든 방법 실패 시 알림 (옵션)
+      - name: Notify on failure
+        if: failure()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '⚠️ Workflow cleanup failed! Please check the logs.'
+            })
