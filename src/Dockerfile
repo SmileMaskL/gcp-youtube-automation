@@ -24,4 +24,5 @@ COPY . .
 
 EXPOSE 8080
 
-CMD ["gunicorn", "--worker-class", "gevent", "--workers", "1", "--timeout", "0", "app:app"]
+CMD ["gunicorn", "-k", "uvicorn.workers.UvicornWorker", "--workers", "1", "--timeout", "0", "app:app"]
+
