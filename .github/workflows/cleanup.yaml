@@ -32,7 +32,7 @@ jobs:
       # 방법 2: c-hive/gha-remove-workflows (대체 방법 1)
       - name: Delete with c-hive action
         if: matrix.method == 'c-hive'
-        uses: c-hive/gha-remove-workflows@v1
+        # uses: c-hive/gha-remove-workflows@v1
         with:
           age_days: 7
           keep_minimum: 5
@@ -45,7 +45,7 @@ jobs:
           # 7일 이상된 완료된 워크플로 실행 삭제
           gh api -X GET /repos/${{ github.repository }}/actions/runs \
             | jq -r '.workflow_runs[] | select(.status != "in_progress") | select(.created_at < "$(date -d "7 days ago" -u +"%Y-%m-%dT%H:%M:%SZ")") | .id' \
-            | head -n -5 \ # 최신 5개는 유지
+            | head -n -5 # 최신 5개는 유지
             | xargs -n1 -I {} gh api -X DELETE /repos/${{ github.repository }}/actions/runs/{}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
