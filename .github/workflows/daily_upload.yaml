@@ -29,31 +29,27 @@ jobs:
           # Workload Identity Provider를 GitHub Secrets에서 가져옴
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
-          # audience 라인을 완전히 삭제합니다.
-          # audience: 'https://github.com/SmileMaskL/gcp-youtube-automation'
+          # GCP 콘솔에서 확인한 Workload Identity Provider의 '전체 리소스 이름'으로 audience 값 설정
+          audience: 'projects/94662874801/locations/global/workloadIdentityPools/github-pool-new/providers/github-provider' # <--- 이 부분을 GCP에서 확인한 값으로 정확히 변경
           
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Build and Push Docker Image # 스텝 이름 유지
+      - name: Build and Push Docker Image
         run: |
-          # gcloud builds submit을 사용하여 src/ 디렉토리에서 Dockerfile 빌드 및 Artifact Registry로 푸시
           gcloud builds submit src/ \
             --tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}
 
       - name: Deploy to Cloud Run
         run: |
-          # 환경 변수를 사용하여 Cloud Run 서비스 이름 및 이미지 경로 변경
           gcloud run deploy ${{ env.IMAGE_NAME }} \
             --image ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }} \
             --platform managed \
             --region ${{ env.REGION }} \
-            --allow-unauthenticated # 필요에 따라 인증 설정 변경 가능
+            --allow-unauthenticated
 
       - name: Trigger Shorts Upload
         run: |
-          # 환경 변수를 사용하여 Cloud Run 서비스 URL 구성
-          # Cloud Run URL 형식: https://SERVICE_NAME-PROJECT_NUMBER.REGION.run.app
           CLOUD_RUN_URL="https://${{ env.IMAGE_NAME }}-${{ env.PROJECT_NUMBER }}.${{ env.REGION }}.run.app"
           echo "Cloud Run URL: $CLOUD_RUN_URL"
           curl -X POST "$CLOUD_RUN_URL" \
