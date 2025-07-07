@@ -22,8 +22,8 @@ jobs:
           workload_identity_provider: "projects/94662874801/locations/global/workloadIdentityPools/github-pool-new/providers/github-provider"
           service_account: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
           # audience는 배열 X 문자열로 설정 (v2.1.3 기준)
-          audience: 'projects/94662874801/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
-
+          audience: 'https://github.com/SmileMaskL/gcp-youtube-automation'
+          
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
