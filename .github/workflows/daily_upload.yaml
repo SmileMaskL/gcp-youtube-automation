@@ -26,11 +26,12 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2.1.3 # 버전 유지
         with:
-          # Workload Identity Provider를 GitHub Secrets에서 가져옴
+          # Workload Identity Provider의 전체 리소스 이름이 저장된 GitHub Secret 사용
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
-          # GCP 콘솔에서 확인한 Workload Identity Provider의 '전체 리소스 이름'으로 audience 값 설정
-          audience: 'projects/94662874801/locations/global/workloadIdentityPools/github-pool-new/providers/github-provider' # <--- 이 부분을 GCP에서 확인한 값으로 정확히 변경
+          # GCP 콘솔에서 확인한 Workload Identity Provider의 '전체 리소스 이름'을 audience 값으로 직접 설정
+          # 이 값은 WIF_PROVIDER Secret에 저장된 값과 동일해야 합니다.
+          audience: 'projects/94662874801/locations/global/workloadIdentityPools/github-pool-new/providers/github-provider' 
           
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
