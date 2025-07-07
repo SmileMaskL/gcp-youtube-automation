@@ -29,6 +29,7 @@ jobs:
           # Workload Identity Provider의 전체 리소스 이름이 저장된 GitHub Secret 사용
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
+          audience: 'projects/94662874801/locations/global/workloadIdentityPools/github-pool-new/providers/github-provider'
           
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
