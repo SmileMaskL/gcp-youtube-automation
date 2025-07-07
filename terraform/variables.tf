@@ -10,6 +10,18 @@ variable "region" {
   default     = "us-central1"
 }
 
+variable "gemini_api_key" {
+  description = "API Key for Gemini. Should be sensitive."
+  type        = string
+  sensitive   = true
+}
+
+variable "elevenlabs_api_key" {
+  description = "API Key for ElevenLabs. Should be sensitive."
+  type        = string
+  sensitive   = true
+}
+
 variable "service_name" {
   description = "Cloud Run service name"
   type        = string
