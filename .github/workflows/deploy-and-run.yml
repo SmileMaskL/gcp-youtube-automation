@@ -10,7 +10,7 @@ on:
 
 env:
   PROJECT_ID: youtube-fully-automated
-  GCP_REGION: us-central1
+  GCP_REGION: asia-northeast3
   SERVICE_NAME: youtube-shorts-automation
   IMAGE_NAME: youtube-shorts-automation
 
