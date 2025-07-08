@@ -27,6 +27,8 @@ jobs:
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com
+          audience: 'https://github.com/SmileMaskL/gcp-youtube-automation'
+          # ✅ Provider의 allowed audiences와 동일하게 지정
 
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v2
