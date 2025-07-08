@@ -2,7 +2,7 @@
 
 provider "google" {
   project = var.project_id # 변수를 사용하여 프로젝트 ID를 지정합니다.
-  region  = "us-central1"  # Cloud Run 서비스도 us-central1에 배포되도록 일치시킵니다.
+  region  = "asia-northeast3"  # Cloud Run 서비스도 asia-northeast3에 배포되도록 일치시킵니다.
 }
 
 # ✅ Cloud Run 서비스 계정 이메일 변수 정의 (코드 가독성 및 유지보수성 향상)
