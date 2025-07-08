@@ -14,7 +14,7 @@ jobs:
 
     env:
       PROJECT_ID: youtube-fully-automated
-      REGION: asia-northeast3
+      REGION: us-central1
       IMAGE_NAME: youtube-shorts-automation
       OPENAI_API_KEYS: ${{ secrets.OPENAI_API_KEYS }}
 
