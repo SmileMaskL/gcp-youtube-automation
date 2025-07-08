@@ -7,7 +7,7 @@ variable "project_id" {
 variable "region" {
   description = "GCP region"
   type        = string
-  default     = "us-central1"
+  default     = "asia-northeast3"
 }
 
 variable "gemini_api_key" {
