@@ -38,7 +38,6 @@ jobs:
         run: |
           gcloud builds submit src/ \
             --tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }} \
-            --no-stream
 
       - name: Deploy to Cloud Run
         run: |
