@@ -1,92 +1,77 @@
 # src/app.py
 
 import logging
-import os # 환경 변수를 읽기 위해 추가
+import os
+import json
 from fastapi import FastAPI, Request, HTTPException
 import uvicorn
+from content_generator import generate_content_and_script
+from youtube_uploader import upload_video_to_youtube
+from openai_utils import get_next_openai_key
 
-# 로거 설정: Cloud Run의 로깅 시스템과 통합됩니다.
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-logger.info("Application starting...")
-
-try:
-    app = FastAPI()
-    logger.info("FastAPI app instance created successfully.")
-except Exception as e:
-    logger.error(f"Error creating FastAPI app instance: {e}")
-    raise # 오류 발생 시 즉시 종료하여 로그 확인
+app = FastAPI()
 
 @app.on_event("startup")
 async def startup_event():
-    """애플리케이션 시작 시 실행되는 로직."""
     logger.info("FastAPI application startup event triggered.")
-    # 필요한 환경 변수 로드 및 검증 (예시)
-    gemini_key = os.getenv("GEMINI_API_KEY")
-    elevenlabs_key = os.getenv("ELEVENLABS_API_KEY")
-
-    if not gemini_key:
-        logger.error("GEMINI_API_KEY environment variable is not set.")
-        # 실제 운영 환경에서는 앱 시작을 막거나 적절히 처리해야 합니다.
-    else:
-        logger.info("GEMINI_API_KEY is set.")
-
-    if not elevenlabs_key:
-        logger.error("ELEVENLABS_API_KEY environment variable is not set.")
-    else:
-        logger.info("ELEVENLABS_API_KEY is set.")
-
-    logger.info("Application startup complete.")
-
+    # 필수 환경 변수 검증
+    required_envs = ["GEMINI_API_KEY", "NEWSAPI_API_KEY", "OPENAI_API_KEYS",
+                     "YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET", "YOUTUBE_REFRESH_TOKEN"]
+    for env in required_envs:
+        if not os.getenv(env):
+            logger.error(f"{env} is not set. Exiting.")
+            raise RuntimeError(f"{env} is required")
 
 @app.post("/")
-async def root(request: Request):
-    """루트 엔드포인트: Pub/Sub 트리거를 처리합니다."""
-    logger.info("Received request on root endpoint.")
-    try:
-        data = await request.json()
-        logger.info(f"Request data: {data}")
-        # Pub/Sub 메시지 형식에 따라 필요한 로직을 추가합니다.
-        # 예: {"message": {"data": "base64encoded_payload", "attributes": {}}}
-        # 실제 페이로드를 디코딩하고 처리하는 로직 필요
-        return {"message": "Root endpoint received data", "data": data}
-    except Exception as e:
-        logger.error(f"Error processing root request: {e}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
+async def create_and_upload_shorts(request: Request):
+    """
+    하루 5개 인기 검색어 기반 유튜브 Shorts 자동 생성 및 업로드
+    """
+    logger.info("Received request to create and upload 5 Shorts.")
+    gemini_api_key = os.environ["GEMINI_API_KEY"]
+    news_api_key = os.environ["NEWSAPI_API_KEY"]
+    openai_api_keys = os.environ["OPENAI_API_KEYS"].split(",")
 
+    client_id = os.environ["YOUTUBE_CLIENT_ID"]
+    client_secret = os.environ["YOUTUBE_CLIENT_SECRET"]
+    refresh_token = os.environ["YOUTUBE_REFRESH_TOKEN"]
 
-@app.post("/generate")
-async def generate_content(request: Request):
-    """AI 콘텐츠 생성 엔드포인트."""
-    logger.info("Received request on /generate endpoint.")
-    try:
-        data = await request.json()
-        logger.info(f"Generate content data: {data}")
-        # 여기에 AI 콘텐츠 생성 로직 삽입
-        # 예: Gemini API 호출, Pexels API 호출 등
-        return {"message": "Content generation initiated", "data": data}
-    except Exception as e:
-        logger.error(f"Error generating content: {e}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
+    results = []
+    for i in range(5):
+        logger.info(f"🔁 Generating video {i+1}/5")
+        # OpenAI 키 로테이션 적용
+        selected_openai_key = get_next_openai_key(openai_api_keys)
 
+        # 콘텐츠 생성
+        content = generate_content_and_script(gemini_api_key, news_api_key, openai_api_keys)
 
-@app.post("/upload")
-async def upload_video(request: Request):
-    """유튜브 업로드 엔드포인트."""
-    logger.info("Received request on /upload endpoint.")
-    try:
-        data = await request.json()
-        logger.info(f"Upload video data: {data}")
-        # 여기에 유튜브 업로드 로직 삽입
-        return {"message": "Video upload initiated", "data": data}
-    except Exception as e:
-        logger.error(f"Error uploading video: {e}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
+        # 대본 저장
+        script_path = f"/tmp/script_{i+1}.txt"
+        with open(script_path, "w") as f:
+            f.write(content["script"])
+
+        # 🎬 영상 생성 로직 (예시: TTS + MoviePy)
+        video_path = f"/tmp/video_{i+1}.mp4"
+        # 실제 생성 함수는 별도 구현 필요
+        with open(video_path, "w") as f:
+            f.write("FAKE_VIDEO") # placeholder
+
+        # 유튜브 업로드
+        upload_video_to_youtube(
+            client_id,
+            client_secret,
+            refresh_token,
+            video_path,
+            content["title"],
+            content["description"]
+        )
+        results.append({"title": content["title"], "status": "uploaded"})
+
+    return {"status": "success", "uploaded_videos": results}
 
 
 if __name__ == "__main__":
-    # 로컬 개발 환경에서만 uvicorn으로 직접 실행
-    # Cloud Run에서는 Gunicorn이 이 파일을 로드합니다.
-    logger.info("Running uvicorn locally.")
     uvicorn.run("app:app", host="0.0.0.0", port=8080, log_level="info")
