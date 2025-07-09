@@ -14,7 +14,7 @@ from content_generator import ContentGenerator
 from youtube_uploader import YouTubeUploader
 from video_engine import VideoEngine
 
-# 로그 디렉토리 존재 확인
+# 로그 디렉토리 존재 확인 및 생성
 log_dir = "/var/log"
 if not os.path.exists(log_dir):
     os.makedirs(log_dir)
