@@ -2,7 +2,8 @@ FROM python:3.11-slim-buster
 
 # 필수 패키지 설치
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
+    apt-get install -y --no-install-recommends ffmpeg libsm6 libxext6 libglib2.0-0 && \
+        pip install moviepy requests pillow \
         ffmpeg \
         libimage-exiftool-perl \
         wget && \
