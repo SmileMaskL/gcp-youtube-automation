@@ -41,3 +41,4 @@ python-dotenv==1.0.1
 # Utils
 requests==2.32.2
 pydantic==2.7.1
+pillow==11.3.0
