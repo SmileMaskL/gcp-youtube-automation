@@ -4,9 +4,9 @@ import json
 import traceback # Import traceback for detailed error logging
 from fastapi import FastAPI, Request, HTTPException
 import uvicorn
-from content_generator import generate_content_and_script
-from youtube_uploader import upload_video_to_youtube
-from openai_utils import get_next_openai_key
+from content_generator import generate_content_and_script # content_generator.py에서 import
+from youtube_uploader import upload_video_to_youtube # youtube_uploader.py에서 import
+from openai_utils import get_next_openai_key # openai_utils.py에서 import
 
 # 로깅 설정: Cloud Run/Logging에서 보기 좋게 시간, 레벨, 메시지 포맷 지정
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -80,25 +80,34 @@ async def create_and_upload_shorts(request: Request):
             
             # OpenAI 키 로테이션 적용
             selected_openai_key = get_next_openai_key(openai_api_keys)
-            logger.info(f"Using OpenAI key: {selected_openai_key[:8]}... (last 8 chars)") # 보안을 위해 키의 일부만 로깅
+            logger.info(f"Using OpenAI key (first 8 chars): {selected_openai_key[:8]}...") # 보안을 위해 키의 일부만 로깅
 
-            # 콘텐츠 생성 (이 함수가 실제 OpenAI 키를 받는지 확인 필요)
-            # generate_content_and_script 함수가 여러 OpenAI 키를 직접 관리할 수도 있고,
-            # 아니면 단일 selected_openai_key를 받아야 할 수도 있습니다.
-            # 현재 코드상으로는 openai_api_keys 리스트를 통째로 넘기고 있습니다.
-            # 만약 내부에서 get_next_openai_key와 같은 로직을 다시 수행한다면 중복될 수 있습니다.
-            # content = generate_content_and_script(gemini_api_key, news_api_key, openai_api_keys)
-            # 또는
-            content = generate_content_and_script(gemini_api_key, news_api_key, selected_openai_key)
-            logger.info(f"Content generated for video {i+1}: Title='{content.get('title', 'N/A')}'")
-
+            # --- 이 부분에서 오류 발생 (app.py:92) ---
+            # content_generator.py의 generate_content_and_script 함수가 호출됩니다.
+            # 이 함수 내부에서 문제가 발생하고 있을 가능성이 매우 높습니다.
+            try:
+                # content = generate_content_and_script(gemini_api_key, news_api_key, openai_api_keys) # 주석처리된 이전 코드
+                # 현재 로직대로 selected_openai_key 단일 값을 전달합니다.
+                logger.info("Calling generate_content_and_script with provided API keys.")
+                content = generate_content_and_script(gemini_api_key, news_api_key, selected_openai_key)
+                logger.info(f"Content generated for video {i+1}: Title='{content.get('title', 'N/A')}'")
+            except Exception as e:
+                # generate_content_and_script 함수 내에서 발생하는 모든 예외를 여기서 캐치하여 상세 로깅합니다.
+                logger.error(f"Error in generate_content_and_script for video {i+1}: {e}")
+                logger.error(traceback.format_exc()) # 전체 traceback 로깅
+                raise HTTPException(status_code=500, detail=f"Content generation failed for video {i+1}.")
 
             # 대본 저장
             # /tmp는 Cloud Run 컨테이너에서 유일하게 쓰기 가능한 임시 디렉토리입니다.
             script_path = f"/tmp/script_{i+1}.txt"
-            with open(script_path, "w", encoding="utf-8") as f: # 인코딩 추가
-                f.write(content["script"])
-            logger.info(f"Script saved to {script_path}")
+            try:
+                with open(script_path, "w", encoding="utf-8") as f:
+                    f.write(content["script"])
+                logger.info(f"Script saved to {script_path}")
+            except Exception as e:
+                logger.error(f"Error saving script to {script_path}: {e}")
+                logger.error(traceback.format_exc())
+                raise HTTPException(status_code=500, detail="Failed to save script file.")
 
             # --- 🎬 실제 영상 생성 로직 필요 ---
             # 현재는 더미 파일 생성: 이 부분이 실제 동작하려면 moviepy 등을 이용한 영상 생성 로직이 필요합니다.
@@ -114,26 +123,31 @@ async def create_and_upload_shorts(request: Request):
             try:
                 # 간단한 빈 파일 생성 또는 작은 더미 데이터 쓰기
                 with open(video_path, "wb") as f:
-                    f.write(b"This is a placeholder video file.")
+                    f.write(b"This is a placeholder video file. REPLACE THIS!")
                 logger.warning(f"Placeholder video created at {video_path}. REPLACE THIS WITH ACTUAL VIDEO GENERATION LOGIC!")
             except Exception as e:
                 logger.error(f"Error creating placeholder video: {e}")
+                logger.error(traceback.format_exc())
                 raise HTTPException(status_code=500, detail="Failed to create placeholder video.")
             # --- 🎬 영상 생성 로직 끝 ---
 
-
             # 유튜브 업로드
             logger.info(f"Attempting to upload video {i+1} to YouTube...")
-            upload_video_to_youtube(
-                client_id,
-                client_secret,
-                refresh_token,
-                video_path,
-                content["title"],
-                content["description"]
-            )
-            results.append({"title": content["title"], "status": "uploaded"})
-            logger.info(f"Video '{content['title']}' uploaded successfully.")
+            try:
+                upload_video_to_youtube(
+                    client_id,
+                    client_secret,
+                    refresh_token,
+                    video_path,
+                    content["title"],
+                    content["description"]
+                )
+                results.append({"title": content["title"], "status": "uploaded"})
+                logger.info(f"Video '{content['title']}' uploaded successfully.")
+            except Exception as e:
+                logger.error(f"Error uploading video {i+1} to YouTube: {e}")
+                logger.error(traceback.format_exc())
+                raise HTTPException(status_code=500, detail=f"YouTube upload failed for video {i+1}.")
 
             # 임시 파일 정리 (선택 사항, 하지만 Cloud Run의 /tmp 공간 관리에 좋음)
             try:
