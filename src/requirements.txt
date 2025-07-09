@@ -1,23 +1,25 @@
-# src/requirements.txt (최종 버전)
+# src/requirements.txt (수정 버전)
 
 # Web Framework
 fastapi==0.111.0
-uvicorn==0.30.1 # FastAPI와 함께 사용되는 ASGI 서버
-uvicorn[standard]
-gunicorn==22.0.0
+uvicorn[standard]==0.30.1 # FastAPI와 함께 사용되는 ASGI 서버
 
-# Asynchronous / Greenlet (for Gunicorn gevent worker)
-gevent==23.9.1
-greenlet==3.0.3
-aiohttp==3.9.5 # 비동기 HTTP 클라이언트
+# Asynchronous / Greenlet
+# gevent, greenlet, aiohttp는 uvicorn[standard] 또는 다른 라이브러리의 종속성으로
+# 자동으로 설치될 수 있으므로, 명시적으로 버전을 고정하지 않거나
+# 필요한 경우에만 추가합니다. 현재는 충돌 가능성을 줄이기 위해 제거합니다.
+# aiohttp는 requests와 함께 사용되지 않는 경우가 많으므로, 필요하지 않다면 제거합니다.
+# aiohttp==3.9.5 # 필요한 경우에만 추가
 
 # Google Cloud
 google-cloud-storage==2.16.0
 google-api-python-client==2.126.0
-protobuf==4.25.3 # protobuf 버전을 4점대 최신 버전으로 고정하여 충돌을 피합니다.
+# protobuf 버전을 너무 엄격하게 고정하면 충돌이 자주 발생합니다.
+# 다른 Google 라이브러리가 호환되는 버전을 설치하도록 허용합니다.
+# protobuf==4.25.3 # 주석 처리 또는 제거하여 pip가 최적의 버전을 찾도록 합니다.
 google-auth==2.29.0
 google-auth-oauthlib==1.2.0
-google-cloud-logging==3.8.0 # 명시적 버전 추가
+google-cloud-logging==3.8.0
 google-cloud-aiplatform # 최신 버전 사용 (버전 충돌 발생 시 특정 버전 명시)
 google-auth-httplib2==0.1.1
 
