@@ -9,7 +9,6 @@ RUN apt-get update && \
         libglib2.0-0 \
         libimage-exiftool-perl \
         wget && \
-    pip install moviepy requests pillow && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -22,7 +21,4 @@ COPY . .
 
 EXPOSE 8080
 
-# --- 여기를 수정합니다. ---
-# CMD를 쉘 형식으로 변경하여 ${PORT} 환경 변수가 올바르게 확장되도록 합니다.
-# 쉘 형식은 CMD "command arg1 arg2" 와 같이 문자열로 작성됩니다.
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080"]
