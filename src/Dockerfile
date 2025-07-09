@@ -1,12 +1,11 @@
-# 1. 베이스 이미지 - Python 3.11 슬림 최신 안정화 버전
 FROM python:3.11-slim-bookworm
 
-# 2. apt 소스 리스트 정리 및 최신화
-RUN echo "deb http://deb.debian.org/debian bookworm main non-free non-free-firmware" > /etc/apt/sources.list && \
+RUN echo "deb http://ftp.de.debian.org/debian bookworm main non-free non-free-firmware" > /etc/apt/sources.list && \
     echo "deb http://security.debian.org/debian-security bookworm-security main" >> /etc/apt/sources.list
 
-# 3. 필수 시스템 패키지 설치 (FFmpeg, curl, perl, build-essential 포함)
-RUN apt-get update -y --fix-missing && \
+RUN rm -rf /var/lib/apt/lists/* && \
+    apt-get clean && \
+    apt-get update -o Acquire::CompressionTypes::Order::=gz,bzip2,xz --fix-missing && \
     apt-get install -y --no-install-recommends \
         ffmpeg \
         libsm6 \
