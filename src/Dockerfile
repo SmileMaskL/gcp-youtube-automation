@@ -5,7 +5,7 @@ FROM python:3.11-slim-bookworm
 RUN echo "deb http://deb.debian.org/debian bookworm main non-free non-free-firmware" > /etc/apt/sources.list && \
     echo "deb http://security.debian.org/debian-security bookworm-security main" >> /etc/apt/sources.list
 
-# 3. 필수 시스템 패키지 설치 (FFmpeg 포함, curl 추가)
+# 3. 필수 시스템 패키지 설치 (FFmpeg, curl, perl, build-essential 포함)
 RUN apt-get update -y --fix-missing && \
     apt-get install -y --no-install-recommends \
         ffmpeg \
@@ -40,7 +40,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # 7. 앱 소스 전체 복사
 COPY . .
 
-# 8. Cloud Run 호환 포트 설정
+# 8. Cloud Run 환경변수 및 포트 설정
 ENV PORT=8080
 EXPOSE 8080
 
@@ -51,5 +51,5 @@ STOPSIGNAL SIGTERM
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s \
   CMD curl -f http://localhost:${PORT}/health || exit 1
 
-# 11. uvicorn 서버 실행 명령어
+# 11. uvicorn 서버 실행
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080", "--timeout-keep-alive", "300"]
