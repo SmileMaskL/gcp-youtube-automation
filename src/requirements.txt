@@ -19,6 +19,7 @@ google-auth==2.29.0
 google-auth-oauthlib==1.2.0
 google-cloud-logging==3.8.0 # 명시적 버전 추가
 google-cloud-aiplatform # 최신 버전 사용 (버전 충돌 발생 시 특정 버전 명시)
+google-auth-httplib2==0.1.1
 
 # AI APIs
 openai==1.30.1
