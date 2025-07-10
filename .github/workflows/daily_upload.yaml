@@ -4,6 +4,7 @@ name: Deploy and Run Automation
 on:
   push:
     branches: [ main ]
+  workflow_dispatch:
   schedule:
     - cron: '0 12 * * *'  # 매일 12PM UTC 실행
 
