@@ -5,10 +5,12 @@ FROM python:3.11-bookworm as builder
 RUN apt-get update && apt-get install -y \
     build-essential wget perl
 
-# 2. ExifTool 빌드
-RUN wget https://exiftool.org/Image-ExifTool-15.10.tar.gz && \
-    tar -xzf Image-ExifTool-*.tar.gz && \
-    cd Image-ExifTool-* && \
+# 2. ExifTool 빌드: 정확한 버전과 디렉토리 이름 사용
+ARG EXIFTOOL_VERSION=15.10
+RUN wget "https://exiftool.org/Image-ExifTool-${EXIFTOOL_VERSION}.tar.gz" -O /tmp/Image-ExifTool.tar.gz && \
+    mkdir -p /tmp/exiftool_build && \
+    tar -xzf /tmp/Image-ExifTool.tar.gz -C /tmp/exiftool_build && \
+    cd "/tmp/exiftool_build/Image-ExifTool-${EXIFTOOL_VERSION}" && \
     perl Makefile.PL && \
     make && make install
 
