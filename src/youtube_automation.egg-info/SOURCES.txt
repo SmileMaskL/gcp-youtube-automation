@@ -1,0 +1,8 @@
+README.md
+pyproject.toml
+setup.py
+src/youtube_automation.egg-info/PKG-INFO
+src/youtube_automation.egg-info/SOURCES.txt
+src/youtube_automation.egg-info/dependency_links.txt
+src/youtube_automation.egg-info/requires.txt
+src/youtube_automation.egg-info/top_level.txt
