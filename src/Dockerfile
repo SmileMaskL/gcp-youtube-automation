@@ -1,23 +1,25 @@
-# 멀티스테이지 빌드
-FROM python:3.11-bookworm as builder
+# 멀티스테이지 빌드 적용
+FROM python:3.11-bookworm AS builder # 'AS' 대문자로 변경
 
-# 1. 빌드 종속성
+# 1. 시스템 패키지 (빌드용)
 RUN apt-get update && apt-get install -y \
     build-essential wget perl
 
-# 2. ExifTool 설치 (버전 관리)
+# 2. ExifTool 빌드: 최신 버전과 정확한 디렉토리 이름 사용 (현재 12.87 기준)
 ARG EXIFTOOL_VERSION=12.87
-RUN wget "https://exiftool.org/Image-ExifTool-${EXIFTOOL_VERSION}.tar.gz" -O /tmp/Image-ExifTool.tar.gz && \
+ENV EXIFTOOL_VERSION_BUILD=${EXIFTOOL_VERSION} # ARG 값을 ENV로 전달
+RUN wget "https://exiftool.org/Image-ExifTool-${EXIFTOOL_VERSION_BUILD}.tar.gz" -O /tmp/Image-ExifTool.tar.gz && \
     mkdir -p /tmp/exiftool_build && \
-    tar -xzf /tmp/Image-ExifTool.tar.gz -C /tmp/exiftool_build && \
-    cd "/tmp/exiftool_build/Image-ExifTool-${EXIFTOOL_VERSION}" && \
+    tar -xzf Image-ExifTool.tar.gz -C /tmp/exiftool_build && \
+    cd "/tmp/exiftool_build/Image-ExifTool-${EXIFTOOL_VERSION_BUILD}" && \
     perl Makefile.PL && \
     make && make install
 
-# 최종 이미지
+# ----------------------------------------
+# 런타임 이미지
 FROM python:3.11-slim-bookworm
 
-# 3. 런타임 종속성
+# 3. 런타임 패키지
 RUN apt-get update && apt-get install -y \
     ffmpeg libsm6 libxext6 libglib2.0-0 libgl1-mesa-glx && \
     rm -rf /var/lib/apt/lists/*
@@ -26,12 +28,12 @@ RUN apt-get update && apt-get install -y \
 COPY --from=builder /usr/local/bin/exiftool /usr/local/bin/
 COPY --from=builder /usr/local/share/man/man1/exiftool.1 /usr/local/share/man/man1/
 
-# 5. GCP 인증 설정
-ENV GOOGLE_APPLICATION_CREDENTIALS=/app/gcp_credentials.json
-
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
+
+ENV PORT=8080
+EXPOSE 8080
 
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080", "--timeout-keep-alive", "300"]
