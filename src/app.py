@@ -11,10 +11,10 @@ from fastapi.responses import JSONResponse
 import uvicorn
 
 # 상대 임포트로 통일
-from .content_generator import ContentGenerator, ContentValidator
-from .youtube_uploader import YouTubeUploader
-from .video_engine import VideoEngine
-from .secret_loader import secret_manager
+from src.content_generator import ContentGenerator, ContentValidator
+from src.youtube_uploader import YouTubeUploader
+from src.video_engine import VideoEngine
+from src.secret_loader import secret_manager
 
 # 경로 고정 (Codespace 전용 설정)
 sys.path.append("/workspaces/gcp-youtube-automation/src")
