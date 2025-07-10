@@ -41,3 +41,6 @@ pillow>=11.3.0
 
 # dotenv for local dev
 python-dotenv>=1.0.1
+
+google-cloud-texttospeech>=2.0.0
+opencv-python-headless>=4.5.0
