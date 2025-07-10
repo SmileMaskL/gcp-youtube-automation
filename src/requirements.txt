@@ -1,27 +1,8 @@
-# src/requirements.txt (수정 버전)
+# src/requirements.txt (수정 버전 - 의존성 충돌 해결 시도)
 
 # Web Framework
-fastapi==0.111.0
 uvicorn[standard]==0.30.1 # FastAPI와 함께 사용되는 ASGI 서버
-
-# Asynchronous / Greenlet
-# gevent, greenlet, aiohttp는 uvicorn[standard] 또는 다른 라이브러리의 종속성으로
-# 자동으로 설치될 수 있으므로, 명시적으로 버전을 고정하지 않거나
-# 필요한 경우에만 추가합니다. 현재는 충돌 가능성을 줄이기 위해 제거합니다.
-# aiohttp는 requests와 함께 사용되지 않는 경우가 많으므로, 필요하지 않다면 제거합니다.
-# aiohttp==3.9.5 # 필요한 경우에만 추가
-
-# Google Cloud
-google-cloud-storage==2.16.0
-google-api-python-client==2.126.0
-# protobuf 버전을 너무 엄격하게 고정하면 충돌이 자주 발생합니다.
-# 다른 Google 라이브러리가 호환되는 버전을 설치하도록 허용합니다.
-# protobuf==4.25.3 # 주석 처리 또는 제거하여 pip가 최적의 버전을 찾도록 합니다.
-google-auth==2.29.0
-google-auth-oauthlib==1.2.0
-google-cloud-logging==3.8.0
-google-cloud-aiplatform # 최신 버전 사용 (버전 충돌 발생 시 특정 버전 명시)
-google-auth-httplib2==0.1.1
+fastapi==0.111.0
 
 # AI APIs
 openai==1.30.1
@@ -38,10 +19,24 @@ imageio==2.34.1
 imageio-ffmpeg==0.4.9
 ffmpeg-python==0.2.0
 
-# dotenv for local dev
-python-dotenv==1.0.1
+# Google Cloud 관련 라이브러리 - 핵심 종속성 버전 완화
+google-cloud-storage==2.16.0
+google-api-python-client==2.126.0
+google-auth==2.29.0
+google-auth-oauthlib==1.2.0
+google-cloud-logging==3.8.0
+google-cloud-aiplatform # 최신 버전 사용. 만약 충돌 시 특정 버전으로 고정 (예: google-cloud-aiplatform==1.30.0)
+google-auth-httplib2==0.1.1
+# protobuf는 Google 라이브러리의 핵심 종속성이므로, 버전을 완전히 명시하지 않아 pip가 가장 적합한 버전을 찾도록 합니다.
+# 만약 충돌이 계속되면, protobuf>=3.19,<5.0.0 (혹은 더 넓은 범위)과 같이 최소/최대 버전을 지정하는 것을 고려합니다.
 
 # Utils
 requests==2.32.2
-pydantic==2.7.1
+# Pydantic은 FastAPI의 핵심 종속성입니다. Pydantic v1 (1.x.x)과 v2 (2.x.x)는 호환되지 않습니다.
+# FastAPI 0.111.0은 Pydantic v2와 호환되지만, 다른 하위 라이브러리가 Pydantic v1을 요구할 수 있습니다.
+# 일단은 버전을 완화하여 pip가 최적 버전을 찾도록 시도합니다.
+pydantic # pydantic==2.7.1 에서 버전을 완전히 제거하여 pip가 호환 버전을 찾도록 합니다.
 pillow==11.3.0
+
+# dotenv for local dev
+python-dotenv==1.0.1
