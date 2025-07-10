@@ -44,3 +44,5 @@ python-dotenv>=1.0.1
 
 google-cloud-texttospeech>=2.0.0
 opencv-python-headless>=4.5.0
+
+google-cloud-secret-manager
