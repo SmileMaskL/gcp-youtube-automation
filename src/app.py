@@ -1,20 +1,10 @@
-# src/app.py
 import os
 import logging
-import signal
-import sys
-import time
-import traceback
-from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.responses import JSONResponse
-import uvicorn
-
-# 상대 임포트로 통일
-from src.content_generator import ContentGenerator, ContentValidator
 from src.youtube_uploader import YouTubeUploader
 from src.video_engine import VideoEngine
-from src.secret_loader import secret_manager
+from src.secret_loader import secret_manager # SecretManager 인스턴스 임포트
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -24,30 +14,41 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# 환경 변수에서 YouTube API 자격 증명 로드
-# 실제 운영 환경에서는 더 안전한 방법(예: Google Secret Manager)을 사용해야 합니다.
-CLIENT_ID = os.getenv("YOUTUBE_CLIENT_ID")
-CLIENT_SECRET = os.getenv("YOUTUBE_CLIENT_SECRET")
-REFRESH_TOKEN = os.getenv("YOUTUBE_REFRESH_TOKEN")
-
-# YouTubeUploader 인스턴스 초기화
-# 앱 시작 시 한 번만 초기화되도록 합니다.
-youtube_uploader = None
-try:
-    if CLIENT_ID and CLIENT_SECRET and REFRESH_TOKEN:
-        youtube_uploader = YouTubeUploader({
-            "client_id": CLIENT_ID,
-            "client_secret": CLIENT_SECRET,
-            "refresh_token": REFRESH_TOKEN
-        })
-        logging.info("YouTubeUploader 초기화 시도 완료.")
-    else:
-        logging.warning("YouTube API 자격 증명 환경 변수가 설정되지 않았습니다. YouTube 업로드 기능이 비활성화됩니다.")
-except Exception as e:
-    logging.error(f"YouTubeUploader 초기화 중 오류 발생: {e}")
-    youtube_uploader = None # 오류 발생 시 None으로 설정하여 업로드 기능 비활성화
-
+# YouTubeUploader 인스턴스를 전역 변수로 선언하되, 초기화는 startup 이벤트에서 진행
+youtube_uploader: YouTubeUploader = None
 video_engine = VideoEngine()
+
+@app.on_event("startup")
+async def startup_event():
+    """
+    FastAPI 애플리케이션 시작 시 실행되는 이벤트 핸들러입니다.
+    여기서 YouTubeUploader를 초기화하여 앱 시작 오류를 방지합니다.
+    """
+    global youtube_uploader
+    logging.info("애플리케이션 시작 이벤트: YouTubeUploader 초기화 시도...")
+
+    try:
+        # Secret Manager에서 YouTube API 자격 증명 로드
+        # Secret Manager에 저장된 시크릿 ID를 여기에 명시해야 합니다.
+        # 예: youtube-client-id, youtube-client-secret, youtube-refresh-token
+        client_id = secret_manager.get_secret("youtube-client-id") # Secret ID를 실제 값으로 변경하세요
+        client_secret = secret_manager.get_secret("youtube-client-secret") # Secret ID를 실제 값으로 변경하세요
+        refresh_token = secret_manager.get_secret("youtube-refresh-token") # Secret ID를 실제 값으로 변경하세요
+
+        if not all([client_id, client_secret, refresh_token]):
+            logging.error("Secret Manager에서 YouTube API 자격 증명을 로드하는 데 실패했습니다. 일부가 누락되었습니다.")
+            raise ValueError("불완전한 YouTube API 자격 증명.")
+
+        youtube_uploader = YouTubeUploader({
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "refresh_token": refresh_token
+        })
+        logging.info("✅ YouTubeUploader 초기화 성공.")
+    except Exception as e:
+        logging.error(f"❌ YouTubeUploader 초기화 중 치명적인 오류 발생: {e}")
+        # 초기화 실패 시 youtube_uploader는 None으로 유지됩니다.
+        # 이 경우 /upload_short 엔드포인트에서 오류를 반환할 것입니다.
 
 @app.get("/")
 async def read_root():
@@ -61,7 +62,9 @@ async def health_check():
     """
     서비스의 상태를 확인하는 헬스 체크 엔드포인트.
     """
-    return {"status": "ok", "message": "서비스가 정상적으로 작동하고 있습니다."}
+    # YouTubeUploader가 성공적으로 초기화되었는지도 헬스 체크에 포함
+    uploader_status = "초기화됨" if youtube_uploader else "초기화 실패 또는 대기 중"
+    return {"status": "ok", "message": "서비스가 정상적으로 작동하고 있습니다.", "youtube_uploader_status": uploader_status}
 
 @app.post("/upload_short")
 async def upload_short_video(
@@ -77,9 +80,10 @@ async def upload_short_video(
     - `description`: YouTube 비디오 설명
     - `keywords`: 비디오 태그 (콤마로 구분된 문자열, 예: "AI, Shorts, Automation")
     """
+    # YouTubeUploader가 성공적으로 초기화되었는지 확인
     if not youtube_uploader:
-        logging.error("YouTube 업로드 서비스가 초기화되지 않아 요청을 처리할 수 없습니다.")
-        raise HTTPException(status_code=503, detail="YouTube 업로드 서비스가 초기화되지 않았습니다. API 자격 증명을 확인하세요.")
+        logging.error("YouTube 업로드 서비스가 아직 초기화되지 않았거나 오류가 발생했습니다.")
+        raise HTTPException(status_code=503, detail="YouTube 업로드 서비스가 준비되지 않았습니다. 잠시 후 다시 시도하거나 서버 로그를 확인하세요.")
 
     # 1. 비디오 파일 임시 저장
     # /tmp 디렉토리는 컨테이너 내에서 임시 파일을 저장하기에 적합합니다.
@@ -95,11 +99,8 @@ async def upload_short_video(
 
     # 2. 비디오 처리 (예: 텍스트 오버레이, 편집, 효과 추가 등)
     # VideoEngine을 사용하여 실제 비디오 처리 로직을 수행합니다.
-    # 이 예시에서는 단순히 입력 파일을 출력 파일로 복사하는 모의 처리입니다.
     processed_video_path = f"/tmp/processed_{video_file.filename}"
     try:
-        # 실제 비디오 처리 로직은 VideoEngine 내부에 구현됩니다.
-        # 여기서는 예시로 title을 텍스트 오버레이로 사용합니다.
         processing_success = video_engine.process_video(
             input_video_path=input_video_path,
             output_video_path=processed_video_path,
@@ -143,3 +144,4 @@ async def upload_short_video(
         if os.path.exists(processed_video_path):
             os.remove(processed_video_path)
             logging.info(f"처리된 비디오 파일 삭제: {processed_video_path}")
+
