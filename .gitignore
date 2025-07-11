@@ -9,7 +9,7 @@
 *.exe
 *.out
 bin/
-github-actions-sa-policy.json
+youtube-fully-automated.json
 google-cloud-sdk/
 *.tar.gz
 
