@@ -3,7 +3,7 @@ fastapi==0.111.0
 uvicorn[standard]==0.30.1
 gunicorn==21.2.0
 pydantic==2.7.0
-python-multipart>=0.0.7  # FastAPI 0.111+ 요구사항 반영 ★ 수정된 부분 ★
+python-multipart>=0.0.7
 
 # ===== Google Cloud Services =====
 google-cloud-aiplatform==1.38.0
@@ -14,7 +14,7 @@ google-generativeai==0.4.0
 google-cloud-texttospeech==2.14.0
 google-api-python-client==2.126.0
 google-cloud-secret-manager==2.24.0
-google-auth-oauthlib==1.2.0 # <--- 이 줄이 추가되었습니다.
+google-auth-oauthlib==1.2.0
 
 # ===== Media Processing =====
 opencv-python-headless==4.9.0.80
