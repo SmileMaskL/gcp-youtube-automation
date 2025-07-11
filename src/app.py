@@ -3,10 +3,12 @@ import logging
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.responses import JSONResponse
 
-from src.youtube_uploader import YouTubeUploader
+# --- 다음 줄들이 수정되었습니다 ---
+from youtube_uploader import YouTubeUploader # 'src.' 제거
 from video_engine import VideoEngine
-from src.secret_loader import secret_manager
-from config import settings
+from secret_loader import secret_manager # 'src.' 제거
+from config import settings # 이 부분은 이미 올바릅니다.
+# --- 수정 끝 ---
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
