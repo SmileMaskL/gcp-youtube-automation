@@ -1,0 +1,19 @@
+{
+  "name": "GCP YouTube Automation",
+  "build": {
+    "dockerfile": "../src/Dockerfile",
+    "context": "../src"
+  },
+  "remoteUser": "root",
+  "postCreateCommand": "pip install -r src/requirements.txt",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-azuretools.vscode-docker",
+        "GoogleCloudTools.cloudcode"
+      ]
+    }
+  },
+  "forwardPorts": [8080]
+}
