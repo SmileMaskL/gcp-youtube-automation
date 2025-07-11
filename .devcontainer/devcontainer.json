@@ -15,8 +15,8 @@
       ]
     }
   },
-  "features": {
-    "ghcr.io/devcontainers/features/gcloud-cli:1": {}
-  },
+  // "features": { // 이 부분을 완전히 삭제하거나 주석 처리합니다.
+  //   "ghcr.io/devcontainers/features/gcloud-cli:1": {}
+  // },
   "forwardPorts": [8080]
 }
