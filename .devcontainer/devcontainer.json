@@ -1,11 +1,11 @@
 {
   "name": "GCP YouTube Automation",
   "build": {
-    "dockerfile": "../Dockerfile",
-    "context": ".."
+    "dockerfile": "../src/Dockerfile",
+    "context": "../src"
   },
   "remoteUser": "root",
-  "postCreateCommand": "pip install -r requirements.txt",
+  "postCreateCommand": "pip install -r src/requirements.txt",
   "customizations": {
     "vscode": {
       "extensions": [
