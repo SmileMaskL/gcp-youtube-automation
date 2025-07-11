@@ -1,48 +1,35 @@
 # src/Dockerfile
 
-# 멀티스테이지 빌드 적용
+# --- 빌드 스테이지 ---
 FROM python:3.11-bookworm AS builder
 
-# 시스템 패키지 (빌드용)
-RUN apt-get update && apt-get install -y \
-    --no-install-recommends \
-    git \
-    && rm -rf /var/lib/apt/lists/*
+# 필수 빌드 패키지 설치
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
 
-# ----------------------------------------
-# 런타임 이미지
+# --- 런타임 스테이지 ---
 FROM python:3.11-slim-bookworm
 
-# 런타임 패키지
-RUN apt-get update && apt-get install -y \
-    --no-install-recommends \
+# 필수 라이브러리 설치
+RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg libsm6 libxext6 libglib2.0-0 libgl1-mesa-glx \
     && rm -rf /var/lib/apt/lists/*
 
 # 작업 디렉토리 설정
-# 호스트의 'src' 디렉토리 내용이 컨테이너의 '/app/src'로 복사될 것입니다.
-WORKDIR /app/src
+WORKDIR /app
 
 # requirements 설치
-# Dockerfile이 src 디렉토리 내에 있고, requirements.txt도 src 디렉토리 내에 있으므로
-# 현재 작업 디렉토리(./)에서 requirements.txt를 찾습니다.
-COPY requirements.txt .
+COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 앱 코드 복사
-# 호스트의 현재 빌드 컨텍스트(즉, src 디렉토리)의 모든 내용을
-# 컨테이너의 현재 작업 디렉토리인 /app/src로 복사합니다.
 COPY . .
 
-# Python 경로에 /app/src 폴더를 추가합니다.
-# 이렇게 하면 /app/src/app.py에서 /app/src/youtube_uploader.py 등을
-# 'from youtube_uploader import ...' 형태로 직접 임포트할 수 있습니다.
-ENV PYTHONPATH=/app/src
+# PYTHONPATH 설정 (src 모듈 인식)
+ENV PYTHONPATH="${PYTHONPATH}:/app/src"
 
 # 포트 설정
 ENV PORT=8080
 EXPOSE 8080
 
-# 실행 명령어
-# Uvicorn은 /app/src 디렉토리에서 app.py 파일을 찾아 그 안의 'app' 객체를 실행합니다.
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080", "--timeout-keep-alive", "300"]
+# uvicorn 실행 명령어 수정 (src.app:app 로 변경)
+CMD ["uvicorn", "src.app:app", "--host", "0.0.0.0", "--port", "8080", "--timeout-keep-alive", "300"]
