@@ -2,9 +2,12 @@ import os
 import logging
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.responses import JSONResponse
-from src.youtube_uploader import YouTubeUploader
-from src.video_engine import VideoEngine
-from src.secret_loader import secret_manager # SecretManager 인스턴스 임포트
+
+# --- 다음 줄들이 수정되었습니다 ---
+from youtube_uploader import YouTubeUploader
+from video_engine import VideoEngine
+from secret_loader import secret_manager # SecretManager 인스턴스 임포트
+# --- 수정 끝 ---
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -144,4 +147,3 @@ async def upload_short_video(
         if os.path.exists(processed_video_path):
             os.remove(processed_video_path)
             logging.info(f"처리된 비디오 파일 삭제: {processed_video_path}")
-
