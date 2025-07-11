@@ -1,81 +1,50 @@
-# .github/workflows/deploy-and-run.yml
-name: Deploy to Cloud Run # 워크플로우의 이름
+name: Deploy to Cloud Run
 
 on:
-  push: # main 브랜치에 푸시될 때 워크플로우 실행
-    branches:
-      - main
-  workflow_dispatch: # GitHub UI에서 수동으로 워크플로우를 실행할 수 있도록 허용
+  push:
+    branches: [ main ]
+  workflow_dispatch:
 
-env: # 워크플로우 전반에 걸쳐 사용될 환경 변수 정의
-  PROJECT_ID: youtube-fully-automated # Google Cloud 프로젝트 ID
-  GCP_REGION: us-central1 # Cloud Run 서비스를 배포할 GCP 리전
-  SERVICE_NAME: youtube-shorts-automation # Cloud Run 서비스 이름
-  IMAGE_NAME: youtube-shorts-automation # Docker 이미지 이름 (GCR에 저장될 이름)
+env:
+  PROJECT_ID: your-gcp-project-id
+  REGION: us-central1
+  SERVICE_NAME: youtube-shorts-automation
 
 jobs:
-  deploy: # 'deploy'라는 이름의 단일 작업 정의
-    runs-on: ubuntu-latest # 이 작업이 실행될 가상 머신 환경 (최신 Ubuntu)
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      id-token: 'write'
 
-    permissions: # 이 작업에 필요한 권한 설정
-      contents: read # 저장소 콘텐츠를 읽을 수 있는 권한 (checkout 액션에 필요)
-      id-token: write # OIDC 토큰을 생성할 수 있는 권한 (Google Cloud 인증에 필요)
+    steps:
+    - uses: actions/checkout@v4
 
-    steps: # 작업 내에서 실행될 단계들
-    - name: Checkout code # 저장소 코드 체크아웃
-      uses: actions/checkout@v4 # actions/checkout 액션 사용
-
-    - name: Generate Temporary Service Account Key # 서비스 계정 키 파일을 임시로 생성
-      # GCP_SA_KEY 시크릿에 저장된 서비스 계정 키를 파일로 저장하고,
-      # GOOGLE_APPLICATION_CREDENTIALS 환경 변수를 설정하여 gcloud가 이 키를 사용하도록 합니다.
-      run: |
-        echo "${{ secrets.GCP_SA_KEY }}" > ./gcp-sa-key.json
-        echo "GOOGLE_APPLICATION_CREDENTIALS=./gcp-sa-key.json" >> "$GITHUB_ENV"
-
-    - name: Authenticate to Google Cloud # Google Cloud에 인증
-      uses: google-github-actions/auth@v2 # google-github-actions/auth 액션 사용
+    # GCP 인증
+    - uses: google-github-actions/auth@v2
       with:
-        credentials_json: ${{ secrets.GCP_SA_KEY }} # 시크릿에 저장된 서비스 계정 키 사용
-        project_id: ${{ env.PROJECT_ID }} # 인증 시 프로젝트 ID 명시
+        credentials_json: ${{ secrets.GCP_CREDENTIALS }}
+        project_id: ${{ env.PROJECT_ID }}
 
-    - name: Set up Cloud SDK # Google Cloud SDK 설치 및 초기화
-      uses: google-github-actions/setup-gcloud@v2 # google-github-actions/setup-gcloud 액션 사용
+    # Docker 빌드
+    - name: Build Docker image
+      run: |
+        cd src
+        docker build -t gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }} .
+
+    # GCR 푸시
+    - name: Push to GCR
+      run: |
+        docker push gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}
+
+    # Cloud Run 배포
+    - uses: google-github-actions/deploy-cloudrun@v2
       with:
-        project_id: ${{ env.PROJECT_ID }} # SDK 설정 시 프로젝트 ID 명시
-
-    - name: Configure Docker for GCR # Docker가 Google Container Registry (GCR)에 인증하도록 설정
-      run: gcloud auth configure-docker --project ${{ env.PROJECT_ID }}
-
-    - name: Build Docker image # Docker 이미지 빌드
-      # Dockerfile이 'src/' 디렉토리에 있다고 가정하고 빌드 컨텍스트를 './src'로 지정합니다.
-      run: docker build -t gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:latest ./src
-
-    - name: Push Docker image to GCR # Docker 이미지를 GCR에 푸시
-      run: docker push gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:latest
-
-    - name: Deploy to Cloud Run # Cloud Run에 서비스 배포
-      run: |
-        gcloud run deploy ${{ env.SERVICE_NAME }} \
-          --image gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:latest \
-          --region ${{ env.GCP_REGION }} \
-          --platform managed \
-          --allow-unauthenticated \
-          --timeout=300 \
-          --project ${{ env.PROJECT_ID }} \
-          --set-env-vars \
-            YOUTUBE_CLIENT_ID=${{ secrets.YOUTUBE_CLIENT_ID }},\
-            YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }},\
-            YOUTUBE_REFRESH_TOKEN=${{ secrets.YOUTUBE_REFRESH_TOKEN }}
-
-    - name: Get Cloud Run Service URL # 배포된 Cloud Run 서비스의 URL 가져오기
-      run: |
-        SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
-          --platform managed \
-          --region ${{ env.GCP_REGION }} \
-          --format="value(status.url)" \
-          --project ${{ env.PROJECT_ID }})
-        echo "✅ 배포된 서비스 URL: $SERVICE_URL"
-
-    - name: Cleanup Service Account Key # 임시 서비스 계정 키 파일 삭제
-      if: always()
-      run: rm -f ./gcp-sa-key.json
+        service: ${{ env.SERVICE_NAME }}
+        image: gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}
+        region: ${{ env.REGION }}
+        credentials: ${{ secrets.GCP_CREDENTIALS }}
+        env_vars: |
+          YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN=${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+          GOOGLE_APPLICATION_CREDENTIALS=/app/youtube-fully-automated.json
