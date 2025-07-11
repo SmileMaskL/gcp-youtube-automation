@@ -1,50 +1,42 @@
+# ===== Core Dependencies =====
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+gunicorn==21.2.0
+pydantic==2.7.0  # FastAPI 필수
 
+# ===== Google Cloud Services =====
+# AI 플랫폼 (버전 고정)
+google-cloud-aiplatform==1.38.0
+protobuf==4.25.3  # Google 라이브러리 호환 버전
+google-api-core==2.15.0  # 하위 호환성 필수
 
-# ===== Web Framework & Server =====
-# ASGI 서버 (개발용)
-uvicorn[standard]>=0.30.1,<0.31.0  # 웹소켓 등 추가 기능 포함
-
-# 프로덕션 서버 (WSGI HTTP Server)
-gunicorn>=21.2.0,<22.0.0  # Uvicorn과 함께 사용시 worker 클래스 지정 필요
-
-# 웹 프레임워크
-fastapi>=0.111.0,<0.112.0
-
-# ===== AI/ML APIs =====
-openai>=1.30.1,<2.0.0
-google-generativeai>=0.4.0,<0.5.0
-elevenlabs>=1.0.1,<2.0.0
-
-# ===== News API =====
-newsapi-python>=0.2.7,<0.3.0
+# 기타 Google 서비스
+google-cloud-storage==2.16.0
+google-generativeai==0.4.0  # 충돌 방지 버전
+google-cloud-texttospeech==2.14.0
+google-api-python-client==2.126.0
 
 # ===== Media Processing =====
-pexels_api>=1.0.1,<2.0.0
-moviepy>=1.0.3,<2.0.0
-imageio>=2.34.1,<3.0.0
-imageio-ffmpeg>=0.4.9,<0.5.0
-ffmpeg-python>=0.2.0,<0.3.0
-opencv-python-headless>=4.5.0,<5.0.0  # GUI 없는 경량 버전
-pillow>=11.3.0,<12.0.0  # 이미지 처리
+opencv-python-headless==4.9.0.80  # OpenCV 안정 버전
+moviepy==1.0.3  # 정확한 버전 고정
+imageio==2.34.1
+imageio-ffmpeg==0.4.9
+ffmpeg-python==0.2.0
+pillow==11.3.0  # 이미지 처리
 
-# ===== Google Cloud =====
-google-cloud-storage>=2.16.0,<3.0.0
-google-api-python-client>=2.126.0,<3.0.0
-google-auth>=2.29.0,<3.0.0
-google-auth-oauthlib>=1.2.0,<2.0.0
-google-cloud-logging>=3.8.0,<4.0.0
-google-cloud-aiplatform>=1.38.0,<2.0.0
-google-auth-httplib2>=0.1.1,<0.2.0
-google-cloud-texttospeech>=2.0.0,<3.0.0
-google-cloud-secret-manager>=2.16.0,<3.0.0
-protobuf>=4.21.0,<5.0.0  # 모든 Google 라이브러리와 호환되는 버전
+# ===== AI/APIs =====
+openai==1.30.1
+elevenlabs==1.0.1
 
 # ===== Utilities =====
-requests>=2.32.2,<3.0.0
-pydantic>=2.7.0,<3.0.0  # FastAPI 0.111+는 Pydantic v2 필수
-python-dotenv>=1.0.1,<2.0.0  # 환경 변수 관리
-python-multipart>=0.0.6,<0.0.7  # FastAPI 파일 업로드용
+requests==2.32.2
+python-dotenv==1.0.1
+python-multipart==0.0.6
+pexels_api==1.0.1
+newsapi-python==0.2.7
 
-# ===== Optional (주석 처리해두고 필요시 활성화) =====
-# pandas>=2.0.0,<3.0.0  # 데이터 처리 필요시
-# numpy>=1.24.0,<2.0.0  # AI 작업시 종종 필요
+# ===== Explicit Conflict Resolvers =====
+# 아래 패키지는 다른 의존성과 충돌 가능성이 높아 명시적 지정
+grpcio==1.62.1  # Google 라이브러리 필수
+grpcio-status==1.62.1
+google-auth==2.29.0
