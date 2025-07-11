@@ -2,27 +2,25 @@
 fastapi==0.111.0
 uvicorn[standard]==0.30.1
 gunicorn==21.2.0
-pydantic==2.7.0  # FastAPI 필수
+pydantic==2.7.0
+python-multipart>=0.0.7  # FastAPI 0.111+ 요구사항 반영 ★ 수정된 부분 ★
 
 # ===== Google Cloud Services =====
-# AI 플랫폼 (버전 고정)
 google-cloud-aiplatform==1.38.0
-protobuf==4.25.3  # Google 라이브러리 호환 버전
-google-api-core==2.15.0  # 하위 호환성 필수
-
-# 기타 Google 서비스
+protobuf==4.25.3
+google-api-core==2.15.0
 google-cloud-storage==2.16.0
-google-generativeai==0.4.0  # 충돌 방지 버전
+google-generativeai==0.4.0
 google-cloud-texttospeech==2.14.0
 google-api-python-client==2.126.0
 
 # ===== Media Processing =====
-opencv-python-headless==4.9.0.80  # OpenCV 안정 버전
-moviepy==1.0.3  # 정확한 버전 고정
+opencv-python-headless==4.9.0.80
+moviepy==1.0.3
 imageio==2.34.1
 imageio-ffmpeg==0.4.9
 ffmpeg-python==0.2.0
-pillow==11.3.0  # 이미지 처리
+pillow==11.3.0
 
 # ===== AI/APIs =====
 openai==1.30.1
@@ -31,12 +29,10 @@ elevenlabs==1.0.1
 # ===== Utilities =====
 requests==2.32.2
 python-dotenv==1.0.1
-python-multipart==0.0.6
 pexels_api==1.0.1
 newsapi-python==0.2.7
 
-# ===== Explicit Conflict Resolvers =====
-# 아래 패키지는 다른 의존성과 충돌 가능성이 높아 명시적 지정
-grpcio==1.62.1  # Google 라이브러리 필수
+# ===== Conflict Resolvers =====
+grpcio==1.62.1
 grpcio-status==1.62.1
 google-auth==2.29.0
