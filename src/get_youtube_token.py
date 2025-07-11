@@ -24,9 +24,11 @@ def get_initial_credentials():
         return
 
     # --- 다음 줄이 수정되었습니다 ---
-    # client_secrets.json 파일에 "redirect_uris": ["http://localhost"]가 있으므로 이를 사용합니다.
+    # 데스크톱 앱의 OOB 흐름을 위해 'urn:ietf:wg:oauth:2.0:oob'를 사용합니다.
+    # 이 URI는 Google Cloud Console에 명시적으로 등록할 필요가 없거나,
+    # 데스크톱 앱 유형에서는 자동으로 허용됩니다.
     flow = InstalledAppFlow.from_client_secrets_file(
-        client_secrets_file_path, SCOPES, redirect_uri='http://localhost'
+        client_secrets_file_path, SCOPES, redirect_uri='urn:ietf:wg:oauth:2.0:oob'
     )
     # --- 수정 끝 ---
 
@@ -34,16 +36,11 @@ def get_initial_credentials():
     auth_url, _ = flow.authorization_url(prompt='consent')
     print(f'Please go to this URL and authorize your YouTube account: {auth_url}')
 
-    # 사용자로부터 인증 코드 입력 받기 (이 부분은 localhost 리디렉션을 사용하므로 필요 없습니다)
-    # 대신, flow.run_local_server()를 사용하여 자동으로 처리합니다.
-    # Codespaces 환경에서는 여전히 문제가 될 수 있으므로,
-    # 아래의 '대안: 수동 OOB 흐름 유지' 섹션을 참고하세요.
-    
-    # 임시로 로컬 서버를 실행하여 인증 코드를 자동으로 처리합니다.
-    # Codespaces 환경에서는 이 부분이 여전히 ERR_CONNECTION_REFUSED를 발생시킬 수 있습니다.
-    # 이 문제가 발생하면 아래 '대안: 수동 OOB 흐름 유지' 섹션을 따르세요.
-    print("Waiting for authentication in your browser...")
-    flow.run_local_server(port=0) # 사용 가능한 포트를 자동으로 할당하고 브라우저 리디렉션을 처리
+    # --- 다음 줄이 수정되었습니다 (수동 인증 코드 입력으로 변경) ---
+    # 로컬 서버를 실행하는 대신, 사용자로부터 인증 코드를 직접 입력받습니다.
+    code = input('Enter the authorization code from that page here: ')
+    flow.fetch_token(code=code)
+    # --- 수정 끝 ---
 
     creds = flow.credentials
 
