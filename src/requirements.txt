@@ -1,49 +1,51 @@
-# src/requirements.txt (의존성 충돌 해결을 위한 재수정 버전)
+# Base Python Version
+python>=3.9,<3.12  # Python 버전 범위 지정 (3.12는 일부 라이브러리와 아직 호환 문제 가능성 있음)
 
-# Web Framework
-uvicorn[standard]>=0.30.1 # 최소 버전 명시, 최신 Uvicorn 버전과 호환성 유지
-fastapi>=0.111.0 # FastAPI의 최신 버전 범위 허용
+# ===== Web Framework & Server =====
+# ASGI 서버 (개발용)
+uvicorn[standard]>=0.30.1,<0.31.0  # 웹소켓 등 추가 기능 포함
 
-# AI APIs
-openai>=1.30.1
-google-generativeai>=0.4.0
-elevenlabs>=1.0.1
+# 프로덕션 서버 (WSGI HTTP Server)
+gunicorn>=21.2.0,<22.0.0  # Uvicorn과 함께 사용시 worker 클래스 지정 필요
 
-# NewsAPI
-newsapi-python>=0.2.7
+# 웹 프레임워크
+fastapi>=0.111.0,<0.112.0
 
-# Video & Audio - 이 부분에서 충돌이 자주 발생할 수 있으므로 버전을 더 유연하게 설정
-pexels_api>=1.0.1
-moviepy>=1.0.3
-imageio>=2.34.1
-imageio-ffmpeg>=0.4.9
-ffmpeg-python>=0.2.0
+# ===== AI/ML APIs =====
+openai>=1.30.1,<2.0.0
+google-generativeai>=0.4.0,<0.5.0
+elevenlabs>=1.0.1,<2.0.0
 
-# Google Cloud 관련 라이브러리 - 특히 protobuf와 충돌이 잦으므로 버전을 유연하게!
-google-cloud-storage>=2.16.0
-google-api-python-client>=2.126.0
-google-auth>=2.29.0
-google-auth-oauthlib>=1.2.0
-google-cloud-logging>=3.8.0
-google-cloud-aiplatform # 버전을 완전히 제거하여 pip가 최적 버전을 찾도록 합니다.
-google-auth-httplib2>=0.1.1
-# protobuf는 명시적으로 버전을 고정하지 않습니다.
-# 만약 여전히 문제가 발생하면, protobuf>=3.19,<5.0.0 과 같이 최소/최대 버전을 지정하는 것을 고려합니다.
-# 현재는 pip가 스스로 결정하도록 완전히 제거하는 것이 가장 유연합니다.
+# ===== News API =====
+newsapi-python>=0.2.7,<0.3.0
 
-# Utils
-requests>=2.32.2
-# Pydantic은 버전을 완전히 제거하여 FastAPI와 다른 라이브러리가 호환되는 버전을 찾도록 합니다.
-# Pydantic v1 (1.x.x)과 v2 (2.x.x)는 호환되지 않으므로, 다른 라이브러리가 명확히 v1을 요구하지 않는 한
-# 버전을 제거하여 pip가 v2와 호환되는 버전을 설치하도록 유도합니다.
-pydantic
-pillow>=11.3.0
+# ===== Media Processing =====
+pexels_api>=1.0.1,<2.0.0
+moviepy>=1.0.3,<2.0.0
+imageio>=2.34.1,<3.0.0
+imageio-ffmpeg>=0.4.9,<0.5.0
+ffmpeg-python>=0.2.0,<0.3.0
+opencv-python-headless>=4.5.0,<5.0.0  # GUI 없는 경량 버전
+pillow>=11.3.0,<12.0.0  # 이미지 처리
 
-# dotenv for local dev
-python-dotenv>=1.0.1
+# ===== Google Cloud =====
+google-cloud-storage>=2.16.0,<3.0.0
+google-api-python-client>=2.126.0,<3.0.0
+google-auth>=2.29.0,<3.0.0
+google-auth-oauthlib>=1.2.0,<2.0.0
+google-cloud-logging>=3.8.0,<4.0.0
+google-cloud-aiplatform>=1.38.0,<2.0.0
+google-auth-httplib2>=0.1.1,<0.2.0
+google-cloud-texttospeech>=2.0.0,<3.0.0
+google-cloud-secret-manager>=2.16.0,<3.0.0
+protobuf>=4.21.0,<5.0.0  # 모든 Google 라이브러리와 호환되는 버전
 
-google-cloud-texttospeech>=2.0.0
-opencv-python-headless>=4.5.0
+# ===== Utilities =====
+requests>=2.32.2,<3.0.0
+pydantic>=2.7.0,<3.0.0  # FastAPI 0.111+는 Pydantic v2 필수
+python-dotenv>=1.0.1,<2.0.0  # 환경 변수 관리
+python-multipart>=0.0.6,<0.0.7  # FastAPI 파일 업로드용
 
-google-cloud-secret-manager
-python-multipart
+# ===== Optional (주석 처리해두고 필요시 활성화) =====
+# pandas>=2.0.0,<3.0.0  # 데이터 처리 필요시
+# numpy>=1.24.0,<2.0.0  # AI 작업시 종종 필요
