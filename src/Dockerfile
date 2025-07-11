@@ -21,7 +21,7 @@ RUN apt-get update && apt-get install -y \
 
 # 작업 디렉토리 설정
 # 호스트의 'src' 디렉토리 내용이 컨테이너의 '/app/src'로 복사될 것입니다.
-WORKDIR /app/src # <--- 이 부분은 현재 프로젝트 구조에 맞게 유지됩니다.
+WORKDIR /app/src
 
 # requirements 설치
 # Dockerfile이 src 디렉토리 내에 있고, requirements.txt도 src 디렉토리 내에 있으므로
@@ -37,7 +37,7 @@ COPY . .
 # Python 경로에 /app/src 폴더를 추가
 # 이렇게 하면 /app/src/app.py에서 /app/src/youtube_uploader.py 등을
 # 'from youtube_uploader import ...' 형태로 직접 임포트할 수 있습니다.
-ENV PYTHONPATH=/app/src # <--- 이 부분을 /app/src로 변경합니다.
+ENV PYTHONPATH=/app/src # <--- 주석을 별도의 줄로 분리했습니다.
 
 # 포트 설정
 ENV PORT=8080
