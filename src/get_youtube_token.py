@@ -24,23 +24,27 @@ def get_initial_credentials():
         return
 
     # --- 다음 줄이 수정되었습니다 ---
-    # 데스크톱 앱의 OOB 흐름을 위해 'urn:ietf:wg:oauth:2.0:oob'를 사용합니다.
-    # 이 URI는 Google Cloud Console에 명시적으로 등록할 필요가 없거나,
-    # 데스크톱 앱 유형에서는 자동으로 허용됩니다.
+    # client_secrets.json 파일에 "redirect_uris": ["http://localhost"]가 있으므로 이를 사용합니다.
+    # Codespaces 환경에서는 http://localhost로의 자동 리디렉션이 실패하므로,
+    # 사용자가 수동으로 인증 코드를 복사해야 합니다.
     flow = InstalledAppFlow.from_client_secrets_file(
-        client_secrets_file_path, SCOPES, redirect_uri='urn:ietf:wg:oauth:2.0:oob'
+        client_secrets_file_path, SCOPES, redirect_uri='http://localhost'
     )
     # --- 수정 끝 ---
 
     # 브라우저를 열고 인증 URL을 표시
     auth_url, _ = flow.authorization_url(prompt='consent')
     print(f'Please go to this URL and authorize your YouTube account: {auth_url}')
+    print("\n--- 중요: 브라우저에서 승인 후 'localhost에서 연결을 거부했습니다' 오류가 발생하더라도,")
+    print("         브라우저의 주소창 URL에서 'code='로 시작하는 부분을 찾아 복사하세요. ---")
+    print("         예시: http://localhost:XXXXX/?code=4/0AX...&scope=...")
+    print("         '4/0AX...' 부분이 인증 코드입니다.")
 
-    # --- 다음 줄이 수정되었습니다 (수동 인증 코드 입력으로 변경) ---
-    # 로컬 서버를 실행하는 대신, 사용자로부터 인증 코드를 직접 입력받습니다.
-    code = input('Enter the authorization code from that page here: ')
+    # 사용자로부터 인증 코드 입력 받기
+    code = input('Enter the authorization code from the browser URL here: ')
+    
+    # 인증 코드를 사용하여 토큰 교환
     flow.fetch_token(code=code)
-    # --- 수정 끝 ---
 
     creds = flow.credentials
 
