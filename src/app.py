@@ -3,11 +3,9 @@ import logging
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.responses import JSONResponse
 
-# --- 다음 줄들이 수정되었습니다 ---
 from youtube_uploader import YouTubeUploader
 from video_engine import VideoEngine
 from secret_loader import secret_manager # SecretManager 인스턴스 임포트
-# --- 수정 끝 ---
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -34,9 +32,11 @@ async def startup_event():
         # Secret Manager에서 YouTube API 자격 증명 로드
         # Secret Manager에 저장된 시크릿 ID를 여기에 명시해야 합니다.
         # 예: youtube-client-id, youtube-client-secret, youtube-refresh-token
-        client_id = secret_manager.get_secret("youtube-client-id") # Secret ID를 실제 값으로 변경하세요
-        client_secret = secret_manager.get_secret("youtube-client-secret") # Secret ID를 실제 값으로 변경하세요
-        refresh_token = secret_manager.get_secret("youtube-refresh-token") # Secret ID를 실제 값으로 변경하세요
+        # --- 다음 줄들이 수정되었습니다 (대소문자 변경) ---
+        client_id = secret_manager.get_secret("YOUTUBE_CLIENT_ID")
+        client_secret = secret_manager.get_secret("YOUTUBE_CLIENT_SECRET")
+        refresh_token = secret_manager.get_secret("YOUTUBE_REFRESH_TOKEN")
+        # --- 수정 끝 ---
 
         if not all([client_id, client_secret, refresh_token]):
             logging.error("Secret Manager에서 YouTube API 자격 증명을 로드하는 데 실패했습니다. 일부가 누락되었습니다.")
