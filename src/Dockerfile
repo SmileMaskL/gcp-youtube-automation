@@ -34,10 +34,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 컨테이너의 현재 작업 디렉토리인 /app/src로 복사합니다.
 COPY . .
 
-# Python 경로에 /app/src 폴더를 추가
+# Python 경로에 /app/src 폴더를 추가합니다.
 # 이렇게 하면 /app/src/app.py에서 /app/src/youtube_uploader.py 등을
 # 'from youtube_uploader import ...' 형태로 직접 임포트할 수 있습니다.
-ENV PYTHONPATH=/app/src # <--- 주석을 별도의 줄로 분리했습니다.
+ENV PYTHONPATH=/app/src
 
 # 포트 설정
 ENV PORT=8080
