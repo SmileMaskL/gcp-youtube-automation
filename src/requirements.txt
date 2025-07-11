@@ -1,5 +1,4 @@
-# Base Python Version
-python>=3.9,<3.12  # Python 버전 범위 지정 (3.12는 일부 라이브러리와 아직 호환 문제 가능성 있음)
+
 
 # ===== Web Framework & Server =====
 # ASGI 서버 (개발용)
