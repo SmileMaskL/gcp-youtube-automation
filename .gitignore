@@ -12,3 +12,9 @@ bin/
 github-actions-sa-policy.json
 google-cloud-sdk/
 *.tar.gz
+
+# 대용량 파일
+venv/
+.terraform/
+*.a
+binaries/
