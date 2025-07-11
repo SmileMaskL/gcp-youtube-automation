@@ -10,6 +10,7 @@
 *.out
 bin/
 youtube-fully-automated.json
+youtube_client_secrets.json
 google-cloud-sdk/
 *.tar.gz
 
