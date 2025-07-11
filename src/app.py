@@ -3,9 +3,10 @@ import logging
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.responses import JSONResponse
 
-from src.youtube_uploader import YouTubeUploader
+from youtube_uploader import YouTubeUploader
 from video_engine import VideoEngine
-from secret_loader import secret_manager # SecretManager 인스턴스 임포트
+from secret_loader import secret_manager
+from config import settings
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
