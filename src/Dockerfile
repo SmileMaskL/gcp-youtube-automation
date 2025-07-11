@@ -14,22 +14,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg libsm6 libxext6 libglib2.0-0 libgl1-mesa-glx \
     && rm -rf /var/lib/apt/lists/*
 
-# 작업 디렉토리 설정
-WORKDIR /app
+# 작업 디렉토리 설정 (핵심 변경)
+WORKDIR /app/src  # ★ /app이 아닌 /app/src로 지정 ★
 
-# requirements 설치
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+# requirements 설치 (상대 경로 조정)
+COPY requirements.txt ../
+RUN pip install --no-cache-dir -r ../requirements.txt
 
-# 앱 코드 복사
+# 앱 코드 복사 (현재 디렉토리 유지)
 COPY . .
 
-# PYTHONPATH 설정 (src 모듈 인식)
-ENV PYTHONPATH="${PYTHONPATH}:/app/src"
+# PYTHONPATH 설정 (핵심 변경)
+ENV PYTHONPATH="/app"  # ★ /app/src가 아닌 /app으로 설정 ★
 
 # 포트 설정
 ENV PORT=8080
 EXPOSE 8080
 
-# uvicorn 실행 명령어 수정 (src.app:app 로 변경)
-CMD ["uvicorn", "src.app:app", "--host", "0.0.0.0", "--port", "8080", "--timeout-keep-alive", "300"]
+# 실행 명령어 (변경 없음)
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080", "--timeout-keep-alive", "300"]
