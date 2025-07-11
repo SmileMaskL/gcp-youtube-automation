@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # 작업 디렉토리
-WORKDIR /app
+WORKDIR /app/ㄴㄱㅊ
 
 # requirements 설치
 COPY requirements.txt .
@@ -37,4 +37,4 @@ ENV PORT=8080
 EXPOSE 8080
 
 # 실행 명령어
-CMD ["uvicorn", "src.app:app", "--host", "0.0.0.0", "--port", "8080", "--timeout-keep-alive", "300"]
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080", "--timeout-keep-alive", "300"]
