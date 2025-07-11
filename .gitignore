@@ -11,6 +11,7 @@
 bin/
 youtube-fully-automated.json
 youtube_client_secrets.json
+github-actions-sa.json
 google-cloud-sdk/
 *.tar.gz
 
