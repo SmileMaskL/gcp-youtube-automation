@@ -10,3 +10,5 @@
 *.out
 bin/
 github-actions-sa-policy.json
+google-cloud-sdk/
+*.tar.gz
