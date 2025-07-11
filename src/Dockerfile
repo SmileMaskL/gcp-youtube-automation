@@ -1,22 +1,20 @@
-# src/Dockerfile
-
-# --- 빌드 스테이지 ---
-FROM python:3.11-bookworm AS builder
-RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
-
-# --- 런타임 스테이지 ---
 FROM python:3.11-slim-bookworm
-RUN apt-get update && apt-get install -y --no-install-recommends \
+
+# 필수 패키지 설치
+RUN apt-get update && apt-get install -y \
     ffmpeg libsm6 libxext6 libglib2.0-0 libgl1-mesa-glx \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app/src
-COPY requirements.txt ../
-RUN pip install --no-cache-dir -r ../requirements.txt
+# 작업 디렉토리 설정 (변경)
+# ★ /app/src에서 /app으로 변경 ★
+WORKDIR /app
 COPY . .
 
-# ★ 핵심 설정: Python이 /app/src를 모듈로 인식하도록 ★
+# Python 경로 설정
 ENV PYTHONPATH="/app"
 
-EXPOSE 8080
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080", "--timeout-keep-alive", "300"]
+# 의존성 설치
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 실행 명령어 (변경)
+CMD ["uvicorn", "src.app:app", "--host", "0.0.0.0", "--port", "8080"]
