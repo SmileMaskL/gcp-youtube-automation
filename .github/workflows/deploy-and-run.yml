@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 env:
-  PROJECT_ID: your-gcp-project-id
+  PROJECT_ID: youtube-fully-automated
   REGION: us-central1
   SERVICE_NAME: youtube-shorts-automation
 
