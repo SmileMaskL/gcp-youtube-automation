@@ -30,11 +30,20 @@ jobs:
     - name: Set gcloud project
       run: gcloud config set project ${{ env.PROJECT_ID }}
 
+    # Artifact Registry 인증
+    - name: Configure docker to use gcloud as a credential helper
+      run: gcloud auth configure-docker asia-northeast3-docker.pkg.dev
+
     # Docker 빌드
     - name: Build Docker image
       run: |
         cd src
-        docker build -t gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }} .
+        docker build -t asia-northeast3-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}/${{ env.SERVICE_NAME }}:latest .
+
+    # Push to Artifact Registry
+    - name: Push Docker image
+      run: |
+        docker push asia-northeast3-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}/${{ env.SERVICE_NAME }}:latest
 
     # GCR 푸시
     - name: Push to GCR
