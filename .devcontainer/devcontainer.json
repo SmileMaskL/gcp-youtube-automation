@@ -1,19 +1,27 @@
 {
-  "name": "GCP YouTube Automation",
-  "build": {
-    "dockerfile": "../src/Dockerfile",
-    "context": "../src"
+  "name": "Python 3.11 with GCP Tools",
+  "image": "mcr.microsoft.com/devcontainers/python:3.11-bookworm", // 권장: 최신 Debian 기반 이미지 사용 (bullseye도 가능)
+  "features": {
+    // gcloud CLI 설치
+    "ghcr.io/devcontainers/features/google-cloud-cli:1": {
+      "version": "latest"
+    },
+    // sudo를 포함한 apt 권한 문제 해결을 위해 common-utils 추가
+    // apt-get이 필요하면 이 피쳐에 포함될 수 있습니다.
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": "false",
+      "installOhMyZsh": "false",
+      "upgradePackages": "true"
+    }
   },
-  "remoteUser": "root",
-  "postCreateCommand": "pip install -r src/requirements.txt",
+  "postCreateCommand": "pip install --no-cache-dir -r requirements.txt",
   "customizations": {
     "vscode": {
       "extensions": [
         "ms-python.python",
         "ms-azuretools.vscode-docker",
-        "GoogleCloudTools.cloudcode"
+        "GoogleCloudTools.cloudcode" // Cloud Code 확장 프로그램 설치
       ]
     }
-  },
-  "forwardPorts": [8080]
+  }
 }
