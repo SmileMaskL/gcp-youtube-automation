@@ -32,7 +32,7 @@ jobs:
       run: |-
         gcloud run deploy youtube-shorts-automation \
           --project=${{ secrets.GCP_PROJECT_ID }} \
-          --region=us-central1 \ # ✅ us-central1로 명확히 설정
+          --region=us-central1 \
           --source=. \
           --set-secrets="GEMINI_API_KEY=GEMINI_API_KEY:latest" \
           --set-secrets="OPENAI_API_KEYS=OPENAI_API_KEYS:latest" \
