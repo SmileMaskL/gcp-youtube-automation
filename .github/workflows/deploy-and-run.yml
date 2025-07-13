@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 env:
-  PROJECT_ID: youtube-fully-automated
+  GCP_PROJECT_ID: youtube-fully-automated
   REGION: us-central1
   SERVICE_NAME: youtube-shorts-automation
 
@@ -24,24 +24,24 @@ jobs:
     - uses: google-github-actions/auth@v2
       with:
         credentials_json: ${{ secrets.GCP_CREDENTIALS }}
-        project_id: ${{ env.PROJECT_ID }}
+        GCP_PROJECT_ID: ${{ env.GCP_PROJECT_ID }}
 
     # Docker 빌드
     - name: Build Docker image
       run: |
         cd src
-        docker build -t gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }} .
+        docker build -t gcr.io/${{ env.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }} .
 
     # GCR 푸시
     - name: Push to GCR
       run: |
-        docker push gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}
+        docker push gcr.io/${{ env.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}
 
     # Cloud Run 배포
     - uses: google-github-actions/deploy-cloudrun@v2
       with:
         service: ${{ env.SERVICE_NAME }}
-        image: gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}
+        image: gcr.io/${{ env.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}
         region: ${{ env.REGION }}
         credentials: ${{ secrets.GCP_CREDENTIALS }}
         env_vars: |
