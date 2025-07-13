@@ -93,4 +93,39 @@ resource "google_cloud_scheduler_job" "daily_shorts_trigger" {
   ]
 }
 
-# ... (나머지 Pub/Sub, IAM 리소스는 그대로 유지)
+# ✅ Pub/Sub subscription 생성 → Cloud Run Push endpoint에 전달 (수정됨!)
+resource "google_pubsub_subscription" "shorts_trigger_subscription" {
+  name  = "shorts-trigger-subscription"
+  topic = google_pubsub_topic.shorts_trigger.id
+
+  push_config {
+    push_endpoint = google_cloud_run_service.youtube_shorts_automation.status[0].url
+    
+    oidc_token {
+      service_account_email = var.cloud_run_service_account_email # Cloud Run 서비스 계정 이메일
+    }
+  }
+  
+  depends_on = [
+    google_cloud_run_service.youtube_shorts_automation,
+    google_pubsub_topic.shorts_trigger
+  ]
+}
+
+# ✅ Cloud Run 서비스에 Pub/Sub subscriber 역할 부여
+# Cloud Run 서비스 계정(github-actions-sa)이 Pub/Sub에서 메시지를 수신할 수 있도록 권한을 줍니다.
+resource "google_project_iam_member" "cloudrun_pubsub_subscriber" {
+  project = var.project_id
+  role    = "roles/iam.serviceAccountTokenCreator" # Pub/Sub 푸시 요청에 OIDC 토큰을 생성하기 위해 필요
+  member  = "serviceAccount:service-${var.project_id}@gcp-sa-pubsub.iam.gserviceaccount.com" # Pub/Sub 서비스 계정
+}
+
+resource "google_project_iam_member" "cloudrun_invoker_for_pubsub" {
+  project = var.project_id
+  role    = "roles/run.invoker" # Pub/Sub 서비스 계정이 Cloud Run 서비스를 호출할 수 있도록 권한을 줍니다.
+  member  = "serviceAccount:service-${var.project_id}@gcp-sa-pubsub.iam.gserviceaccount.com" # Pub/Sub 서비스 계정
+
+  depends_on = [
+    google_cloud_run_service.youtube_shorts_automation
+  ]
+}
