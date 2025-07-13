@@ -24,8 +24,8 @@ jobs:
       run: gcloud config set project ${{ secrets.GCP_PROJECT_ID }}
 
     # ✅ Cloud Build API 활성화 (중복 실행 무해)
-    - name: Enable Cloud Build API
-      run: gcloud services enable cloudbuild.googleapis.com
+    # - name: Enable Cloud Build API
+      # run: gcloud services enable cloudbuild.googleapis.com
 
     - name: Deploy to Cloud Run
       run: |-
