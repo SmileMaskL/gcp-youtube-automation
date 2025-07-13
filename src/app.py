@@ -34,9 +34,9 @@ async def startup_event():
         # Secret Manager에 저장된 시크릿 ID를 여기에 명시해야 합니다.
         # 예: youtube-client-id, youtube-client-secret, youtube-refresh-token
         # --- 다음 줄들이 수정되었습니다 (대소문자 변경) ---
-        client_id = secret_manager.get_secret("YOUTUBE_CLIENT_ID")
-        client_secret = secret_manager.get_secret("YOUTUBE_CLIENT_SECRET")
-        refresh_token = secret_manager.get_secret("YOUTUBE_REFRESH_TOKEN")
+        client_id = os.getenv("YOUTUBE_CLIENT_ID")
+        client_secret = os.getenv("YOUTUBE_CLIENT_SECRET")
+        refresh_token =  os.getenv("YOUTUBE_REFRESH_TOKEN")
         # --- 수정 끝 ---
 
         if not all([client_id, client_secret, refresh_token]):
