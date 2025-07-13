@@ -31,8 +31,8 @@ jobs:
       run: gcloud config set project ${{ env.PROJECT_ID }}
 
     # ✅ Cloud Build API 활성화 (중복 실행 무해)
-    - name: Enable Cloud Build API
-      run: gcloud services enable cloudbuild.googleapis.com
+    # - name: Enable Cloud Build API
+      # run: gcloud services enable cloudbuild.googleapis.com
 
     # Artifact Registry 인증
     - name: Configure docker to use gcloud as a credential helper
