@@ -11,8 +11,8 @@ WORKDIR /app
 COPY . /app
 
 # 파이썬 종속성 설치 (requirements.txt가 /app에 있으므로 정상 작동)
-RUN pip install --no-cache-dir -r requirements.txt
-RUN apt-get update && apt-get install -y --no-install-recommends gcc
+RUN sed -i 's|http://deb.debian.org/debian|http://deb.debian.org/debian-security|g' /etc/apt/sources.list && \
+    apt-get update && apt-get install -y --no-install-recommends gcc
 
 # 애플리케이션 실행 명령어를 설정합니다.
 # app.py가 /app/app.py에 있으므로, 'app:app'이 맞습니다.
