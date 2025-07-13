@@ -1,3 +1,4 @@
+# .github/workflows/daily_upload.yaml
 name: Deploy and Run Automation
 
 on:
@@ -23,15 +24,15 @@ jobs:
     - name: Set gcloud project
       run: gcloud config set project ${{ secrets.GCP_PROJECT_ID }}
 
-    # ✅ Cloud Build API 활성화 (중복 실행 무해)
+    # Cloud Build API 활성화 (주석 처리 유지)
     # - name: Enable Cloud Build API
-      # run: gcloud services enable cloudbuild.googleapis.com
+    #   run: gcloud services enable cloudbuild.googleapis.com
 
     - name: Deploy to Cloud Run
       run: |-
         gcloud run deploy youtube-shorts-automation \
           --project=${{ secrets.GCP_PROJECT_ID }} \
-          --region=us-central1 \
+          --region=us-central1 \ # ✅ us-central1로 명확히 설정
           --source=. \
           --set-secrets="GEMINI_API_KEY=GEMINI_API_KEY:latest" \
           --set-secrets="OPENAI_API_KEYS=OPENAI_API_KEYS:latest" \
