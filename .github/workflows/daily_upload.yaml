@@ -22,13 +22,13 @@ jobs:
     - name: Deploy to Cloud Run
       run: |-
         gcloud run deploy youtube-shorts-automation \
-          --project=${{ secrets.GCP_PROJECT }} \
+          --project=${{ secrets.GCP_PROJECT_ID }} \
           --region=us-central1 \
           --source=. \
           --set-secrets="GEMINI_API_KEY=GEMINI_API_KEY:latest" \
           --set-secrets="OPENAI_API_KEYS=OPENAI_API_KEYS:latest" \
-          --set-secrets="YOUTUBE_CREDENTIALS_JSON=YOUTUBE_CREDENTIALS_JSON:latest" \
+          --set-secrets="GCP_CREDENTIALS=GCP_CREDENTIALS:latest" \
           --memory=4Gi \
           --cpu=2 \
           --timeout=600s \
-          --service-account=automation-sa@${{ secrets.GCP_PROJECT }}.iam.gserviceaccount.com
+          --service-account=automation-sa@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
