@@ -53,6 +53,7 @@ jobs:
         service: ${{ env.SERVICE_NAME }}
         image: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE_NAME }}:latest
         region: ${{ env.REGION }}
+        project_id: ${{ env.PROJECT_ID }}
         credentials: ${{ secrets.GCP_CREDENTIALS }}
         env_vars: |
           YOUTUBE_CLIENT_ID=YOUTUBE_CLIENT_ID:latest
