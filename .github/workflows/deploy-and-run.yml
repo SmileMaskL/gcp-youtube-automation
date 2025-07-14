@@ -55,6 +55,6 @@ jobs:
         region: ${{ env.REGION }}
         credentials: ${{ secrets.GCP_CREDENTIALS }}
         env_vars: |
-          YOUTUBE_CLIENT_ID=${{ secrets.YOUTUBE_CLIENT_ID }}
-          YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }}
-          YOUTUBE_REFRESH_TOKEN=${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+          YOUTUBE_CLIENT_ID=YOUTUBE_CLIENT_ID:latest
+          YOUTUBE_CLIENT_SECRET=YOUTUBE_CLIENT_SECRET:latest
+          YOUTUBE_REFRESH_TOKEN=YOUTUBE_REFRESH_TOKEN:latest
