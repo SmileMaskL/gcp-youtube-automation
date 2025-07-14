@@ -1,82 +1,66 @@
-# src/requirements.txt (최종 버전)
+# src/requirements.txt
 
-# Web Framework
-fastapi==0.111.0
-uvicorn==0.30.1 # FastAPI와 함께 사용되는 ASGI 서버
-uvicorn[standard]
-gunicorn==22.0.0
-
-# Asynchronous / Greenlet (for Gunicorn gevent worker)
-gevent==23.9.1
-greenlet==3.0.3
-aiohttp==3.9.5 # 비동기 HTTP 클라이언트
-
-# Google Cloud
-google-cloud-storage==2.16.0
-google-api-python-client==2.126.0
-protobuf==4.25.3 # protobuf 버전을 4점대 최신 버전으로 고정하여 충돌을 피합니다.
-google-auth==2.29.0
-google-auth-oauthlib==1.2.0
-google-cloud-logging==3.8.0 # 명시적 버전 추가
-google-cloud-aiplatform # 최신 버전 사용 (버전 충돌 발생 시 특정 버전 명시)
-
-# AI APIs
-openai==1.30.1
-google-generativeai==0.4.0
-elevenlabs==1.0.1
-
-# NewsAPI
-newsapi-python==0.2.7
-
-# Video & Audio
-pexels_api==1.0.1
-
-# ===== Core Dependencies =====
+# ===========================
+# 🔷 Web Framework
+# ===========================
 fastapi==0.111.0
 uvicorn[standard]==0.30.1
-gunicorn==21.2.0
-pydantic==2.7.0
+gunicorn==22.0.0
 python-multipart>=0.0.7
+pydantic==2.7.1
 
-# ===== Google Cloud Services =====
-google-cloud-aiplatform==1.38.0
-protobuf==4.25.3
-google-api-core==2.15.0
+# ===========================
+# 🔷 Asynchronous / Greenlet
+# ===========================
+gevent==23.9.1
+greenlet==3.0.3
+aiohttp==3.9.5
+
+# ===========================
+# 🔷 Google Cloud
+# ===========================
 google-cloud-storage==2.16.0
-google-generativeai==0.4.0
-google-cloud-texttospeech==2.14.0
 google-api-python-client==2.126.0
-google-cloud-secret-manager==2.24.0
+protobuf==4.25.3
+google-auth==2.29.0
 google-auth-oauthlib==1.2.0
+google-cloud-logging==3.8.0
+google-cloud-aiplatform==1.38.0
+google-api-core==2.15.0
+google-cloud-texttospeech==2.14.0
+google-cloud-secret-manager==2.24.0
+google-generativeai==0.4.0
 
-# ===== Media Processing =====
+# ===========================
+# 🔷 AI APIs
+# ===========================
+openai==1.30.1
+elevenlabs==1.0.1
+
+# ===========================
+# 🔷 News & Media APIs
+# ===========================
+newsapi-python==0.2.7
+pexels_api==1.0.1
+
+# ===========================
+# 🔷 Video & Audio Processing
+# ===========================
 opencv-python-headless==4.9.0.80
 moviepy==1.0.3
 imageio==2.34.1
 imageio-ffmpeg==0.4.9
 ffmpeg-python==0.2.0
 
-# dotenv for local dev
-python-dotenv==1.0.1
-
-# Utils
-requests==2.32.2
-pydantic==2.7.1
-pillow==11.3.0
-pillow==11.3.0
-
-# ===== AI/APIs =====
-openai==1.30.1
-elevenlabs==1.0.1
-
-# ===== Utilities =====
+# ===========================
+# 🔷 Utilities
+# ===========================
 requests==2.32.2
 python-dotenv==1.0.1
-pexels_api==1.0.1
-newsapi-python==0.2.7
+pillow==11.3.0
 
-# ===== Conflict Resolvers =====
+# ===========================
+# 🔷 gRPC Conflict Resolvers
+# ===========================
 grpcio==1.62.1
 grpcio-status==1.62.1
-google-auth==2.29.0
->>>>>>> 39084fc7b559941b38b6aa3e14ae067a1e397f39
