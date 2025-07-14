@@ -1,26 +1,29 @@
 {
   "name": "Python 3.11 with GCP Tools",
-  "image": "mcr.microsoft.com/devcontainers/python:3.11-bookworm", // 권장: 최신 Debian 기반 이미지 사용 (bullseye도 가능)
+  "image": "mcr.microsoft.com/devcontainers/python:3.11-bookworm",
   "features": {
-    // gcloud CLI 설치
     "ghcr.io/devcontainers/features/google-cloud-cli:1": {
       "version": "latest"
     },
-    // sudo를 포함한 apt 권한 문제 해결을 위해 common-utils 추가
-    // apt-get이 필요하면 이 피쳐에 포함될 수 있습니다.
     "ghcr.io/devcontainers/features/common-utils:2": {
       "installZsh": "false",
       "installOhMyZsh": "false",
       "upgradePackages": "true"
+    },
+    // --- 다음 두 줄을 추가 또는 확인 ---
+    // Docker in Docker (컨테이너 내에서 Docker 명령 사용) 기능 추가
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "version": "latest"
     }
   },
-  "postCreateCommand": "pip install --no-cache-dir -r requirements.txt",
+  // --- postCreateCommand를 수정 또는 추가 ---
+  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y jq && pip install --no-cache-dir -r requirements.txt",
   "customizations": {
     "vscode": {
       "extensions": [
         "ms-python.python",
         "ms-azuretools.vscode-docker",
-        "GoogleCloudTools.cloudcode" // Cloud Code 확장 프로그램 설치
+        "GoogleCloudTools.cloudcode"
       ]
     }
   }
