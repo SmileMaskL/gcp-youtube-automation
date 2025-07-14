@@ -1,9 +1,7 @@
-# .github/workflows/daily_upload.yaml
-
 name: Daily Upload Automation
 
 on:
-  workflow_dispatch: # 수동 실행 허용
+  workflow_dispatch:
   schedule:
     - cron: '0 0 * * *'  # 매일 00:00 UTC 실행
 
@@ -14,46 +12,39 @@ env:
   SERVICE_NAME: youtube-shorts-automation
 
 jobs:
-  daily-upload:
+  deploy:
     runs-on: ubuntu-latest
     permissions:
       contents: 'read'
       id-token: 'write'
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-    # ✅ GCP 인증
     - name: Authenticate to Google Cloud
       uses: google-github-actions/auth@v2
       with:
         credentials_json: ${{ secrets.GCP_CREDENTIALS }}
         project_id: ${{ env.PROJECT_ID }}
 
-    # ✅ gcloud 설정
     - name: Set gcloud project
       run: gcloud config set project ${{ env.PROJECT_ID }}
 
-    # ✅ Artifact Registry 인증
-    - name: Configure docker to use gcloud as a credential helper
+    - name: Configure Docker
       run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
 
-    # ✅ Docker build
     - name: Build Docker image
       run: |
         docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE_NAME }}:latest src
 
-    # ✅ Docker push
     - name: Push Docker image
       run: |
         docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE_NAME }}:latest
 
-    # ✅ Cloud Run 배포
     - name: Deploy to Cloud Run
-      uses: google-github-actions/deploy-cloudrun@v2
-      with:
-        service: ${{ env.SERVICE_NAME }}
-        image: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE_NAME }}:latest
-        region: ${{ env.REGION }}
-        pr
+      run: |
+        gcloud run deploy ${{ env.SERVICE_NAME }} \
+          --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE_NAME }}:latest \
+          --region=${{ env.REGION }} \
+          --platform=managed \
+          --allow-unauthenticated
