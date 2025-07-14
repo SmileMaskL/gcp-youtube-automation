@@ -15,7 +15,11 @@ class Config:
         if not self.project_id:
             logger.error("GCP_PROJECT_ID 환경 변수가 설정되지 않았습니다.")
             raise ValueError("GCP_PROJECT_ID 환경 변수를 설정해야 합니다.")
+<<<<<<< HEAD
         
+=======
+            
+>>>>>>> 39084fc7b559941b38b6aa3e14ae067a1e397f39
         # ElevenLabs Voice ID는 환경 변수에서 기본값을 제공합니다.
         self.elevenlabs_voice_id = os.getenv("ELEVENLABS_VOICE_ID", "21m00Tcm4FnGU8l8FGzN")
 
@@ -27,8 +31,13 @@ class Config:
             logger.warning("OPENAI_API_KEYS 환경 변수가 설정되지 않았거나 비어 있습니다.")
 
         # AI 모델 선택을 위한 기본값 (필요에 따라 변경)
+<<<<<<< HEAD
         self.default_ai_model_content = os.getenv("DEFAULT_AI_MODEL_CONTENT", "gemini") 
         self.default_ai_model_summary = os.getenv("DEFAULT_AI_MODEL_SUMMARY", "openai") 
+=======
+        self.default_ai_model_content = os.getenv("DEFAULT_AI_MODEL_CONTENT", "gemini")  
+        self.default_ai_model_summary = os.getenv("DEFAULT_AI_MODEL_SUMMARY", "openai")  
+>>>>>>> 39084fc7b559941b38b6aa3e14ae067a1e397f39
 
         # YouTube 관련 기본 설정
         self.youtube_category_id = os.getenv("YOUTUBE_CATEGORY_ID", "28") # 예: 뉴스 & 정치
@@ -66,3 +75,10 @@ class Config:
     def get_elevenlabs_voice_id(self):
         # 이미 __init__에서 환경 변수 기본값과 함께 로드
         return self.elevenlabs_voice_id
+<<<<<<< HEAD
+=======
+
+# ★ 이 부분이 핵심입니다! ★
+# Config 클래스의 인스턴스를 생성하여 'settings'라는 이름으로 export 합니다.
+settings = Config()
+>>>>>>> 39084fc7b559941b38b6aa3e14ae067a1e397f39

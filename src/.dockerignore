@@ -1,0 +1,9 @@
+.gitignore
+.git/
+venv/
+__pycache__/
+*.log
+*.pyc
+*.egg-info
+.DS_Store
+youtube_shorts.log

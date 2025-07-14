@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 name: Daily 5 Shorts Upload
 
 on:
@@ -91,3 +92,48 @@ jobs:
           # 예: curl -X POST "${URL}/process_shorts"
           # 만약 서비스가 무인증을 허용하지 않는다면, 인증 헤더를 추가해야 합니다.
           curl -X POST "$URL"
+=======
+# .github/workflows/daily_upload.yaml
+
+name: Deploy and Run Automation
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+  schedule:
+    - cron: '0 12 * * *'  # 매일 12PM UTC 실행
+
+env:
+  PROJECT_ID: youtube-fully-automated
+  REGION: us-central1
+  REPOSITORY: youtube-shorts-automation
+  SERVICE_NAME: youtube-shorts-automation
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ secrets.GCP_CREDENTIALS }}
+        project_id: ${{ env.PROJECT_ID }}
+
+    - name: Set gcloud project
+      run: gcloud config set project ${{ env.PROJECT_ID }}
+
+    - name: Deploy to Cloud Run
+      run: |
+        gcloud run deploy ${{ env.SERVICE_NAME }} \
+          --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE_NAME }}:latest \
+          --region=${{ env.REGION }} \
+          --platform=managed \
+          --memory=4Gi \
+          --cpu=2 \
+          --timeout=600s \
+          --service-account=github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
+          --allow-unauthenticated
+>>>>>>> 39084fc7b559941b38b6aa3e14ae067a1e397f39

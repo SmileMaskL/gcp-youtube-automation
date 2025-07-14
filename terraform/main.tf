@@ -1,18 +1,38 @@
 # terraform/main.tf
 
 provider "google" {
+<<<<<<< HEAD
   project = var.project_id # 변수를 사용하여 프로젝트 ID를 지정합니다.
   region  = "us-central1"  # Cloud Run 서비스도 us-central1에 배포되도록 일치시킵니다.
 }
 
 # ✅ Cloud Run 서비스 계정 이메일 변수 정의 (코드 가독성 및 유지보수성 향상)
+=======
+  project = var.project_id
+  region  = "us-central1"
+}
+
+# Artifact Registry Repository 생성 리소스 추가
+resource "google_artifact_registry_repository" "youtube_shorts_automation_repo" {
+  repository_id = "youtube-shorts-automation"
+  location      = "us-central1"
+  format        = "DOCKER"
+  description   = "Docker repository for YouTube Shorts Automation"
+}
+
+# Cloud Run 서비스 계정 이메일 변수 정의
+>>>>>>> 39084fc7b559941b38b6aa3e14ae067a1e397f39
 variable "cloud_run_service_account_email" {
   description = "The email of the service account used by Cloud Run."
   type        = string
   default     = "github-actions-sa@youtube-fully-automated.iam.gserviceaccount.com"
 }
 
+<<<<<<< HEAD
 # ✅ API 키 변수 정의 (variables.tf 파일에 정의 필요)
+=======
+# API 키 변수 정의 (variables.tf 파일에 정의 필요)
+>>>>>>> 39084fc7b559941b38b6aa3e14ae067a1e397f39
 variable "gemini_api_key" {
   description = "API Key for Gemini."
   type        = string
@@ -25,20 +45,36 @@ variable "elevenlabs_api_key" {
   sensitive   = true
 }
 
+<<<<<<< HEAD
 # 🚀 Cloud Run 서비스 생성 (Terraform 관리 시작!)
 resource "google_cloud_run_service" "youtube_shorts_automation" {
   name     = "youtube-shorts-automation" # 서비스 이름은 GitHub Actions YAML과 동일해야 합니다.
   location = var.region                  # provider의 region 변수 사용
+=======
+# Cloud Run 서비스 생성
+resource "google_cloud_run_service" "youtube_shorts_automation" {
+  name     = "youtube-shorts-automation"
+  location = var.region
+>>>>>>> 39084fc7b559941b38b6aa3e14ae067a1e397f39
 
   template {
     spec {
       containers {
+<<<<<<< HEAD
         # GitHub Actions에서 GCR에 push할 이미지 경로를 참조합니다.
         image = "gcr.io/${var.project_id}/youtube-shorts-automation:latest"
         ports {
           container_port = 8080 # Dockerfile의 EXPOSE 8080과 일치해야 합니다.
         }
         env { # ✅ 이 블록을 추가하여 환경 변수를 전달합니다.
+=======
+        # Artifact Registry 이미지를 참조하도록 변경
+        image = "${google_artifact_registry_repository.youtube_shorts_automation_repo.location}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.youtube_shorts_automation_repo.repository_id}/${google_cloud_run_service.youtube_shorts_automation.name}:latest"
+        ports {
+          container_port = 8080
+        }
+        env {
+>>>>>>> 39084fc7b559941b38b6aa3e14ae067a1e397f39
           name  = "GEMINI_API_KEY"
           value = var.gemini_api_key
         }
@@ -48,7 +84,10 @@ resource "google_cloud_run_service" "youtube_shorts_automation" {
         }
         # 필요한 다른 secret들을 여기에 추가할 수 있습니다.
       }
+<<<<<<< HEAD
       # 이 서비스 계정이 Cloud Run 앱의 권한이 됩니다.
+=======
+>>>>>>> 39084fc7b559941b38b6aa3e14ae067a1e397f39
       service_account_name = var.cloud_run_service_account_email
     }
   }
@@ -58,13 +97,17 @@ resource "google_cloud_run_service" "youtube_shorts_automation" {
     latest_revision = true
   }
 
+<<<<<<< HEAD
   # 외부에서 Cloud Run 서비스에 접근 가능하도록 설정 (Pub/Sub Push endpoint 포함)
+=======
+>>>>>>> 39084fc7b559941b38b6aa3e14ae067a1e397f39
   metadata {
     annotations = {
       "run.googleapis.com/ingress" = "all"
     }
   }
 
+<<<<<<< HEAD
   # Cloud Run 서비스가 배포될 때까지 기다리도록 depends_on 추가
   depends_on = [] # 이 부분은 명시적인 종속성이 없으므로 비워둡니다.
 }
@@ -87,11 +130,35 @@ resource "google_cloud_scheduler_job" "daily_shorts_trigger" {
     data       = base64encode(jsonencode({"action":"create_and_upload_shorts", "metadata":{"topic":"긍정 명언"}}))
   }
   
+=======
+  depends_on = [
+    google_artifact_registry_repository.youtube_shorts_automation_repo
+  ]
+}
+
+# Pub/Sub topic 및 Scheduler, Subscription 등은 region에 크게 영향받지 않으므로 그대로 유지
+# 단, google_cloud_scheduler_job의 time_zone은 us-central1에 맞는 타임존으로 변경
+resource "google_cloud_scheduler_job" "daily_shorts_trigger" {
+  name        = "daily-shorts-trigger"
+  description = "매일 유튜브 쇼츠 자동 업로드 트리거"
+  schedule    = "0 9 * * *" # 원하는 시간으로 설정
+  time_zone   = "America/Chicago" # us-central1에 맞는 타임존으로 변경
+
+  pubsub_target {
+    topic_name = google_pubsub_topic.shorts_trigger.id
+    data       = base64encode(jsonencode({"action":"create_and_upload_shorts", "metadata":{"topic":"긍정 명언"}}))
+  }
+>>>>>>> 39084fc7b559941b38b6aa3e14ae067a1e397f39
   depends_on = [
     google_pubsub_topic.shorts_trigger
   ]
 }
 
+<<<<<<< HEAD
+=======
+# ... (나머지 Pub/Sub, IAM 리소스는 그대로 유지)
+
+>>>>>>> 39084fc7b559941b38b6aa3e14ae067a1e397f39
 # ✅ Pub/Sub subscription 생성 → Cloud Run Push endpoint에 전달 (수정됨!)
 resource "google_pubsub_subscription" "shorts_trigger_subscription" {
   name  = "shorts-trigger-subscription"
