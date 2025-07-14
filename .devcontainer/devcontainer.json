@@ -1,4 +1,4 @@
-/*{
+{
   "name": "Python 3.11 with GCP Tools",
   "image": "mcr.microsoft.com/devcontainers/python:3.11-bookworm",
   "features": {
@@ -8,18 +8,16 @@
     "ghcr.io/devcontainers/features/common-utils:2": {
       "installZsh": "false",
       "installOhMyZsh": "false",
-      "upgradePackages": "true"
+      "upgradePackages": "true",
+      "installAptPackages": "jq"
     },
     "ghcr.io/devcontainers/features/docker-in-docker:2": {
-      "version": "latest"
-    },
-    // --- jq를 설치하는 새로운 Feature 추가 (더 안정적) ---
-    "ghcr.io/devcontainers/features/apt-get-install:1": {
-      "packages": "jq"
+      "version": "latest",
+      "moby": true,
+      "privileged": true
     }
   },
-  // --- postCreateCommand는 Python 종속성 설치만 담당하도록 간소화 ---
-  "postCreateCommand": "pip install --no-cache-dir -r requirements.txt",
+  "postCreateCommand": "pip install --no-cache-dir -r src/requirements.txt",
   "customizations": {
     "vscode": {
       "extensions": [
@@ -29,4 +27,4 @@
       ]
     }
   }
-}*/
+}
