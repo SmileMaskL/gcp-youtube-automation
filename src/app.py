@@ -1,6 +1,5 @@
 import os
 import logging
-<<<<<<< HEAD
 import signal
 import sys
 import time
@@ -128,7 +127,6 @@ if __name__ == "__main__":
         timeout_keep_alive=300,
         access_log=False
     )
-=======
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.responses import JSONResponse
 
@@ -277,4 +275,3 @@ async def upload_short_video(
         if os.path.exists(processed_video_path):
             os.remove(processed_video_path)
             logging.info(f"처리된 비디오 파일 삭제: {processed_video_path}")
->>>>>>> 39084fc7b559941b38b6aa3e14ae067a1e397f39
