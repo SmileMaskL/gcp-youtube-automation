@@ -1,3 +1,5 @@
+# .github/workflows/daily_upload.yaml
+
 name: Daily Upload Automation
 
 on:
@@ -30,12 +32,12 @@ jobs:
     - name: Set gcloud project
       run: gcloud config set project ${{ env.PROJECT_ID }}
 
-    - name: Configure Docker
+    - name: Configure Docker for Artifact Registry
       run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
 
     - name: Build Docker image
       run: |
-        docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE_NAME }}:latest src
+        docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE_NAME }}:latest ./src
 
     - name: Push Docker image
       run: |
