@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # 1. 베이스 이미지 - Python 3.11 슬림 최신 안정화 버전
 FROM python:3.11-slim-bookworm
 
@@ -57,7 +56,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s \
 
 # 12. uvicorn 서버 실행 명령어
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080", "--timeout-keep-alive", "300"]
-=======
 # src/Dockerfile
 FROM python:3.11-slim-bullseye
 
@@ -72,4 +70,3 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080"]
->>>>>>> 39084fc7b559941b38b6aa3e14ae067a1e397f39
