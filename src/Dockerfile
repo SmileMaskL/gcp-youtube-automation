@@ -5,7 +5,7 @@ FROM python:3.11-slim-bookworm
 WORKDIR /app
 
 # 파이썬 종속성 복사
-COPY requirements.txt .
+COPY src/requirements.txt .
 
 # apt update 후 gcc 설치 (pandas, numpy 등 빌드 필요시)
 RUN apt-get update && \
