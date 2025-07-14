@@ -1,6 +1,6 @@
 # src/Dockerfile
 # 최신 Debian 기반으로 변경
-FROM python:3.11-slim-bullseye
+FROM python:3.11-slim-bookworm
 
 WORKDIR /app
 
