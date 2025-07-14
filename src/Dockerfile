@@ -8,13 +8,11 @@ WORKDIR /app
 COPY requirements.txt .
 
 # apt update 후 gcc 설치 (pandas, numpy 등 빌드 필요시)
-RUN apt-get update && apt-get install -y --no-install-recommends gcc
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends gcc && \
+    pip install --no-cache-dir -r requirements.txt
 
-# 파이썬 종속성 설치
-RUN pip install --no-cache-dir -r requirements.txt
-
-# 앱 소스 복사
-COPY . .
+COPY src/ .
 
 # 앱 실행
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080"]
