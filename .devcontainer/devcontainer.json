@@ -10,14 +10,16 @@
       "installOhMyZsh": "false",
       "upgradePackages": "true"
     },
-    // --- 다음 두 줄을 추가 또는 확인 ---
-    // Docker in Docker (컨테이너 내에서 Docker 명령 사용) 기능 추가
     "ghcr.io/devcontainers/features/docker-in-docker:2": {
       "version": "latest"
+    },
+    // --- jq를 설치하는 새로운 Feature 추가 (더 안정적) ---
+    "ghcr.io/devcontainers/features/apt-get-install:1": {
+      "packages": "jq"
     }
   },
-  // --- postCreateCommand를 수정 또는 추가 ---
-  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y jq && pip install --no-cache-dir -r requirements.txt",
+  // --- postCreateCommand는 Python 종속성 설치만 담당하도록 간소화 ---
+  "postCreateCommand": "pip install --no-cache-dir -r requirements.txt",
   "customizations": {
     "vscode": {
       "extensions": [
