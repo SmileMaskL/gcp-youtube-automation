@@ -1,4 +1,5 @@
 # .github/workflows/daily_upload.yaml
+
 name: Deploy and Run Automation
 
 on:
@@ -8,6 +9,12 @@ on:
   schedule:
     - cron: '0 12 * * *'  # 매일 12PM UTC 실행
 
+env:
+  PROJECT_ID: youtube-fully-automated
+  REGION: us-central1
+  REPOSITORY: youtube-shorts-automation
+  SERVICE_NAME: youtube-shorts-automation
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -15,29 +22,22 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - id: auth
-      uses: google-github-actions/auth@v2
+    - uses: google-github-actions/auth@v2
       with:
         credentials_json: ${{ secrets.GCP_CREDENTIALS }}
-        project_id: ${{ secrets.GCP_PROJECT_ID }}
+        project_id: ${{ env.PROJECT_ID }}
 
     - name: Set gcloud project
-      run: gcloud config set project ${{ secrets.GCP_PROJECT_ID }}
-
-    # Cloud Build API 활성화 (주석 처리 유지)
-    # - name: Enable Cloud Build API
-    #   run: gcloud services enable cloudbuild.googleapis.com
+      run: gcloud config set project ${{ env.PROJECT_ID }}
 
     - name: Deploy to Cloud Run
-      run: |-
-        gcloud run deploy youtube-shorts-automation \
-          --project=${{ secrets.GCP_PROJECT_ID }} \
-          --region=us-central1 \
-          --source=. \
-          --set-secrets="GEMINI_API_KEY=GEMINI_API_KEY:latest" \
-          --set-secrets="OPENAI_API_KEYS=OPENAI_API_KEYS:latest" \
-          --set-secrets="GCP_CREDENTIALS=GCP_CREDENTIALS:latest" \
+      run: |
+        gcloud run deploy ${{ env.SERVICE_NAME }} \
+          --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE_NAME }}:latest \
+          --region=${{ env.REGION }} \
+          --platform=managed \
           --memory=4Gi \
           --cpu=2 \
           --timeout=600s \
-          --service-account=github-actions-sa@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+          --service-account=github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
+          --allow-unauthenticated
