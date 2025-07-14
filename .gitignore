@@ -9,7 +9,6 @@
 *.exe
 *.out
 bin/
-<<<<<<< HEAD
 
 src/env.yaml
 =======
@@ -24,4 +23,36 @@ venv/
 .terraform/
 *.a
 binaries/
->>>>>>> 39084fc7b559941b38b6aa3e14ae067a1e397f39
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+.venv/
+
+# IDEs
+.vscode/
+.idea/
+
+# Logs
+*.log
+logs/ 
+# logs 디렉토리 전체를 무시합니다.
+automation.log 
+# 특정 로그 파일도 무시합니다.
+youtube_shorts.log 
+# 특정 로그 파일도 무시합니다.
+
+# 임시 또는 캐시 파일
+tmp/
+output/
+htmlcov/
+
+# Git 충돌 잔재 또는 버전 관리 불필요 파일 (예시)
+*=0.0.7
+*=5.29.3
+*.egg-info/ 
+# youtube_automation.egg-info 디렉토리 전체를 무시합니다.
